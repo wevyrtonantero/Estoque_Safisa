@@ -4,36 +4,36 @@ const { pool } = require('../../database/connection');
 class PecaModel {
   // Lista somente itens simples, com filtros opcionais para a tela de pecas.
   static async findAll(filters = {}) {
-    const conditions = ["classificacao = 'ITEM'"];
+    const conditions = ["p.classificacao = 'ITEM'"];
     const values = [];
 
     if (filters.codigo) {
-      conditions.push('codigo LIKE ?');
+      conditions.push('p.codigo LIKE ?');
       values.push(`%${filters.codigo}%`);
     }
 
     if (filters.descricao) {
-      conditions.push('descricao LIKE ?');
+      conditions.push('p.descricao LIKE ?');
       values.push(`%${filters.descricao}%`);
     }
 
     if (filters.tipo) {
-      conditions.push('tipo = ?');
+      conditions.push('p.tipo = ?');
       values.push(filters.tipo);
     }
 
     if (filters.id_materia_prima) {
-      conditions.push('id_materia_prima = ?');
+      conditions.push('p.id_materia_prima = ?');
       values.push(filters.id_materia_prima);
     }
 
     if (filters.id_fornecedor) {
-      conditions.push('id_fornecedor = ?');
+      conditions.push('p.id_fornecedor = ?');
       values.push(filters.id_fornecedor);
     }
 
     if (filters.id_maquina) {
-      conditions.push('id_maquina = ?');
+      conditions.push('p.id_maquina = ?');
       values.push(filters.id_maquina);
     }
 

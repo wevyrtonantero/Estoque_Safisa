@@ -34,12 +34,18 @@ const EstruturaSubmontagemController = {
   async getComponents(req, res) {
     try {
       const submontagem = await EstruturaSubmontagemModel.submontagemExists(req.params.id);
+      const estoqueReferenciaId = req.query.estoque_referencia
+        ? Number.parseInt(req.query.estoque_referencia, 10)
+        : null;
 
       if (!submontagem) {
         return res.status(404).json({ message: 'Submontagem nao encontrada.' });
       }
 
-      const componentes = await EstruturaSubmontagemModel.findBySubmontagemId(req.params.id);
+      const componentes = await EstruturaSubmontagemModel.findBySubmontagemId(
+        req.params.id,
+        Number.isInteger(estoqueReferenciaId) ? estoqueReferenciaId : null
+      );
       return res.status(200).json(componentes);
     } catch (error) {
       console.error('Erro ao listar componentes da submontagem:', error);

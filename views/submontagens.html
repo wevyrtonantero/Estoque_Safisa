@@ -71,13 +71,13 @@
       </article>
 
       <article class="summary-card">
-        <span>Componentes Vinculados</span>
-        <strong id="metric-total-componentes">0</strong>
+        <span id="metric-saldo-pronto-label">Saldo Pronto no Estoque</span>
+        <strong id="metric-saldo-pronto">0</strong>
       </article>
 
       <article class="summary-card">
-        <span>Massa Total</span>
-        <strong id="metric-massa-total">0,000 kg</strong>
+        <span id="metric-capacidade-label">Capacidade no Estoque</span>
+        <strong id="metric-capacidade-total">0</strong>
       </article>
     </section>
 
@@ -104,15 +104,12 @@
         </div>
 
         <div class="field">
-          <label for="filtro-sub-tipo">Tipo</label>
-          <select id="filtro-sub-tipo">
-            <option value="">Todos</option>
-            <option value="COMPRADA">COMPRADA</option>
-            <option value="PRODUZIDA">PRODUZIDA</option>
+          <label for="filtro-sub-estoque-referencia">Estoque de referencia</label>
+          <select id="filtro-sub-estoque-referencia">
+            <option value="">Carregando estoques...</option>
           </select>
         </div>
 
-        <button class="btn btn-secondary" type="submit">Filtrar</button>
         <button id="btn-limpar-filtros-submontagem" class="btn btn-neutral" type="button">Limpar</button>
       </form>
 
@@ -126,28 +123,37 @@
               <th>Descricao</th>
               <th>Componentes</th>
               <th>Massa</th>
+              <th>Saldo Pronto</th>
+              <th>Capacidade</th>
+              <th>Limitante</th>
               <th>Acoes</th>
             </tr>
           </thead>
           <tbody id="submontagens-tbody">
             <tr>
-              <td colspan="5" class="empty-state">Carregando submontagens cadastradas...</td>
+              <td colspan="8" class="empty-state">Carregando submontagens cadastradas...</td>
             </tr>
           </tbody>
         </table>
       </div>
     </section>
 
-    <section class="content-card">
-      <div class="card-top">
+  </main>
+
+  <div id="estrutura-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="estrutura"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
         <div>
           <span class="section-pill">Estrutura</span>
           <h2 id="estrutura-titulo">Selecione uma submontagem</h2>
-          <p id="estrutura-subtitulo">Abra a estrutura a partir da listagem para consultar ou editar os componentes.</p>
+          <p id="estrutura-subtitulo">Abra a estrutura a partir da listagem para consultar ou imprimir os componentes.</p>
         </div>
 
         <div class="topbar-actions">
-          <button type="button" id="btn-novo-componente" class="btn btn-secondary" disabled>Adicionar Componente</button>
+          <button type="button" id="btn-imprimir-estrutura" class="btn btn-secondary">Imprimir</button>
+          <button id="btn-fechar-modal-estrutura" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
         </div>
       </div>
 
@@ -161,6 +167,9 @@
         <div class="structure-kpis">
           <span id="estrutura-total-componentes" class="mini-chip">Componentes: 0</span>
           <span id="estrutura-massa-total" class="mini-chip">Massa: 0,000 kg</span>
+          <span id="estrutura-saldo-pronto" class="mini-chip">Saldo pronto: 0</span>
+          <span id="estrutura-capacidade" class="mini-chip">Capacidade: 0</span>
+          <span id="estrutura-limitante" class="mini-chip">Limitante: -</span>
         </div>
       </div>
 
@@ -173,20 +182,22 @@
               <th>Codigo</th>
               <th>Descricao</th>
               <th>Quantidade</th>
+              <th>Disponivel</th>
+              <th>Capacidade</th>
               <th>Tipo</th>
-              <th>Massa</th>
-              <th>Acoes</th>
+              <th>Massa Unit.</th>
+              <th>Massa Total</th>
             </tr>
           </thead>
           <tbody id="componentes-tbody">
             <tr>
-              <td colspan="6" class="empty-state">Nenhuma estrutura carregada.</td>
+              <td colspan="8" class="empty-state">Nenhuma estrutura carregada.</td>
             </tr>
           </tbody>
         </table>
       </div>
-    </section>
-  </main>
+    </div>
+  </div>
 
   <div id="submontagem-modal" class="modal hidden" aria-hidden="true">
     <div class="modal-backdrop" data-close-modal="submontagem"></div>

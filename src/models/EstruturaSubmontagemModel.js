@@ -24,7 +24,31 @@ class EstruturaSubmontagemModel {
   }
 
   // Lista os componentes de uma submontagem ja com dados do item relacionado.
-  static async findBySubmontagemId(submontagemId) {
+  static async findBySubmontagemId(submontagemId, idEstoqueReferencia = null) {
+    const useStockReference = Number.isInteger(idEstoqueReferencia);
+    const stockSelect = useStockReference
+      ? `
+          COALESCE(se.quantidade, 0) AS saldo_estoque_referencia,
+          FLOOR(
+            CASE
+              WHEN es.quantidade > 0 THEN COALESCE(se.quantidade, 0) / es.quantidade
+              ELSE 0
+            END
+          ) AS capacidade_estoque_referencia,
+        `
+      : `
+          0 AS saldo_estoque_referencia,
+          0 AS capacidade_estoque_referencia,
+        `;
+    const stockJoin = useStockReference
+      ? `
+        LEFT JOIN estoque_saldos se
+          ON se.id_peca = es.id_item_componente
+          AND se.id_estoque = ?
+      `
+      : '';
+    const params = useStockReference ? [idEstoqueReferencia, submontagemId] : [submontagemId];
+
     const [rows] = await pool.query(
       `
         SELECT
@@ -38,14 +62,16 @@ class EstruturaSubmontagemModel {
           p.codigo AS codigo_componente,
           p.descricao AS descricao_componente,
           p.tipo AS tipo_componente,
+          ${stockSelect}
           p.comprimento_mm,
           p.massa_kg
         FROM estrutura_submontagem es
         INNER JOIN pecas p ON p.id = es.id_item_componente
+        ${stockJoin}
         WHERE es.id_submontagem = ?
         ORDER BY p.codigo ASC
       `,
-      [submontagemId]
+      params
     );
 
     return rows;

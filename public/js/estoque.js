@@ -7,8 +7,6 @@ const entradaInicialApiBaseUrl = '/api/estoque/entrada-inicial';
 const transferenciaApiBaseUrl = '/api/estoque/transferencia';
 const ajusteApiBaseUrl = '/api/estoque/ajuste';
 const saidaApiBaseUrl = '/api/estoque/saida';
-const expedicaoNome = 'ExpediÃ§Ã£o';
-
 let estoquesCache = [];
 let itensCache = [];
 let saldosCache = [];
@@ -16,6 +14,23 @@ let saldosOperacionaisCache = [];
 let saidaLista = [];
 let estruturasSubmontagemCache = new Map();
 let filtroDebounceTimer = null;
+const expedicaoNomeCorreto = 'Expedi\u00e7\u00e3o';
+
+function obterEstoqueExpedicao() {
+  return estoquesCache.find((estoque) => Number(estoque.id) === 3)
+    || estoquesCache.find((estoque) => String(estoque.nome || '') === expedicaoNomeCorreto)
+    || null;
+}
+
+function isRegistroExpedicao(registro) {
+  const estoqueExpedicao = obterEstoqueExpedicao();
+
+  if (estoqueExpedicao && Number(registro.id_estoque) === Number(estoqueExpedicao.id)) {
+    return true;
+  }
+
+  return String(registro.estoque_nome || '') === expedicaoNomeCorreto;
+}
 
 const filtroForm = document.getElementById('estoque-filtro-form');
 const estoqueMensagemBox = document.getElementById('estoque-mensagem');
@@ -146,9 +161,31 @@ async function carregarItens() {
     }
 
     itensCache = itens;
+    await preCarregarEstruturasSubmontagem();
   } catch (error) {
     mostrarMensagemEstoque(error.message, 'error');
   }
+}
+
+async function preCarregarEstruturasSubmontagem() {
+  const submontagens = itensCache.filter((item) => item.classificacao === 'SUBMONTAGEM');
+
+  await Promise.all(submontagens.map(async (submontagem) => {
+    if (estruturasSubmontagemCache.has(submontagem.id)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/submontagens/${submontagem.id}/componentes`);
+      const componentes = await response.json();
+
+      if (response.ok) {
+        estruturasSubmontagemCache.set(submontagem.id, componentes);
+      }
+    } catch (_) {
+      // Mantem a busca resiliente mesmo se alguma estrutura falhar.
+    }
+  }));
 }
 
 // Lista os saldos da tela principal com filtros dinamicos.
@@ -314,16 +351,21 @@ function renderizarSugestoesItem(tipo, termo) {
     return;
   }
 
-  config.panel.innerHTML = itensFiltrados.map((item) => `
-    <button type="button" class="autocomplete-option" data-item-id="${item.id}" data-item-codigo="${escapeHtml(item.codigo)}" data-item-descricao="${escapeHtml(item.descricao)}">
-      <strong>${escapeHtml(item.codigo)} - ${escapeHtml(item.descricao)}</strong>
-      <span>${escapeHtml(
-        tipo === 'saida'
-          ? `${item.classificacao} | ${item.tipo} | Saldo ExpediÃ§Ã£o: ${formatarQuantidade(obterSaldoExpedicao(item.id))}`
-          : `${item.classificacao} | ${item.tipo} | Maquina: ${item.maquina_nome || '-'}`
-      )}</span>
-    </button>
-  `).join('');
+  config.panel.innerHTML = itensFiltrados.map((item) => {
+    const disponivelSaida = item.classificacao === 'SUBMONTAGEM'
+      ? calcularDisponibilidadeSubmontagem(estruturasSubmontagemCache.get(item.id) || [])
+      : obterSaldoExpedicao(item.id);
+    const subtitulo = tipo === 'saida'
+      ? `${item.classificacao} | ${item.tipo} | Disponivel ${expedicaoNomeCorreto}: ${formatarQuantidade(disponivelSaida)}`
+      : `${item.classificacao} | ${item.tipo} | Maquina: ${item.maquina_nome || '-'}`;
+
+    return `
+      <button type="button" class="autocomplete-option" data-item-id="${item.id}" data-item-codigo="${escapeHtml(item.codigo)}" data-item-descricao="${escapeHtml(item.descricao)}">
+        <strong>${escapeHtml(item.codigo)} - ${escapeHtml(item.descricao)}</strong>
+        <span>${escapeHtml(subtitulo)}</span>
+      </button>
+    `;
+  }).join('');
   config.panel.classList.remove('hidden');
 }
 
@@ -475,7 +517,7 @@ async function handleTransferencia(event) {
 async function abrirModalSaida(saldo = null) {
   resetSaidaForm();
 
-  if (saldo && saldo.estoque_nome === expedicaoNome) {
+  if (saldo && isRegistroExpedicao(saldo)) {
     saidaItemIdInput.value = saldo.id_peca;
     saidaItemBuscaInput.value = `${saldo.codigo} - ${saldo.descricao}`;
     await atualizarSaldoDisponivelSaida();
@@ -507,7 +549,7 @@ async function carregarEstruturaSubmontagemSaida(submontagemId) {
 
 function obterSaldoExpedicao(itemId) {
   const saldo = saldosOperacionaisCache.find((registro) => (
-    registro.estoque_nome === expedicaoNome &&
+    isRegistroExpedicao(registro) &&
     Number(registro.id_peca) === Number(itemId)
   ));
 
@@ -530,13 +572,19 @@ function calcularDisponibilidadeSubmontagem(componentes) {
   }, Number.POSITIVE_INFINITY);
 }
 
+function calcularDisponibilidadeTotalSubmontagem(submontagemId, componentes) {
+  const saldoPronto = obterSaldoExpedicao(submontagemId);
+  const disponibilidadeComponentes = calcularDisponibilidadeSubmontagem(componentes);
+  return Number((saldoPronto + disponibilidadeComponentes).toFixed(2));
+}
+
 function obterSaldoDisponivelRegistroSaida(registro) {
   if (registro.classificacao !== 'SUBMONTAGEM') {
     return obterSaldoExpedicao(registro.id_peca);
   }
 
   const componentes = estruturasSubmontagemCache.get(registro.id_peca) || [];
-  return calcularDisponibilidadeSubmontagem(componentes);
+  return calcularDisponibilidadeTotalSubmontagem(registro.id_peca, componentes);
 }
 
 async function obterItemSelecionadoSaida() {
@@ -550,21 +598,18 @@ async function obterItemSelecionadoSaida() {
 
   if (item.classificacao === 'SUBMONTAGEM') {
     const componentes = await carregarEstruturaSubmontagemSaida(item.id);
-    const saldoDisponivel = calcularDisponibilidadeSubmontagem(componentes);
-
-    if (componentes.length === 0) {
-      mostrarMensagemSaida(`A submontagem ${item.codigo} nao possui componentes cadastrados.`, 'error');
-      return null;
-    }
+    const saldoPronto = obterSaldoExpedicao(item.id);
+    const saldoDisponivel = calcularDisponibilidadeTotalSubmontagem(item.id, componentes);
 
     if (saldoDisponivel <= 0) {
-      mostrarMensagemSaida(`A submontagem ${item.codigo} nao possui saldo suficiente nos componentes da Expedicao.`, 'error');
+      mostrarMensagemSaida(`A submontagem ${item.codigo} nao possui saldo pronto nem componentes suficientes na Expedicao.`, 'error');
       return null;
     }
 
     return {
       ...item,
-      saldo_disponivel: saldoDisponivel
+      saldo_disponivel: saldoDisponivel,
+      saldo_pronto: saldoPronto
     };
   }
 
@@ -597,7 +642,7 @@ async function atualizarSaldoDisponivelSaida() {
     try {
       const componentes = await carregarEstruturaSubmontagemSaida(item.id);
       document.getElementById('saida-saldo-disponivel').value = formatarQuantidade(
-        calcularDisponibilidadeSubmontagem(componentes)
+        calcularDisponibilidadeTotalSubmontagem(item.id, componentes)
       );
     } catch (error) {
       document.getElementById('saida-saldo-disponivel').value = '0';
@@ -878,7 +923,7 @@ function renderizarTabelaSaldos(saldos) {
           <div class="row-menu-panel">
             <button type="button" class="row-menu-item" data-action="history" data-saldo-id="${saldo.id}">Ver Historico</button>
             <button type="button" class="row-menu-item" data-action="transfer" data-saldo-id="${saldo.id}">Transferir</button>
-            ${saldo.estoque_nome === expedicaoNome ? `<button type="button" class="row-menu-item" data-action="sale" data-saldo-id="${saldo.id}">Saida de Venda</button>` : ''}
+            ${isRegistroExpedicao(saldo) ? `<button type="button" class="row-menu-item" data-action="sale" data-saldo-id="${saldo.id}">Saida de Venda</button>` : ''}
             <button type="button" class="row-menu-item" data-action="adjust" data-saldo-id="${saldo.id}">Ajustar Saldo</button>
           </div>
         </details>
@@ -932,7 +977,7 @@ function resetSaidaForm() {
   saidaForm.reset();
   saidaLista = [];
   saidaItemIdInput.value = '';
-  document.getElementById('saida-estoque-titulo').textContent = expedicaoNome;
+  document.getElementById('saida-estoque-titulo').textContent = expedicaoNomeCorreto;
   document.getElementById('saida-estoque-subtitulo').textContent = 'Monte a lista de venda e baixe tudo de uma vez.';
   document.getElementById('saida-quantidade').value = '1';
   atualizarSaldoDisponivelSaida();

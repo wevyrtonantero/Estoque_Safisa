@@ -3,6 +3,134 @@ const { pool } = require('../../database/connection');
 const EstruturaSubmontagemModel = require('./EstruturaSubmontagemModel');
 
 class SubmontagemModel {
+  static buildStockMetricParams(idEstoqueReferencia) {
+    if (!Number.isInteger(idEstoqueReferencia)) {
+      return [];
+    }
+
+    return new Array(7).fill(idEstoqueReferencia);
+  }
+
+  static buildStockMetricsSelect(idEstoqueReferencia) {
+    if (!Number.isInteger(idEstoqueReferencia)) {
+      return `
+        0 AS saldo_pronto_estoque,
+        0 AS capacidade_estoque,
+        NULL AS componente_limitante_codigo,
+        NULL AS componente_limitante_descricao,
+        0 AS componente_limitante_saldo,
+        NULL AS componente_limitante_quantidade_estrutura,
+        0 AS componente_limitante_capacidade
+      `;
+    }
+
+    return `
+      COALESCE((
+        SELECT ss.quantidade
+        FROM estoque_saldos ss
+        WHERE ss.id_estoque = ? AND ss.id_peca = p.id
+        LIMIT 1
+      ), 0) AS saldo_pronto_estoque,
+      COALESCE((
+        SELECT MIN(
+          FLOOR(
+            CASE
+              WHEN es2.quantidade > 0 THEN COALESCE(ssc.quantidade, 0) / es2.quantidade
+              ELSE 0
+            END
+          )
+        )
+        FROM estrutura_submontagem es2
+        LEFT JOIN estoque_saldos ssc
+          ON ssc.id_peca = es2.id_item_componente
+          AND ssc.id_estoque = ?
+        WHERE es2.id_submontagem = p.id
+      ), 0) AS capacidade_estoque,
+      (
+        SELECT pc2.codigo
+        FROM estrutura_submontagem es3
+        INNER JOIN pecas pc2 ON pc2.id = es3.id_item_componente
+        LEFT JOIN estoque_saldos sl
+          ON sl.id_peca = es3.id_item_componente
+          AND sl.id_estoque = ?
+        WHERE es3.id_submontagem = p.id
+        ORDER BY
+          CASE
+            WHEN es3.quantidade > 0 THEN COALESCE(sl.quantidade, 0) / es3.quantidade
+            ELSE 0
+          END ASC,
+          pc2.codigo ASC
+        LIMIT 1
+      ) AS componente_limitante_codigo,
+      (
+        SELECT pc2.descricao
+        FROM estrutura_submontagem es3
+        INNER JOIN pecas pc2 ON pc2.id = es3.id_item_componente
+        LEFT JOIN estoque_saldos sl
+          ON sl.id_peca = es3.id_item_componente
+          AND sl.id_estoque = ?
+        WHERE es3.id_submontagem = p.id
+        ORDER BY
+          CASE
+            WHEN es3.quantidade > 0 THEN COALESCE(sl.quantidade, 0) / es3.quantidade
+            ELSE 0
+          END ASC,
+          pc2.codigo ASC
+        LIMIT 1
+      ) AS componente_limitante_descricao,
+      COALESCE((
+        SELECT COALESCE(sl.quantidade, 0)
+        FROM estrutura_submontagem es3
+        LEFT JOIN estoque_saldos sl
+          ON sl.id_peca = es3.id_item_componente
+          AND sl.id_estoque = ?
+        WHERE es3.id_submontagem = p.id
+        ORDER BY
+          CASE
+            WHEN es3.quantidade > 0 THEN COALESCE(sl.quantidade, 0) / es3.quantidade
+            ELSE 0
+          END ASC,
+          es3.id_item_componente ASC
+        LIMIT 1
+      ), 0) AS componente_limitante_saldo,
+      (
+        SELECT es3.quantidade
+        FROM estrutura_submontagem es3
+        LEFT JOIN estoque_saldos sl
+          ON sl.id_peca = es3.id_item_componente
+          AND sl.id_estoque = ?
+        WHERE es3.id_submontagem = p.id
+        ORDER BY
+          CASE
+            WHEN es3.quantidade > 0 THEN COALESCE(sl.quantidade, 0) / es3.quantidade
+            ELSE 0
+          END ASC,
+          es3.id_item_componente ASC
+        LIMIT 1
+      ) AS componente_limitante_quantidade_estrutura,
+      COALESCE((
+        SELECT FLOOR(
+          CASE
+            WHEN es3.quantidade > 0 THEN COALESCE(sl.quantidade, 0) / es3.quantidade
+            ELSE 0
+          END
+        )
+        FROM estrutura_submontagem es3
+        LEFT JOIN estoque_saldos sl
+          ON sl.id_peca = es3.id_item_componente
+          AND sl.id_estoque = ?
+        WHERE es3.id_submontagem = p.id
+        ORDER BY
+          CASE
+            WHEN es3.quantidade > 0 THEN COALESCE(sl.quantidade, 0) / es3.quantidade
+            ELSE 0
+          END ASC,
+          es3.id_item_componente ASC
+        LIMIT 1
+      ), 0) AS componente_limitante_capacidade
+    `;
+  }
+
   static async replaceComponents(connection, submontagemId, componentes = []) {
     await connection.query(
       `
@@ -78,7 +206,8 @@ class SubmontagemModel {
           p.estoque_minimo,
           p.estoque_seguranca,
           p.consumo_mensal,
-          p.massa_kg,
+          COALESCE(SUM(es.quantidade * COALESCE(pc.massa_kg, 0)), 0) AS massa_kg,
+          ${this.buildStockMetricsSelect(filters.id_estoque_referencia)},
           p.created_at,
           p.updated_at,
           COUNT(DISTINCT es.id) AS total_componentes,
@@ -91,14 +220,14 @@ class SubmontagemModel {
         GROUP BY p.id
         ORDER BY p.id DESC
       `,
-      values
+      [...this.buildStockMetricParams(filters.id_estoque_referencia), ...values]
     );
 
     return rows;
   }
 
   // Busca uma submontagem pelo ID, com total de componentes agregados.
-  static async findById(id) {
+  static async findById(id, idEstoqueReferencia = null) {
     const [rows] = await pool.query(
       `
         SELECT
@@ -114,16 +243,18 @@ class SubmontagemModel {
           p.estoque_minimo,
           p.estoque_seguranca,
           p.consumo_mensal,
-          p.massa_kg,
+          COALESCE(SUM(es.quantidade * COALESCE(pc.massa_kg, 0)), 0) AS massa_kg,
+          ${this.buildStockMetricsSelect(idEstoqueReferencia)},
           p.created_at,
           p.updated_at,
           COUNT(es.id) AS total_componentes
         FROM pecas p
         LEFT JOIN estrutura_submontagem es ON es.id_submontagem = p.id
+        LEFT JOIN pecas pc ON pc.id = es.id_item_componente
         WHERE p.id = ? AND p.classificacao = 'SUBMONTAGEM'
         GROUP BY p.id
       `,
-      [id]
+      [...this.buildStockMetricParams(idEstoqueReferencia), id]
     );
 
     return rows[0] || null;

@@ -142,11 +142,15 @@ const SubmontagemController = {
       const itemComponenteId = req.query.id_item_componente
         ? Number.parseInt(req.query.id_item_componente, 10)
         : null;
+      const estoqueReferenciaId = req.query.estoque_referencia
+        ? Number.parseInt(req.query.estoque_referencia, 10)
+        : null;
       const filters = {
         codigo: req.query.codigo ? String(req.query.codigo).trim() : '',
         descricao: req.query.descricao ? String(req.query.descricao).trim() : '',
         tipo: 'PRODUZIDA',
-        id_item_componente: Number.isInteger(itemComponenteId) ? itemComponenteId : null
+        id_item_componente: Number.isInteger(itemComponenteId) ? itemComponenteId : null,
+        id_estoque_referencia: Number.isInteger(estoqueReferenciaId) ? estoqueReferenciaId : null
       };
 
       const submontagens = await SubmontagemModel.findAll(filters);
@@ -160,7 +164,13 @@ const SubmontagemController = {
   // Rota para buscar uma submontagem pelo ID.
   async getById(req, res) {
     try {
-      const submontagem = await SubmontagemModel.findById(req.params.id);
+      const estoqueReferenciaId = req.query.estoque_referencia
+        ? Number.parseInt(req.query.estoque_referencia, 10)
+        : null;
+      const submontagem = await SubmontagemModel.findById(
+        req.params.id,
+        Number.isInteger(estoqueReferenciaId) ? estoqueReferenciaId : null
+      );
 
       if (!submontagem) {
         return res.status(404).json({ message: 'Submontagem nao encontrada.' });
