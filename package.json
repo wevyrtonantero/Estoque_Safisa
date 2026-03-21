@@ -1,0 +1,14 @@
+{
+  "name": "safisa-pecas",
+  "version": "1.0.0",
+  "description": "CRUD de pecas do sistema SAFISA",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "mysql2": "^3.14.1"
+  }
+}

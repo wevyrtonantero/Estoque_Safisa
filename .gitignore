@@ -1,0 +1,15 @@
+node_modules/
+
+*.log
+server.out.log
+server.err.log
+
+.env
+.env.*
+
+dist/
+build/
+coverage/
+
+.DS_Store
+Thumbs.db

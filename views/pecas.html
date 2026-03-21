@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SAFISA | Cadastro de Pecas</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <!-- Fundo escurecido do menu recolhivel -->
+  <div id="drawer-scrim" class="drawer-scrim hidden"></div>
+
+  <!-- Menu recolhivel da area administrativa -->
+  <aside id="app-drawer" class="app-drawer" aria-hidden="true">
+    <div class="drawer-header">
+      <div>
+        <div class="brand-stack">
+          <div class="brand-mark">SF</div>
+          <div>
+            <p class="brand-label">SAFISA</p>
+            <h2 class="brand-title">Painel Administrativo</h2>
+          </div>
+        </div>
+        <p class="brand-copy">Navegacao compacta para liberar area util nas telas operacionais.</p>
+      </div>
+
+      <button id="drawer-close" class="icon-btn" type="button" aria-label="Fechar menu">X</button>
+    </div>
+
+    <nav class="drawer-nav">
+      <a class="nav-link" href="#"><span class="nav-icon">DB</span><span>Dashboard</span></a>
+      <a class="nav-link is-active" href="/pagina-pecas"><span class="nav-icon">PC</span><span>Pecas</span></a>
+      <a class="nav-link" href="/pagina-submontagens"><span class="nav-icon">SB</span><span>Submontagens</span></a>
+      <a class="nav-link" href="/pagina-materias-primas"><span class="nav-icon">MP</span><span>Materia-prima</span></a>
+      <a class="nav-link" href="/pagina-fornecedores"><span class="nav-icon">FR</span><span>Fornecedores</span></a>
+      <a class="nav-link" href="/pagina-maquinas"><span class="nav-icon">MQ</span><span>Maquinas</span></a>
+      <a class="nav-link" href="/pagina-estoque"><span class="nav-icon">ES</span><span>Estoque</span></a>
+      <a class="nav-link" href="#"><span class="nav-icon">PR</span><span>Producao</span></a>
+      <a class="nav-link" href="#"><span class="nav-icon">RL</span><span>Relatorios</span></a>
+    </nav>
+
+    <div class="drawer-footer">
+      <strong>Modulo atual</strong>
+      Cadastro de itens simples com listagem compacta e formulario em modal.
+    </div>
+  </aside>
+
+  <main class="workspace">
+    <!-- Topo compacto da pagina -->
+    <header class="topbar">
+      <div class="topbar-main">
+        <button id="menu-toggle" class="icon-btn icon-btn-menu" type="button" aria-label="Abrir menu">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+
+        <div class="topbar-copy">
+          <p class="page-kicker">Area Administrativa SAFISA</p>
+          <h1 class="page-title">Pecas</h1>
+          <p class="page-subtitle">Listagem enxuta para localizar, editar e cadastrar itens sem ocupar a tela inteira.</p>
+        </div>
+      </div>
+
+      <div class="topbar-actions">
+        <button type="button" id="btn-nova-peca" class="btn btn-primary">Nova Peca</button>
+      </div>
+    </header>
+
+    <!-- Resumo rapido da tela -->
+    <section class="summary-row">
+      <article class="summary-card">
+        <span>Total de Pecas</span>
+        <strong id="metric-total-pecas">0</strong>
+      </article>
+
+      <article class="summary-card">
+        <span>Itens Comprados</span>
+        <strong id="metric-compradas">0</strong>
+      </article>
+
+      <article class="summary-card">
+        <span>Itens Produzidos</span>
+        <strong id="metric-produzidas">0</strong>
+      </article>
+    </section>
+
+    <div id="mensagem" class="message hidden"></div>
+
+    <!-- Card principal da listagem de pecas -->
+    <section class="content-card">
+      <div class="card-top">
+        <div>
+          <span class="section-pill">Listagem</span>
+          <h2>Pecas Cadastradas</h2>
+          <p id="total-registros">0 registro(s) encontrado(s)</p>
+        </div>
+      </div>
+
+      <form id="filtro-form" class="toolbar-form">
+        <div class="field">
+          <label for="filtro-codigo">Buscar por codigo</label>
+          <input id="filtro-codigo" type="text" placeholder="Ex.: PC-001">
+        </div>
+
+        <div class="field">
+          <label for="filtro-descricao">Buscar por descricao</label>
+          <input id="filtro-descricao" type="text" placeholder="Digite parte da descricao">
+        </div>
+
+        <button class="btn btn-secondary" type="submit">Filtrar</button>
+        <button id="btn-limpar-filtros" class="btn btn-neutral" type="button">Limpar</button>
+      </form>
+
+      <div class="subtle-divider"></div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Codigo</th>
+              <th>Descricao</th>
+              <th>Acoes</th>
+            </tr>
+          </thead>
+          <tbody id="pecas-tbody">
+            <tr>
+              <td colspan="3" class="empty-state">Carregando pecas cadastradas...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- Modal de cadastro de peca -->
+  <div id="peca-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="peca"></div>
+
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Cadastro</span>
+          <h2 id="peca-modal-title">Nova Peca</h2>
+          <p>Organize os campos em um fluxo mais limpo sem manter o formulario aberto o tempo todo.</p>
+        </div>
+
+        <button id="btn-fechar-modal-peca" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="peca-modal-mensagem" class="message hidden"></div>
+
+      <form id="peca-form" class="form-grid">
+        <input type="hidden" id="peca-id">
+
+        <div class="field span-4">
+          <label for="codigo">Codigo</label>
+          <input id="codigo" type="text" maxlength="100" placeholder="Ex.: PC-001" required>
+        </div>
+
+        <div class="field span-8">
+          <label for="descricao">Descricao</label>
+          <input id="descricao" type="text" maxlength="255" placeholder="Descricao tecnica da peca" required>
+        </div>
+
+        <div class="field span-4">
+          <label for="comprimento">Comprimento</label>
+          <div class="inline-field">
+            <input id="comprimento" type="number" min="0.01" step="0.01" placeholder="0,00" required>
+            <select id="unidade-comprimento">
+              <option value="mm" selected>mm</option>
+              <option value="m">m</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field span-4">
+          <label for="tipo">Tipo</label>
+          <select id="tipo" required>
+            <option value="">Selecione</option>
+            <option value="COMPRADA">COMPRADA</option>
+            <option value="PRODUZIDA">PRODUZIDA</option>
+          </select>
+        </div>
+
+        <div class="field span-4">
+          <label for="massa">Massa</label>
+          <div class="inline-field">
+            <input id="massa" type="number" min="0" step="0.001" value="0" required>
+            <select id="unidade-massa">
+              <option value="kg" selected>kg</option>
+              <option value="g">g</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field span-4">
+          <label for="id-materia-prima">Materia-prima</label>
+          <input type="hidden" id="id-materia-prima">
+          <div class="autocomplete">
+            <input id="busca-materia-prima" type="text" placeholder="Digite nome, geometria ou bitola">
+            <div id="sugestoes-materia-prima" class="autocomplete-panel hidden"></div>
+          </div>
+        </div>
+
+        <div class="field span-4">
+          <label for="id-fornecedor">Fornecedor</label>
+          <input type="hidden" id="id-fornecedor">
+          <div class="autocomplete">
+            <input id="busca-fornecedor" type="text" placeholder="Digite nome, contato ou cidade">
+            <div id="sugestoes-fornecedor" class="autocomplete-panel hidden"></div>
+          </div>
+        </div>
+
+        <div class="field span-4">
+          <label for="id-maquina">Maquina</label>
+          <input type="hidden" id="id-maquina">
+          <div class="autocomplete">
+            <input id="busca-maquina" type="text" placeholder="Digite nome ou tipo da maquina">
+            <div id="sugestoes-maquina" class="autocomplete-panel hidden"></div>
+          </div>
+        </div>
+
+        <div class="field span-4">
+          <label for="estoque-minimo">Quantidade por pacote</label>
+          <input id="estoque-minimo" type="number" min="0" step="1" value="0" required>
+        </div>
+
+        <div class="field span-4">
+          <label for="estoque-seguranca">Estoque de seguranca</label>
+          <input id="estoque-seguranca" type="number" min="0" step="1" value="0" required>
+        </div>
+
+        <div class="field span-4">
+          <label for="consumo-mensal">Consumo mensal</label>
+          <input id="consumo-mensal" type="number" min="0" step="0.01" value="0" required>
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button id="btn-cancelar-modal-peca" class="btn btn-neutral" type="button">Cancelar</button>
+          <button id="btn-salvar" class="btn btn-primary" type="submit">Salvar Peca</button>
+          <button id="btn-atualizar" class="btn btn-secondary" type="button" disabled>Atualizar Peca</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/js/pecas.js"></script>
+</body>
+</html>

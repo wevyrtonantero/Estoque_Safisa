@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SAFISA | Controle de Estoque</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div id="drawer-scrim" class="drawer-scrim hidden"></div>
+
+  <!-- Menu recolhivel da area administrativa -->
+  <aside id="app-drawer" class="app-drawer" aria-hidden="true">
+    <div class="drawer-header">
+      <div>
+        <div class="brand-stack">
+          <div class="brand-mark">SF</div>
+          <div>
+            <p class="brand-label">SAFISA</p>
+            <h2 class="brand-title">Painel Administrativo</h2>
+          </div>
+        </div>
+        <p class="brand-copy">Navegacao compacta para liberar area util nas telas operacionais.</p>
+      </div>
+
+      <button id="drawer-close" class="icon-btn" type="button" aria-label="Fechar menu">X</button>
+    </div>
+
+    <nav class="drawer-nav">
+      <a class="nav-link" href="#"><span class="nav-icon">DB</span><span>Dashboard</span></a>
+      <a class="nav-link" href="/pagina-pecas"><span class="nav-icon">PC</span><span>Pecas</span></a>
+      <a class="nav-link" href="/pagina-submontagens"><span class="nav-icon">SB</span><span>Submontagens</span></a>
+      <a class="nav-link" href="/pagina-materias-primas"><span class="nav-icon">MP</span><span>Materia-prima</span></a>
+      <a class="nav-link" href="/pagina-fornecedores"><span class="nav-icon">FR</span><span>Fornecedores</span></a>
+      <a class="nav-link" href="/pagina-maquinas"><span class="nav-icon">MQ</span><span>Maquinas</span></a>
+      <a class="nav-link is-active" href="/pagina-estoque"><span class="nav-icon">ES</span><span>Estoque</span></a>
+      <a class="nav-link" href="#"><span class="nav-icon">PR</span><span>Producao</span></a>
+      <a class="nav-link" href="#"><span class="nav-icon">RL</span><span>Relatorios</span></a>
+    </nav>
+
+    <div class="drawer-footer">
+      <strong>Modulo atual</strong>
+      Controle de estoque integrado entre almoxarifado, montagem e expedição.
+    </div>
+  </aside>
+
+  <main class="workspace">
+    <!-- Topo da tela de controle de estoque -->
+    <header class="topbar">
+      <div class="topbar-main">
+        <button id="menu-toggle" class="icon-btn icon-btn-menu" type="button" aria-label="Abrir menu">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+
+        <div class="topbar-copy">
+          <p class="page-kicker">Area Administrativa SAFISA</p>
+          <h1 class="page-title">Controle de Estoque</h1>
+          <p class="page-subtitle">Saldos e movimentacoes entre almoxarifado, montagem e expedição.</p>
+        </div>
+      </div>
+
+      <div class="topbar-actions actions-row">
+        <button type="button" id="btn-nova-entrada" class="btn btn-primary">Nova Movimentacao</button>
+        <button type="button" id="btn-nova-transferencia" class="btn btn-secondary">Transferencia entre Estoques</button>
+        <button type="button" id="btn-nova-saida" class="btn btn-primary">Saida de Venda</button>
+      </div>
+    </header>
+
+    <section class="summary-row">
+      <article class="summary-card">
+        <span>Registros em Estoque</span>
+        <strong id="metric-total-saldos">0</strong>
+      </article>
+
+      <article class="summary-card">
+        <span>Quantidade Total</span>
+        <strong id="metric-quantidade-total">0,00</strong>
+      </article>
+
+      <article class="summary-card">
+        <span>Estoques Ativos</span>
+        <strong id="metric-estoques-ativos">0</strong>
+      </article>
+    </section>
+
+    <div id="estoque-mensagem" class="message hidden"></div>
+
+    <!-- Card principal do controle de estoque -->
+    <section class="content-card">
+      <div class="card-top">
+        <div>
+          <span class="section-pill">Estoque</span>
+          <h2>Saldos por Estoque</h2>
+          <p id="total-saldos">0 registro(s) encontrado(s)</p>
+        </div>
+      </div>
+
+      <!-- Filtros dinamicos do estoque -->
+      <form id="estoque-filtro-form" class="toolbar-form stock-toolbar">
+        <div class="field">
+          <label for="filtro-estoque">Estoque</label>
+          <select id="filtro-estoque">
+            <option value="">Todos</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="filtro-q">Busca geral</label>
+          <input id="filtro-q" type="text" placeholder="Codigo, descricao, estoque ou maquina">
+        </div>
+
+        <div class="field">
+          <label for="filtro-codigo-estoque">Codigo</label>
+          <input id="filtro-codigo-estoque" type="text" placeholder="Ex.: PC-001">
+        </div>
+
+        <div class="field">
+          <label for="filtro-descricao-estoque">Descricao</label>
+          <input id="filtro-descricao-estoque" type="text" placeholder="Digite parte da descricao">
+        </div>
+
+        <div class="field">
+          <label for="filtro-tipo-estoque">Tipo</label>
+          <select id="filtro-tipo-estoque">
+            <option value="">Todos</option>
+            <option value="COMPRADA">COMPRADA</option>
+            <option value="PRODUZIDA">PRODUZIDA</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="filtro-maquina-estoque">Maquina</label>
+          <input id="filtro-maquina-estoque" type="text" placeholder="Digite parte da maquina">
+        </div>
+
+        <div class="field">
+          <label for="filtro-classificacao-estoque">Classificacao</label>
+          <select id="filtro-classificacao-estoque">
+            <option value="">Todas</option>
+            <option value="ITEM">ITEM</option>
+            <option value="SUBMONTAGEM">SUBMONTAGEM</option>
+          </select>
+        </div>
+
+        <div class="toolbar-actions">
+          <button id="btn-limpar-filtros-estoque" class="btn btn-neutral" type="button">Limpar Filtros</button>
+        </div>
+      </form>
+
+      <div class="subtle-divider"></div>
+
+      <!-- Tabela principal do controle de estoque -->
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Estoque</th>
+              <th>Codigo</th>
+              <th>Descricao</th>
+              <th>Tipo</th>
+              <th>Classificacao</th>
+              <th>Maquina</th>
+              <th>Quantidade</th>
+              <th>Acoes</th>
+            </tr>
+          </thead>
+          <tbody id="estoque-saldos-tbody">
+            <tr>
+              <td colspan="8" class="empty-state">Carregando saldos de estoque...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- Modal de entrada inicial -->
+  <div id="entrada-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="entrada"></div>
+
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Movimentacao</span>
+          <h2>Entrada Inicial</h2>
+          <p>Adiciona saldo no estoque escolhido e registra a movimentacao inicial.</p>
+        </div>
+
+        <button id="btn-fechar-modal-entrada" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="entrada-mensagem" class="message hidden"></div>
+
+      <!-- Modal de entrada inicial no estoque -->
+      <form id="entrada-form" class="form-grid">
+        <input type="hidden" id="entrada-item-id">
+
+        <div class="field span-12">
+          <label for="entrada-item-busca">Item</label>
+          <div class="autocomplete">
+            <input id="entrada-item-busca" type="text" placeholder="Digite codigo ou descricao do item">
+            <div id="entrada-item-sugestoes" class="autocomplete-panel hidden"></div>
+          </div>
+          <span class="search-helper">Busca digitavel usando a base atual de pecas e submontagens.</span>
+        </div>
+
+        <div class="field span-6">
+          <label for="entrada-estoque">Estoque de destino</label>
+          <select id="entrada-estoque" required>
+            <option value="">Selecione</option>
+          </select>
+        </div>
+
+        <div class="field span-6">
+          <label for="entrada-quantidade">Quantidade</label>
+          <input id="entrada-quantidade" type="number" min="0.01" step="0.01" placeholder="0,00" required>
+        </div>
+
+        <div class="field span-12">
+          <label for="entrada-observacao">Observacao</label>
+          <input id="entrada-observacao" type="text" maxlength="255" placeholder="Opcional">
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button id="btn-cancelar-modal-entrada" class="btn btn-neutral" type="button">Cancelar</button>
+          <button id="btn-salvar-entrada" class="btn btn-primary" type="submit">Confirmar Entrada</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal de transferencia entre estoques -->
+  <div id="transferencia-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="transferencia"></div>
+
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Transferencia</span>
+          <h2>Transferir Entre Estoques</h2>
+          <p>Retira do estoque de origem, adiciona no destino e grava o historico.</p>
+        </div>
+
+        <button id="btn-fechar-modal-transferencia" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="transferencia-mensagem" class="message hidden"></div>
+
+      <!-- Modal de transferencia entre estoques -->
+      <form id="transferencia-form" class="form-grid">
+        <input type="hidden" id="transferencia-item-id">
+
+        <div class="field span-12">
+          <label for="transferencia-item-busca">Item</label>
+          <div class="autocomplete">
+            <input id="transferencia-item-busca" type="text" placeholder="Digite codigo ou descricao do item">
+            <div id="transferencia-item-sugestoes" class="autocomplete-panel hidden"></div>
+          </div>
+        </div>
+
+        <div class="field span-4">
+          <label for="transferencia-estoque-origem">Estoque de origem</label>
+          <select id="transferencia-estoque-origem" required>
+            <option value="">Selecione</option>
+          </select>
+        </div>
+
+        <div class="field span-4">
+          <label for="transferencia-estoque-destino">Estoque de destino</label>
+          <select id="transferencia-estoque-destino" required>
+            <option value="">Selecione</option>
+          </select>
+        </div>
+
+        <div class="field span-4">
+          <label for="transferencia-quantidade">Quantidade</label>
+          <input id="transferencia-quantidade" type="number" min="0.01" step="0.01" placeholder="0,00" required>
+        </div>
+
+        <div class="field span-12">
+          <label for="transferencia-observacao">Observacao</label>
+          <input id="transferencia-observacao" type="text" maxlength="255" placeholder="Opcional">
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button id="btn-cancelar-modal-transferencia" class="btn btn-neutral" type="button">Cancelar</button>
+          <button id="btn-salvar-transferencia" class="btn btn-primary" type="submit">Confirmar Transferencia</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal de saida de venda pela expedicao -->
+  <div id="saida-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="saida"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Saida</span>
+          <h2>Baixa de Venda pela Expedição</h2>
+          <p>A lista abaixo baixa somente do estoque final de expedição.</p>
+        </div>
+
+        <button id="btn-fechar-modal-saida" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="saida-mensagem" class="message hidden"></div>
+
+      <div class="structure-highlight">
+        <div>
+          <p class="page-kicker">Estoque Final de Saida</p>
+          <h3 id="saida-estoque-titulo">Expedição</h3>
+          <p id="saida-estoque-subtitulo">Monte a lista de venda e baixe tudo de uma vez.</p>
+        </div>
+
+        <div class="structure-kpis">
+          <span id="saida-total-itens-chip" class="mini-chip">Itens na lista: 0</span>
+          <span id="saida-total-quantidade-chip" class="mini-chip">Quantidade total: 0,00</span>
+        </div>
+      </div>
+
+      <!-- Lista de saida de venda montada pela expedicao -->
+      <form id="saida-form" class="form-grid">
+        <input type="hidden" id="saida-item-id">
+
+        <div class="field span-8">
+          <label for="saida-item-busca">Item</label>
+          <div class="autocomplete">
+            <input id="saida-item-busca" type="text" placeholder="Digite codigo ou descricao do item">
+            <div id="saida-item-sugestoes" class="autocomplete-panel hidden"></div>
+          </div>
+        </div>
+
+        <div class="field span-2">
+          <label for="saida-quantidade">Quantidade</label>
+          <input id="saida-quantidade" type="number" min="0.01" step="0.01" value="1" required>
+        </div>
+
+        <div class="field span-2">
+          <label for="saida-saldo-disponivel">Saldo na Expedição</label>
+          <input id="saida-saldo-disponivel" type="text" value="0,00" readonly>
+        </div>
+
+        <div class="field span-12">
+          <label for="saida-observacao">Observacao da venda</label>
+          <input id="saida-observacao" type="text" maxlength="255" placeholder="Opcional">
+        </div>
+
+        <div class="span-12 compact-actions">
+          <button id="btn-adicionar-lista-saida" class="btn btn-secondary" type="button">Adicionar a Lista</button>
+          <button id="btn-adicionar-mais-um-saida" class="btn btn-neutral" type="button">Baixar +1</button>
+          <button id="btn-limpar-item-saida" class="btn btn-neutral" type="button">Limpar Item</button>
+          <button id="btn-limpar-lista-saida" class="btn btn-neutral" type="button">Limpar Lista</button>
+        </div>
+      </form>
+
+      <div class="subtle-divider"></div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Codigo</th>
+              <th>Descricao</th>
+              <th>Quantidade</th>
+              <th>Saldo Atual</th>
+              <th>Acoes</th>
+            </tr>
+          </thead>
+          <tbody id="saida-tbody">
+            <tr>
+              <td colspan="5" class="empty-state">Nenhum item adicionado para a baixa de venda.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="modal-actions">
+        <button id="btn-cancelar-modal-saida" class="btn btn-neutral" type="button">Cancelar</button>
+        <button id="btn-baixar-tudo-saida" class="btn btn-primary" type="button">Baixar Tudo</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de ajuste manual -->
+  <div id="ajuste-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="ajuste"></div>
+
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Ajuste</span>
+          <h2>Ajustar Saldo</h2>
+          <p>O ajuste usa o novo saldo final para deixar a correção clara e segura.</p>
+        </div>
+
+        <button id="btn-fechar-modal-ajuste" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="ajuste-mensagem" class="message hidden"></div>
+
+      <div class="structure-highlight">
+        <div>
+          <p class="page-kicker">Item Selecionado</p>
+          <h3 id="ajuste-item-titulo">Nenhum item selecionado</h3>
+          <p id="ajuste-item-subtitulo">Escolha uma linha da tabela para ajustar o saldo.</p>
+        </div>
+
+        <div class="structure-kpis">
+          <span id="ajuste-estoque-chip" class="mini-chip">Estoque: -</span>
+          <span id="ajuste-saldo-chip" class="mini-chip">Saldo atual: 0,00</span>
+        </div>
+      </div>
+
+      <!-- Modal de ajuste manual de saldo -->
+      <form id="ajuste-form" class="form-grid">
+        <input type="hidden" id="ajuste-item-id">
+        <input type="hidden" id="ajuste-estoque-id">
+
+        <div class="field span-6">
+          <label for="ajuste-novo-saldo">Novo saldo</label>
+          <input id="ajuste-novo-saldo" type="number" min="0" step="0.01" placeholder="0,00" required>
+        </div>
+
+        <div class="field span-6">
+          <label for="ajuste-observacao">Observacao</label>
+          <input id="ajuste-observacao" type="text" maxlength="255" placeholder="Motivo do ajuste">
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button id="btn-cancelar-modal-ajuste" class="btn btn-neutral" type="button">Cancelar</button>
+          <button id="btn-salvar-ajuste" class="btn btn-primary" type="submit">Confirmar Ajuste</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal do historico de movimentacoes -->
+  <div id="historico-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="historico"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Historico</span>
+          <h2 id="historico-modal-title">Historico do Item</h2>
+          <p>Entradas iniciais, transferencias e ajustes registrados para o item selecionado.</p>
+        </div>
+
+        <button id="btn-fechar-modal-historico" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="historico-mensagem" class="message hidden"></div>
+
+      <div class="table-wrapper">
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Tipo</th>
+              <th>Origem</th>
+              <th>Destino</th>
+              <th>Quantidade</th>
+              <th>Observacao</th>
+            </tr>
+          </thead>
+          <tbody id="historico-tbody">
+            <tr>
+              <td colspan="6" class="empty-state">Abra o historico a partir da tabela principal.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/estoque.js"></script>
+</body>
+</html>
