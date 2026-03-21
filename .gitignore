@@ -3,6 +3,8 @@ node_modules/
 *.log
 server.out.log
 server.err.log
+*.bundle
+backups/*.bundle
 
 .env
 .env.*
@@ -10,6 +12,8 @@ server.err.log
 dist/
 build/
 coverage/
+.vscode/
+.idea/
 
 .DS_Store
 Thumbs.db
