@@ -125,8 +125,40 @@ function bindEvents() {
   drawerCloseButton.addEventListener('click', fecharDrawer);
   drawerScrim.addEventListener('click', fecharDrawer);
   document.addEventListener('keydown', handleKeyboardShortcuts);
+  document.addEventListener('click', handleGlobalRowMenuClick);
 
   bindAutocompleteEvents();
+}
+
+function closeAllRowMenus(exceptMenu = null) {
+  document.querySelectorAll('.row-menu[open]').forEach((menu) => {
+    if (exceptMenu && menu === exceptMenu) {
+      return;
+    }
+
+    menu.removeAttribute('open');
+  });
+}
+
+function handleGlobalRowMenuClick(event) {
+  const trigger = event.target.closest('.row-menu-trigger');
+  if (trigger) {
+    const currentMenu = trigger.closest('.row-menu');
+    window.requestAnimationFrame(() => {
+      const shouldKeepOpen = currentMenu && currentMenu.hasAttribute('open');
+      closeAllRowMenus(shouldKeepOpen ? currentMenu : null);
+    });
+    return;
+  }
+
+  if (event.target.closest('.row-menu-item')) {
+    closeAllRowMenus();
+    return;
+  }
+
+  if (!event.target.closest('.row-menu')) {
+    closeAllRowMenus();
+  }
 }
 
 // Carrega estoques para filtros e selects dos modais.
@@ -1039,6 +1071,7 @@ function handleKeyboardShortcuts(event) {
   if (event.key !== 'Escape') return;
 
   esconderTodasSugestoesItem();
+  closeAllRowMenus();
 
   if (!historicoModal.classList.contains('hidden')) return fecharModalHistorico();
   if (!saidaModal.classList.contains('hidden')) return fecharModalSaida();

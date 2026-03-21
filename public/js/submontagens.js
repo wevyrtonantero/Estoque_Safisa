@@ -68,6 +68,7 @@ function bindEvents() {
   document.getElementById('menu-toggle').addEventListener('click', () => toggleDrawer(true));
   document.getElementById('drawer-close').addEventListener('click', () => toggleDrawer(false));
   refs.drawerScrim.addEventListener('click', () => toggleDrawer(false));
+  document.addEventListener('click', handleGlobalRowMenuClick);
 
   refs.estruturaModal.addEventListener('click', (event) => {
     if (event.target.dataset.closeModal === 'estrutura') {
@@ -105,6 +106,37 @@ function bindEvents() {
   refs.tabelaDraft.addEventListener('click', handleTabelaDraft);
 
   bindAutocompleteItens();
+}
+
+function closeAllRowMenus(exceptMenu = null) {
+  document.querySelectorAll('.row-menu[open]').forEach((menu) => {
+    if (exceptMenu && menu === exceptMenu) {
+      return;
+    }
+
+    menu.removeAttribute('open');
+  });
+}
+
+function handleGlobalRowMenuClick(event) {
+  const trigger = event.target.closest('.row-menu-trigger');
+  if (trigger) {
+    const currentMenu = trigger.closest('.row-menu');
+    window.requestAnimationFrame(() => {
+      const shouldKeepOpen = currentMenu && currentMenu.hasAttribute('open');
+      closeAllRowMenus(shouldKeepOpen ? currentMenu : null);
+    });
+    return;
+  }
+
+  if (event.target.closest('.row-menu-item')) {
+    closeAllRowMenus();
+    return;
+  }
+
+  if (!event.target.closest('.row-menu')) {
+    closeAllRowMenus();
+  }
 }
 
 function bindAutocompleteItens() {
@@ -1008,6 +1040,7 @@ function handleKeyboardShortcuts(event) {
   }
 
   esconderSugestoesItens();
+  closeAllRowMenus();
 
   if (!refs.componenteModal.classList.contains('hidden')) {
     fecharModalComponente();

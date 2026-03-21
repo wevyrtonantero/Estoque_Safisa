@@ -62,7 +62,7 @@ class EstoqueModel {
 
   // Lista os saldos com filtros dinamicos por estoque, item e atributos da peca.
   static async findSaldos(filters = {}) {
-    const conditions = ['s.quantidade >= 0'];
+    const conditions = ['s.quantidade > 0'];
     const values = [];
     const orderBy = filters.ordem_quantidade
       ? `s.quantidade ${filters.ordem_quantidade}, p.codigo ASC`
