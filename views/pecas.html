@@ -108,6 +108,27 @@
           <input id="filtro-descricao" type="text" placeholder="Digite parte da descricao">
         </div>
 
+        <div class="field">
+          <label for="filtro-materia-prima">Materia-prima</label>
+          <select id="filtro-materia-prima">
+            <option value="">Todas</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="filtro-fornecedor">Fornecedor</label>
+          <select id="filtro-fornecedor">
+            <option value="">Todos</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="filtro-maquina">Maquina</label>
+          <select id="filtro-maquina">
+            <option value="">Todas</option>
+          </select>
+        </div>
+
         <button class="btn btn-secondary" type="submit">Filtrar</button>
         <button id="btn-limpar-filtros" class="btn btn-neutral" type="button">Limpar</button>
       </form>
@@ -166,7 +187,7 @@
         <div class="field span-4">
           <label for="comprimento">Comprimento</label>
           <div class="inline-field">
-            <input id="comprimento" type="number" min="0.01" step="0.01" placeholder="0,00" required>
+            <input id="comprimento" type="number" min="0.01" step="0.01" placeholder="Opcional">
             <select id="unidade-comprimento">
               <option value="mm" selected>mm</option>
               <option value="m">m</option>
@@ -186,7 +207,7 @@
         <div class="field span-4">
           <label for="massa">Massa</label>
           <div class="inline-field">
-            <input id="massa" type="number" min="0" step="0.001" value="0" required>
+            <input id="massa" type="number" min="0" step="0.001" placeholder="Opcional">
             <select id="unidade-massa">
               <option value="kg" selected>kg</option>
               <option value="g">g</option>
@@ -223,17 +244,17 @@
 
         <div class="field span-4">
           <label for="estoque-minimo">Quantidade por pacote</label>
-          <input id="estoque-minimo" type="number" min="0" step="1" value="0" required>
+          <input id="estoque-minimo" type="number" min="0" step="1" placeholder="Opcional">
         </div>
 
         <div class="field span-4">
           <label for="estoque-seguranca">Estoque de seguranca</label>
-          <input id="estoque-seguranca" type="number" min="0" step="1" value="0" required>
+          <input id="estoque-seguranca" type="number" min="0" step="1" placeholder="Opcional">
         </div>
 
         <div class="field span-4">
           <label for="consumo-mensal">Consumo mensal</label>
-          <input id="consumo-mensal" type="number" min="0" step="0.01" value="0" required>
+          <input id="consumo-mensal" type="number" min="0" step="0.01" placeholder="Opcional">
         </div>
 
         <div class="span-12 modal-actions">

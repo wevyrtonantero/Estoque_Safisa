@@ -160,7 +160,8 @@ async function carregarSaldos() {
     descricao: document.getElementById('filtro-descricao-estoque').value.trim(),
     tipo: document.getElementById('filtro-tipo-estoque').value,
     maquina: document.getElementById('filtro-maquina-estoque').value.trim(),
-    classificacao: document.getElementById('filtro-classificacao-estoque').value
+    classificacao: document.getElementById('filtro-classificacao-estoque').value,
+    ordem_quantidade: document.getElementById('filtro-ordem-quantidade').value
   };
 
   Object.entries(filtros).forEach(([key, value]) => {
@@ -313,7 +314,7 @@ function renderizarSugestoesItem(tipo, termo) {
       <strong>${escapeHtml(item.codigo)} - ${escapeHtml(item.descricao)}</strong>
       <span>${escapeHtml(
         tipo === 'saida'
-          ? `${item.classificacao} | ${item.tipo} | Saldo Expedição: ${formatarNumero(obterSaldoExpedicao(item.id), 2)}`
+          ? `${item.classificacao} | ${item.tipo} | Saldo Expedição: ${formatarQuantidade(obterSaldoExpedicao(item.id))}`
           : `${item.classificacao} | ${item.tipo} | Maquina: ${item.maquina_nome || '-'}`
       )}</span>
     </button>
@@ -649,7 +650,7 @@ function obterSaldoExpedicao(itemId) {
 function atualizarSaldoDisponivelSaida() {
   const itemId = Number.parseInt(saidaItemIdInput.value, 10);
   const saldoDisponivel = Number.isInteger(itemId) ? obterSaldoExpedicao(itemId) : 0;
-  document.getElementById('saida-saldo-disponivel').value = formatarNumero(saldoDisponivel, 2);
+  document.getElementById('saida-saldo-disponivel').value = formatarQuantidade(saldoDisponivel);
 }
 
 function sincronizarSaldosDaListaSaida() {
@@ -669,8 +670,8 @@ function renderizarListaSaida() {
       <tr>
         <td class="table-code">${escapeHtml(item.codigo)}</td>
         <td class="table-description">${escapeHtml(item.descricao)}</td>
-        <td class="table-quantity">${formatarNumero(item.quantidade, 2)}</td>
-        <td>${formatarNumero(item.saldo_disponivel, 2)}</td>
+        <td class="table-quantity">${formatarQuantidade(item.quantidade)}</td>
+        <td>${formatarQuantidade(item.saldo_disponivel)}</td>
         <td class="table-actions-cell">
           <details class="row-menu">
             <summary class="row-menu-trigger" aria-label="Abrir acoes">...</summary>
@@ -687,7 +688,7 @@ function renderizarListaSaida() {
 
   const quantidadeTotal = saidaLista.reduce((acumulador, item) => acumulador + Number(item.quantidade), 0);
   document.getElementById('saida-total-itens-chip').textContent = `Itens na lista: ${saidaLista.length}`;
-  document.getElementById('saida-total-quantidade-chip').textContent = `Quantidade total: ${formatarNumero(quantidadeTotal, 2)}`;
+  document.getElementById('saida-total-quantidade-chip').textContent = `Quantidade total: ${formatarQuantidade(quantidadeTotal)}`;
 }
 
 // Modal de ajuste de saldo usando o novo saldo final.
@@ -698,7 +699,7 @@ function abrirModalAjuste(saldo) {
   document.getElementById('ajuste-item-titulo').textContent = `${saldo.codigo} - ${saldo.descricao}`;
   document.getElementById('ajuste-item-subtitulo').textContent = `${saldo.classificacao} | ${saldo.tipo} | Maquina: ${saldo.maquina_nome}`;
   document.getElementById('ajuste-estoque-chip').textContent = `Estoque: ${saldo.estoque_nome}`;
-  document.getElementById('ajuste-saldo-chip').textContent = `Saldo atual: ${formatarNumero(saldo.quantidade, 2)}`;
+  document.getElementById('ajuste-saldo-chip').textContent = `Saldo atual: ${formatarQuantidade(saldo.quantidade)}`;
   document.getElementById('ajuste-novo-saldo').value = Number(saldo.quantidade);
   abrirModal(ajusteModal);
 }
@@ -779,7 +780,7 @@ function renderizarTabelaSaldos(saldos) {
       <td>${escapeHtml(saldo.tipo)}</td>
       <td>${escapeHtml(saldo.classificacao)}</td>
       <td>${escapeHtml(saldo.maquina_nome || '-')}</td>
-      <td class="table-quantity">${formatarNumero(saldo.quantidade, 2)}</td>
+      <td class="table-quantity">${formatarQuantidade(saldo.quantidade)}</td>
       <td class="table-actions-cell">
         <details class="row-menu">
           <summary class="row-menu-trigger" aria-label="Abrir acoes">...</summary>
@@ -809,7 +810,7 @@ function renderizarHistorico(movimentacoes) {
       <td>${escapeHtml(movimentacao.tipo_movimentacao)}</td>
       <td>${escapeHtml(movimentacao.estoque_origem_nome)}</td>
       <td>${escapeHtml(movimentacao.estoque_destino_nome)}</td>
-      <td class="table-quantity">${formatarNumero(movimentacao.quantidade, 2)}</td>
+      <td class="table-quantity">${formatarQuantidade(movimentacao.quantidade)}</td>
       <td>${escapeHtml(movimentacao.observacao || '-')}</td>
     </tr>
   `).join('');
@@ -818,7 +819,7 @@ function renderizarHistorico(movimentacoes) {
 function atualizarIndicadores(saldos) {
   const quantidadeTotal = saldos.reduce((acumulador, saldo) => acumulador + Number(saldo.quantidade), 0);
   document.getElementById('metric-total-saldos').textContent = String(saldos.length);
-  document.getElementById('metric-quantidade-total').textContent = formatarNumero(quantidadeTotal, 2);
+  document.getElementById('metric-quantidade-total').textContent = formatarQuantidade(quantidadeTotal);
   document.getElementById('metric-estoques-ativos').textContent = String(estoquesCache.length);
 }
 
@@ -856,7 +857,7 @@ function resetAjusteForm() {
   document.getElementById('ajuste-item-titulo').textContent = 'Nenhum item selecionado';
   document.getElementById('ajuste-item-subtitulo').textContent = 'Escolha uma linha da tabela para ajustar o saldo.';
   document.getElementById('ajuste-estoque-chip').textContent = 'Estoque: -';
-  document.getElementById('ajuste-saldo-chip').textContent = 'Saldo atual: 0,00';
+  document.getElementById('ajuste-saldo-chip').textContent = 'Saldo atual: 0';
   esconderMensagemAjuste();
 }
 
@@ -984,6 +985,13 @@ function formatarNumero(valor, casasDecimais) {
   return Number(valor).toLocaleString('pt-BR', {
     minimumFractionDigits: casasDecimais,
     maximumFractionDigits: casasDecimais
+  });
+}
+
+function formatarQuantidade(valor) {
+  return Number(valor).toLocaleString('pt-BR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
   });
 }
 

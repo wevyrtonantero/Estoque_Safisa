@@ -64,6 +64,17 @@ class EstoqueModel {
   static async findSaldos(filters = {}) {
     const conditions = ['s.quantidade >= 0'];
     const values = [];
+    const orderBy = filters.ordem_quantidade
+      ? `s.quantidade ${filters.ordem_quantidade}, p.codigo ASC`
+      : `
+          CASE
+            WHEN e.nome = 'Almoxarifado' THEN 1
+            WHEN e.nome = 'Montagem' THEN 2
+            WHEN e.nome = 'Expedição' THEN 3
+            ELSE 99
+          END,
+          p.codigo ASC
+        `;
 
     if (filters.estoque) {
       conditions.push('e.id = ?');
@@ -129,14 +140,7 @@ class EstoqueModel {
         INNER JOIN pecas p ON p.id = s.id_peca
         LEFT JOIN maquinas m ON m.id = p.id_maquina
         WHERE ${conditions.join(' AND ')}
-        ORDER BY
-          CASE
-            WHEN e.nome = 'Almoxarifado' THEN 1
-            WHEN e.nome = 'Montagem' THEN 2
-            WHEN e.nome = 'Expedição' THEN 3
-            ELSE 99
-          END,
-          p.codigo ASC
+        ORDER BY ${orderBy}
       `,
       values
     );

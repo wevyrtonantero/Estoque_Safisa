@@ -62,7 +62,7 @@
       </div>
 
       <div class="topbar-actions actions-row">
-        <button type="button" id="btn-nova-entrada" class="btn btn-primary">Nova Movimentacao</button>
+        <button type="button" id="btn-nova-entrada" class="btn btn-success">Entrada de Pecas</button>
         <button type="button" id="btn-nova-transferencia" class="btn btn-secondary">Transferencia entre Estoques</button>
         <button type="button" id="btn-nova-saida" class="btn btn-primary">Saida de Venda</button>
       </div>
@@ -76,7 +76,7 @@
 
       <article class="summary-card">
         <span>Quantidade Total</span>
-        <strong id="metric-quantidade-total">0,00</strong>
+        <strong id="metric-quantidade-total">0</strong>
       </article>
 
       <article class="summary-card">
@@ -141,6 +141,15 @@
             <option value="">Todas</option>
             <option value="ITEM">ITEM</option>
             <option value="SUBMONTAGEM">SUBMONTAGEM</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="filtro-ordem-quantidade">Ordenar quantidade</label>
+          <select id="filtro-ordem-quantidade">
+            <option value="">Padrao</option>
+            <option value="ASC">Menor para maior</option>
+            <option value="DESC">Maior para menor</option>
           </select>
         </div>
 
@@ -215,7 +224,7 @@
 
         <div class="field span-6">
           <label for="entrada-quantidade">Quantidade</label>
-          <input id="entrada-quantidade" type="number" min="0.01" step="0.01" placeholder="0,00" required>
+          <input id="entrada-quantidade" type="number" min="1" step="1" placeholder="0" required>
         </div>
 
         <div class="field span-12">
@@ -276,7 +285,7 @@
 
         <div class="field span-4">
           <label for="transferencia-quantidade">Quantidade</label>
-          <input id="transferencia-quantidade" type="number" min="0.01" step="0.01" placeholder="0,00" required>
+          <input id="transferencia-quantidade" type="number" min="1" step="1" placeholder="0" required>
         </div>
 
         <div class="field span-12">
@@ -318,7 +327,7 @@
 
         <div class="structure-kpis">
           <span id="saida-total-itens-chip" class="mini-chip">Itens na lista: 0</span>
-          <span id="saida-total-quantidade-chip" class="mini-chip">Quantidade total: 0,00</span>
+          <span id="saida-total-quantidade-chip" class="mini-chip">Quantidade total: 0</span>
         </div>
       </div>
 
@@ -336,12 +345,12 @@
 
         <div class="field span-2">
           <label for="saida-quantidade">Quantidade</label>
-          <input id="saida-quantidade" type="number" min="0.01" step="0.01" value="1" required>
+          <input id="saida-quantidade" type="number" min="1" step="1" value="1" required>
         </div>
 
         <div class="field span-2">
           <label for="saida-saldo-disponivel">Saldo na Expedição</label>
-          <input id="saida-saldo-disponivel" type="text" value="0,00" readonly>
+          <input id="saida-saldo-disponivel" type="text" value="0" readonly>
         </div>
 
         <div class="field span-12">
@@ -411,7 +420,7 @@
 
         <div class="structure-kpis">
           <span id="ajuste-estoque-chip" class="mini-chip">Estoque: -</span>
-          <span id="ajuste-saldo-chip" class="mini-chip">Saldo atual: 0,00</span>
+          <span id="ajuste-saldo-chip" class="mini-chip">Saldo atual: 0</span>
         </div>
       </div>
 
@@ -422,7 +431,7 @@
 
         <div class="field span-6">
           <label for="ajuste-novo-saldo">Novo saldo</label>
-          <input id="ajuste-novo-saldo" type="number" min="0" step="0.01" placeholder="0,00" required>
+          <input id="ajuste-novo-saldo" type="number" min="0" step="1" placeholder="0" required>
         </div>
 
         <div class="field span-6">

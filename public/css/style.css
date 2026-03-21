@@ -487,6 +487,16 @@ textarea {
   background: rgba(18, 66, 118, 0.08);
 }
 
+.btn-success {
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--success), #28a37a);
+  box-shadow: 0 12px 22px rgba(30, 139, 104, 0.24);
+}
+
+.btn-success:hover {
+  background: linear-gradient(135deg, #177a5b, #208c69);
+}
+
 .btn-danger {
   color: #ffffff;
   background: linear-gradient(135deg, var(--danger), #e85d5d);

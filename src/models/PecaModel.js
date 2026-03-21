@@ -22,27 +22,49 @@ class PecaModel {
       values.push(filters.tipo);
     }
 
+    if (filters.id_materia_prima) {
+      conditions.push('id_materia_prima = ?');
+      values.push(filters.id_materia_prima);
+    }
+
+    if (filters.id_fornecedor) {
+      conditions.push('id_fornecedor = ?');
+      values.push(filters.id_fornecedor);
+    }
+
+    if (filters.id_maquina) {
+      conditions.push('id_maquina = ?');
+      values.push(filters.id_maquina);
+    }
+
     const [rows] = await pool.query(
       `
         SELECT
-          id,
-          codigo,
-          descricao,
-          comprimento_mm,
-          tipo,
-          classificacao,
-          id_materia_prima,
-          id_fornecedor,
-          id_maquina,
-          estoque_minimo,
-          estoque_seguranca,
-          consumo_mensal,
-          massa_kg,
-          created_at,
-          updated_at
-        FROM pecas
+          p.id,
+          p.codigo,
+          p.descricao,
+          p.comprimento_mm,
+          p.tipo,
+          p.classificacao,
+          p.id_materia_prima,
+          p.id_fornecedor,
+          p.id_maquina,
+          p.estoque_minimo,
+          p.estoque_seguranca,
+          p.consumo_mensal,
+          p.massa_kg,
+          p.created_at,
+          p.updated_at,
+          mp.codigo AS materia_prima_codigo,
+          mp.nome AS materia_prima_nome,
+          f.nome AS fornecedor_nome,
+          m.nome AS maquina_nome
+        FROM pecas p
+        LEFT JOIN materias_primas mp ON mp.id = p.id_materia_prima
+        LEFT JOIN fornecedores f ON f.id = p.id_fornecedor
+        LEFT JOIN maquinas m ON m.id = p.id_maquina
         WHERE ${conditions.join(' AND ')}
-        ORDER BY id DESC
+        ORDER BY p.id DESC
       `,
       values
     );

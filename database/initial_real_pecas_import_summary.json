@@ -1,0 +1,95 @@
+{
+  "pdf_origem": "d:\\Pastas Windows\\Desktop\\ALMOXARIFE NOVO.pdf",
+  "linhas_originais": 413,
+  "linhas_unicas": 409,
+  "duplicados": [
+    {
+      "codigo": "053",
+      "ocorrencias": 2,
+      "mantida": {
+        "ordem": 179,
+        "codigo": "053",
+        "descricao": "EMBALAGEM P/ 1 SERVO",
+        "tipo": "COMPRADA",
+        "classificacao": "ITEM",
+        "estoque": 0
+      },
+      "descartadas": [
+        {
+          "ordem": 71,
+          "codigo": "053",
+          "descricao": "RETENTOR DO MBF-032",
+          "tipo": "COMPRADA",
+          "classificacao": "ITEM",
+          "estoque": 317
+        }
+      ]
+    },
+    {
+      "codigo": "200",
+      "ocorrencias": 2,
+      "mantida": {
+        "ordem": 371,
+        "codigo": "200",
+        "descricao": "ALAVANCA DE ACIONAMENTO AGRALE",
+        "tipo": "PRODUZIDA",
+        "classificacao": "ITEM",
+        "estoque": 6
+      },
+      "descartadas": [
+        {
+          "ordem": 111,
+          "codigo": "200",
+          "descricao": "CORPO BR-025",
+          "tipo": "PRODUZIDA",
+          "classificacao": "ITEM",
+          "estoque": 0
+        }
+      ]
+    },
+    {
+      "codigo": "401",
+      "ocorrencias": 2,
+      "mantida": {
+        "ordem": 410,
+        "codigo": "401",
+        "descricao": "CORPO MC-040",
+        "tipo": "PRODUZIDA",
+        "classificacao": "ITEM",
+        "estoque": 600
+      },
+      "descartadas": [
+        {
+          "ordem": 117,
+          "codigo": "401",
+          "descricao": "CORPO DO MC",
+          "tipo": "PRODUZIDA",
+          "classificacao": "ITEM",
+          "estoque": 0
+        }
+      ]
+    },
+    {
+      "codigo": "632",
+      "ocorrencias": 2,
+      "mantida": {
+        "ordem": 412,
+        "codigo": "632",
+        "descricao": "BUCHA",
+        "tipo": "PRODUZIDA",
+        "classificacao": "ITEM",
+        "estoque": 120
+      },
+      "descartadas": [
+        {
+          "ordem": 328,
+          "codigo": "632",
+          "descricao": "Calço eixo alavanca",
+          "tipo": "PRODUZIDA",
+          "classificacao": "ITEM",
+          "estoque": 80
+        }
+      ]
+    }
+  ]
+}

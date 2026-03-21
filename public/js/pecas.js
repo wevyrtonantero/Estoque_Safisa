@@ -103,6 +103,7 @@ async function carregarOpcoesCadastro() {
     }
 
     cadastroOptionsCache = opcoes;
+    preencherFiltrosRelacionamento();
   } catch (error) {
     mostrarMensagem(error.message, 'error');
   }
@@ -112,8 +113,14 @@ async function carregarPecas() {
   const params = new URLSearchParams();
   const codigo = document.getElementById('filtro-codigo').value.trim();
   const descricao = document.getElementById('filtro-descricao').value.trim();
+  const idMateriaPrima = document.getElementById('filtro-materia-prima').value;
+  const idFornecedor = document.getElementById('filtro-fornecedor').value;
+  const idMaquina = document.getElementById('filtro-maquina').value;
   if (codigo) params.append('codigo', codigo);
   if (descricao) params.append('descricao', descricao);
+  if (idMateriaPrima) params.append('id_materia_prima', idMateriaPrima);
+  if (idFornecedor) params.append('id_fornecedor', idFornecedor);
+  if (idMaquina) params.append('id_maquina', idMaquina);
 
   try {
     const endpoint = params.toString() ? `${apiBaseUrl}?${params}` : apiBaseUrl;
@@ -195,6 +202,36 @@ function clearFilters() {
   carregarPecas();
 }
 
+function preencherFiltrosRelacionamento() {
+  preencherSelectFiltro(
+    document.getElementById('filtro-materia-prima'),
+    cadastroOptionsCache.materias_primas,
+    'Todas',
+    (item) => `${item.codigo} - ${item.nome}`
+  );
+  preencherSelectFiltro(
+    document.getElementById('filtro-fornecedor'),
+    cadastroOptionsCache.fornecedores,
+    'Todos',
+    (item) => item.nome
+  );
+  preencherSelectFiltro(
+    document.getElementById('filtro-maquina'),
+    cadastroOptionsCache.maquinas,
+    'Todas',
+    (item) => item.nome
+  );
+}
+
+function preencherSelectFiltro(selectElement, itens, placeholder, labelBuilder) {
+  const valorAtual = selectElement.value;
+  selectElement.innerHTML = `
+    <option value="">${placeholder}</option>
+    ${itens.map((item) => `<option value="${item.id}">${escapeHtml(labelBuilder(item))}</option>`).join('')}
+  `;
+  selectElement.value = valorAtual;
+}
+
 async function handleTableActions(event) {
   const actionButton = event.target.closest('button[data-action]');
   if (!actionButton) return;
@@ -205,9 +242,9 @@ async function handleTableActions(event) {
 }
 
 function montarPayloadDoFormulario() {
-  const comprimento = Number.parseFloat(document.getElementById('comprimento').value);
+  const comprimento = parseOptionalNumber(document.getElementById('comprimento').value);
   const unidadeComprimento = document.getElementById('unidade-comprimento').value;
-  const massa = Number.parseFloat(document.getElementById('massa').value);
+  const massa = parseOptionalNumber(document.getElementById('massa').value);
   const unidadeMassa = document.getElementById('unidade-massa').value;
 
   return {
@@ -218,9 +255,9 @@ function montarPayloadDoFormulario() {
     id_materia_prima: normalizeOptionalValue(materiaPrimaIdInput.value),
     id_fornecedor: normalizeOptionalValue(fornecedorIdInput.value),
     id_maquina: normalizeOptionalValue(maquinaIdInput.value),
-    estoque_minimo: document.getElementById('estoque-minimo').value,
-    estoque_seguranca: document.getElementById('estoque-seguranca').value,
-    consumo_mensal: document.getElementById('consumo-mensal').value,
+    estoque_minimo: normalizeOptionalValue(document.getElementById('estoque-minimo').value),
+    estoque_seguranca: normalizeOptionalValue(document.getElementById('estoque-seguranca').value),
+    consumo_mensal: normalizeOptionalValue(document.getElementById('consumo-mensal').value),
     massa_kg: converterMassaParaKg(massa, unidadeMassa)
   };
 }
@@ -235,16 +272,16 @@ async function carregarPecaParaEdicao(id) {
     document.getElementById('peca-id').value = peca.id;
     document.getElementById('codigo').value = peca.codigo;
     document.getElementById('descricao').value = peca.descricao;
-    document.getElementById('comprimento').value = Number(peca.comprimento_mm);
+    document.getElementById('comprimento').value = formatOptionalNumber(peca.comprimento_mm);
     document.getElementById('unidade-comprimento').value = 'mm';
     document.getElementById('tipo').value = peca.tipo;
     preencherCampoRelacionamento('materia-prima', peca.id_materia_prima);
     preencherCampoRelacionamento('fornecedor', peca.id_fornecedor);
     preencherCampoRelacionamento('maquina', peca.id_maquina);
-    document.getElementById('estoque-minimo').value = peca.estoque_minimo;
-    document.getElementById('estoque-seguranca').value = peca.estoque_seguranca;
-    document.getElementById('consumo-mensal').value = peca.consumo_mensal;
-    document.getElementById('massa').value = Number(peca.massa_kg);
+    document.getElementById('estoque-minimo').value = formatOptionalNumber(peca.estoque_minimo);
+    document.getElementById('estoque-seguranca').value = formatOptionalNumber(peca.estoque_seguranca);
+    document.getElementById('consumo-mensal').value = formatOptionalNumber(peca.consumo_mensal);
+    document.getElementById('massa').value = formatOptionalNumber(peca.massa_kg);
     document.getElementById('unidade-massa').value = 'kg';
     atualizarButton.disabled = false;
     salvarButton.disabled = true;
@@ -501,6 +538,15 @@ function converterMassaParaKg(value, unit) {
 
 function normalizeOptionalValue(value) {
   return value === '' ? null : value;
+}
+
+function parseOptionalNumber(value) {
+  if (value === '') return null;
+  return Number.parseFloat(value);
+}
+
+function formatOptionalNumber(value) {
+  return value === null || value === undefined ? '' : Number(value);
 }
 
 function escapeHtml(value) {

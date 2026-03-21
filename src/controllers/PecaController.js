@@ -13,13 +13,23 @@ function normalizeOptionalInteger(value) {
   return Number.isInteger(parsedValue) ? parsedValue : Number.NaN;
 }
 
-// Normaliza campos decimais vindos do frontend.
-function normalizeDecimal(value, defaultValue = 0) {
+// Normaliza campos decimais opcionais vindos do frontend.
+function normalizeOptionalDecimal(value) {
   if (value === undefined || value === null || value === '') {
-    return defaultValue;
+    return null;
   }
 
   return Number.parseFloat(value);
+}
+
+// Normaliza inteiros opcionais sem forcar zero quando o campo vier vazio.
+function normalizeOptionalNonNegativeInteger(value) {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  const parsedValue = Number.parseInt(value, 10);
+  return Number.isInteger(parsedValue) ? parsedValue : Number.NaN;
 }
 
 // Monta o payload padronizado da entidade peca.
@@ -27,16 +37,16 @@ function buildPayload(body) {
   return {
     codigo: String(body.codigo || '').trim(),
     descricao: String(body.descricao || '').trim(),
-    comprimento_mm: normalizeDecimal(body.comprimento_mm, Number.NaN),
+    comprimento_mm: normalizeOptionalDecimal(body.comprimento_mm),
     tipo: String(body.tipo || '').trim().toUpperCase(),
     classificacao: 'ITEM',
     id_materia_prima: normalizeOptionalInteger(body.id_materia_prima),
     id_fornecedor: normalizeOptionalInteger(body.id_fornecedor),
     id_maquina: normalizeOptionalInteger(body.id_maquina),
-    estoque_minimo: Number.parseInt(body.estoque_minimo ?? 0, 10),
-    estoque_seguranca: Number.parseInt(body.estoque_seguranca ?? 0, 10),
-    consumo_mensal: normalizeDecimal(body.consumo_mensal, 0),
-    massa_kg: normalizeDecimal(body.massa_kg, 0)
+    estoque_minimo: normalizeOptionalNonNegativeInteger(body.estoque_minimo),
+    estoque_seguranca: normalizeOptionalNonNegativeInteger(body.estoque_seguranca),
+    consumo_mensal: normalizeOptionalDecimal(body.consumo_mensal),
+    massa_kg: normalizeOptionalDecimal(body.massa_kg)
   };
 }
 
@@ -52,7 +62,7 @@ function validatePayload(payload) {
     errors.push('O campo descricao e obrigatorio.');
   }
 
-  if (!Number.isFinite(payload.comprimento_mm) || payload.comprimento_mm <= 0) {
+  if (payload.comprimento_mm !== null && (!Number.isFinite(payload.comprimento_mm) || payload.comprimento_mm <= 0)) {
     errors.push('O campo comprimento_mm deve ser maior que zero.');
   }
 
@@ -64,19 +74,19 @@ function validatePayload(payload) {
     errors.push('A classificacao da tela de pecas deve ser ITEM.');
   }
 
-  if (!Number.isInteger(payload.estoque_minimo) || payload.estoque_minimo < 0) {
+  if (payload.estoque_minimo !== null && (!Number.isInteger(payload.estoque_minimo) || payload.estoque_minimo < 0)) {
     errors.push('O campo estoque_minimo nao pode ser negativo.');
   }
 
-  if (!Number.isInteger(payload.estoque_seguranca) || payload.estoque_seguranca < 0) {
+  if (payload.estoque_seguranca !== null && (!Number.isInteger(payload.estoque_seguranca) || payload.estoque_seguranca < 0)) {
     errors.push('O campo estoque_seguranca nao pode ser negativo.');
   }
 
-  if (!Number.isFinite(payload.consumo_mensal) || payload.consumo_mensal < 0) {
+  if (payload.consumo_mensal !== null && (!Number.isFinite(payload.consumo_mensal) || payload.consumo_mensal < 0)) {
     errors.push('O campo consumo_mensal nao pode ser negativo.');
   }
 
-  if (!Number.isFinite(payload.massa_kg) || payload.massa_kg < 0) {
+  if (payload.massa_kg !== null && (!Number.isFinite(payload.massa_kg) || payload.massa_kg < 0)) {
     errors.push('O campo massa_kg nao pode ser negativo.');
   }
 
@@ -96,10 +106,16 @@ const PecaController = {
   async getAll(req, res) {
     try {
       const tipo = req.query.tipo ? String(req.query.tipo).trim().toUpperCase() : '';
+      const idMateriaPrima = normalizeOptionalInteger(req.query.id_materia_prima);
+      const idFornecedor = normalizeOptionalInteger(req.query.id_fornecedor);
+      const idMaquina = normalizeOptionalInteger(req.query.id_maquina);
       const filters = {
         codigo: req.query.codigo ? String(req.query.codigo).trim() : '',
         descricao: req.query.descricao ? String(req.query.descricao).trim() : '',
-        tipo: TIPOS_VALIDOS.includes(tipo) ? tipo : ''
+        tipo: TIPOS_VALIDOS.includes(tipo) ? tipo : '',
+        id_materia_prima: Number.isInteger(idMateriaPrima) ? idMateriaPrima : null,
+        id_fornecedor: Number.isInteger(idFornecedor) ? idFornecedor : null,
+        id_maquina: Number.isInteger(idMaquina) ? idMaquina : null
       };
 
       const pecas = await PecaModel.findAll(filters);

@@ -184,6 +184,9 @@ const EstoqueController = {
       const classificacao = req.query.classificacao
         ? String(req.query.classificacao).trim().toUpperCase()
         : '';
+      const ordemQuantidade = req.query.ordem_quantidade
+        ? String(req.query.ordem_quantidade).trim().toUpperCase()
+        : '';
       const estoque = normalizeOptionalInteger(req.query.estoque);
 
       const saldos = await EstoqueModel.findSaldos({
@@ -193,7 +196,8 @@ const EstoqueController = {
         tipo: TIPOS_VALIDOS.includes(tipo) ? tipo : '',
         maquina: req.query.maquina ? String(req.query.maquina).trim() : '',
         classificacao: CLASSIFICACOES_VALIDAS.includes(classificacao) ? classificacao : '',
-        q: req.query.q ? String(req.query.q).trim() : ''
+        q: req.query.q ? String(req.query.q).trim() : '',
+        ordem_quantidade: ['ASC', 'DESC'].includes(ordemQuantidade) ? ordemQuantidade : ''
       });
 
       return res.status(200).json(saldos);
