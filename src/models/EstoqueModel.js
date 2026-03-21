@@ -329,6 +329,66 @@ class EstoqueModel {
     return resultados;
   }
 
+  static async consumeSubmontagemComponentsFromStock(
+    connection,
+    submontagem,
+    quantidadeBase,
+    idEstoqueOrigem,
+    estoqueDestinoSubmontagem,
+    observacaoBase
+  ) {
+    const componentes = await this.findSubmontagemComponents(submontagem.id, connection);
+
+    if (componentes.length === 0) {
+      throw this.createBusinessError(`A submontagem ${submontagem.codigo} nao possui componentes cadastrados.`);
+    }
+
+    const consumos = [];
+
+    for (const componente of componentes) {
+      const quantidadeConsumida = Number(
+        (Number(componente.quantidade) * Number(quantidadeBase)).toFixed(2)
+      );
+      const saldoOrigem = await this.findSaldoForUpdate(connection, idEstoqueOrigem, componente.id_item_componente);
+      const quantidadeOrigem = saldoOrigem ? Number(saldoOrigem.quantidade) : 0;
+
+      if (quantidadeConsumida > quantidadeOrigem) {
+        throw this.createBusinessError(
+          `Saldo insuficiente em ${componente.codigo} para montar a submontagem ${submontagem.codigo}.`
+        );
+      }
+
+      const novoSaldoOrigem = Number((quantidadeOrigem - quantidadeConsumida).toFixed(2));
+
+      await this.persistSaldo(
+        connection,
+        idEstoqueOrigem,
+        componente.id_item_componente,
+        novoSaldoOrigem,
+        saldoOrigem
+      );
+
+      await this.createMovimentacao(connection, {
+        id_peca: componente.id_item_componente,
+        id_estoque_origem: idEstoqueOrigem,
+        id_estoque_destino: null,
+        tipo_movimentacao: 'SAIDA',
+        quantidade: quantidadeConsumida,
+        observacao: `${observacaoBase || 'Consumo de componentes para montagem.'} Componente ${componente.codigo} consumido na montagem de ${submontagem.codigo} para ${estoqueDestinoSubmontagem}.`.slice(0, 255)
+      });
+
+      consumos.push({
+        id_peca: componente.id_item_componente,
+        codigo: componente.codigo,
+        descricao: componente.descricao,
+        quantidade_consumida: quantidadeConsumida,
+        saldo_origem_restante: novoSaldoOrigem
+      });
+    }
+
+    return consumos;
+  }
+
   // Busca um estoque pelo ID para validar origem e destino.
   static async findStockById(id, connection = pool) {
     const [rows] = await connection.query(
@@ -483,6 +543,62 @@ class EstoqueModel {
       const estoqueDestino = await this.findStockById(data.id_estoque_destino, connection);
       if (!estoqueDestino || Number(estoqueDestino.ativo) !== 1) {
         throw this.createBusinessError('Estoque de destino nao encontrado ou inativo.');
+      }
+
+      if (item.classificacao === 'SUBMONTAGEM') {
+        if (!Number.isInteger(data.id_estoque_origem_componentes)) {
+          throw this.createBusinessError('Informe o estoque de origem dos componentes para montar a submontagem.');
+        }
+
+        const estoqueOrigemComponentes = await this.findStockById(data.id_estoque_origem_componentes, connection);
+        if (!estoqueOrigemComponentes || Number(estoqueOrigemComponentes.ativo) !== 1) {
+          throw this.createBusinessError('Estoque de origem dos componentes nao encontrado ou inativo.');
+        }
+
+        const componentesConsumidos = await this.consumeSubmontagemComponentsFromStock(
+          connection,
+          item,
+          data.quantidade,
+          estoqueOrigemComponentes.id,
+          estoqueDestino.nome,
+          data.observacao || 'Montagem de submontagem pela entrada de estoque.'
+        );
+
+        const saldoAtualSubmontagem = await this.findSaldoForUpdate(
+          connection,
+          data.id_estoque_destino,
+          data.id_peca
+        );
+        const quantidadeAtualSubmontagem = saldoAtualSubmontagem ? Number(saldoAtualSubmontagem.quantidade) : 0;
+        const novoSaldoSubmontagem = Number((quantidadeAtualSubmontagem + Number(data.quantidade)).toFixed(2));
+
+        await this.persistSaldo(
+          connection,
+          data.id_estoque_destino,
+          data.id_peca,
+          novoSaldoSubmontagem,
+          saldoAtualSubmontagem
+        );
+
+        await this.createMovimentacao(connection, {
+          id_peca: data.id_peca,
+          id_estoque_origem: estoqueOrigemComponentes.id,
+          id_estoque_destino: data.id_estoque_destino,
+          tipo_movimentacao: 'ENTRADA_INICIAL',
+          quantidade: data.quantidade,
+          observacao: `${data.observacao || 'Montagem de submontagem pela entrada de estoque.'} Submontagem montada com consumo de componentes.`.slice(0, 255)
+        });
+
+        await connection.commit();
+
+        return {
+          item,
+          estoque_origem_componentes: estoqueOrigemComponentes,
+          estoque_destino: estoqueDestino,
+          saldo_anterior: quantidadeAtualSubmontagem,
+          saldo_atual: novoSaldoSubmontagem,
+          componentes_consumidos: componentesConsumidos
+        };
       }
 
       const saldoAtual = await this.findSaldoForUpdate(

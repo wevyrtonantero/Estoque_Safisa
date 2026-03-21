@@ -67,6 +67,9 @@ const appDrawer = document.getElementById('app-drawer');
 const entradaItemBuscaInput = document.getElementById('entrada-item-busca');
 const entradaItemIdInput = document.getElementById('entrada-item-id');
 const entradaItemSugestoes = document.getElementById('entrada-item-sugestoes');
+const entradaEstoqueOrigemComponentesSelect = document.getElementById('entrada-estoque-origem-componentes');
+const entradaOrigemWrapper = document.getElementById('entrada-origem-wrapper');
+const entradaSubmontagemPreview = document.getElementById('entrada-submontagem-preview');
 const transferenciaItemBuscaInput = document.getElementById('transferencia-item-busca');
 const transferenciaItemIdInput = document.getElementById('transferencia-item-id');
 const transferenciaItemSugestoes = document.getElementById('transferencia-item-sugestoes');
@@ -114,6 +117,9 @@ function bindEvents() {
   document.getElementById('btn-cancelar-modal-ajuste').addEventListener('click', fecharModalAjuste);
   document.getElementById('btn-fechar-modal-ajuste').addEventListener('click', fecharModalAjuste);
   document.getElementById('btn-fechar-modal-historico').addEventListener('click', fecharModalHistorico);
+  document.getElementById('entrada-quantidade').addEventListener('input', atualizarPainelEntradaSubmontagem);
+  document.getElementById('entrada-estoque').addEventListener('change', atualizarPainelEntradaSubmontagem);
+  entradaEstoqueOrigemComponentesSelect.addEventListener('change', atualizarPainelEntradaSubmontagem);
 
   entradaModal.addEventListener('click', handleModalBackdrop);
   transferenciaModal.addEventListener('click', handleModalBackdrop);
@@ -174,6 +180,7 @@ async function carregarEstoques() {
     estoquesCache = estoques;
     preencherSelectEstoques(document.getElementById('filtro-estoque'), 'Todos');
     preencherSelectEstoques(document.getElementById('entrada-estoque'), 'Selecione');
+    preencherSelectEstoques(entradaEstoqueOrigemComponentesSelect, 'Selecione');
     preencherSelectEstoques(document.getElementById('transferencia-estoque-origem'), 'Selecione');
     preencherSelectEstoques(document.getElementById('transferencia-estoque-destino'), 'Selecione');
     document.getElementById('metric-estoques-ativos').textContent = String(estoques.length);
@@ -326,6 +333,7 @@ function handleSaldoActions(event) {
 function bindAutocompleteEvents() {
   entradaItemBuscaInput.addEventListener('input', () => {
     entradaItemIdInput.value = '';
+    atualizarPainelEntradaSubmontagem();
     renderizarSugestoesItem('entrada', entradaItemBuscaInput.value.trim());
   });
   entradaItemBuscaInput.addEventListener('focus', () => {
@@ -385,7 +393,7 @@ function renderizarSugestoesItem(tipo, termo) {
 
   config.panel.innerHTML = itensFiltrados.map((item) => {
     const disponivelSaida = item.classificacao === 'SUBMONTAGEM'
-      ? calcularDisponibilidadeSubmontagem(estruturasSubmontagemCache.get(item.id) || [])
+      ? calcularDisponibilidadeTotalSubmontagem(item.id, estruturasSubmontagemCache.get(item.id) || [])
       : obterSaldoExpedicao(item.id);
     const subtitulo = tipo === 'saida'
       ? `${item.classificacao} | ${item.tipo} | Disponivel ${expedicaoNomeCorreto}: ${formatarQuantidade(disponivelSaida)}`
@@ -408,6 +416,9 @@ async function handleSugestaoItemClick(event, tipo) {
   const config = getItemAutocompleteConfig(tipo);
   config.hidden.value = option.dataset.itemId;
   config.input.value = `${option.dataset.itemCodigo} - ${option.dataset.itemDescricao}`;
+  if (tipo === 'entrada') {
+    await atualizarPainelEntradaSubmontagem();
+  }
   if (tipo === 'saida') {
     await atualizarSaldoDisponivelSaida();
   }
@@ -462,6 +473,7 @@ function preencherSelectEstoques(selectElement, placeholder) {
 // Modal de entrada inicial.
 function abrirModalEntrada() {
   resetEntradaForm();
+  atualizarPainelEntradaSubmontagem();
   abrirModal(entradaModal);
 }
 
@@ -479,6 +491,7 @@ async function handleEntradaInicial(event) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         id_peca: entradaItemIdInput.value,
+        id_estoque_origem_componentes: entradaEstoqueOrigemComponentesSelect.value,
         id_estoque_destino: document.getElementById('entrada-estoque').value,
         quantidade: document.getElementById('entrada-quantidade').value,
         observacao: document.getElementById('entrada-observacao').value.trim()
@@ -579,6 +592,120 @@ async function carregarEstruturaSubmontagemSaida(submontagemId) {
   return componentes;
 }
 
+async function carregarEstruturaSubmontagem(submontagemId) {
+  return carregarEstruturaSubmontagemSaida(submontagemId);
+}
+
+function obterSaldoEmEstoque(idEstoque, itemId) {
+  const saldo = saldosOperacionaisCache.find((registro) => (
+    Number(registro.id_estoque) === Number(idEstoque)
+    && Number(registro.id_peca) === Number(itemId)
+  ));
+
+  return saldo ? Number(saldo.quantidade) : 0;
+}
+
+function esconderPainelEntradaSubmontagem() {
+  entradaOrigemWrapper.classList.add('hidden');
+  entradaSubmontagemPreview.classList.add('hidden');
+  entradaEstoqueOrigemComponentesSelect.required = false;
+  document.getElementById('entrada-preview-titulo').textContent = 'Selecione uma submontagem';
+  document.getElementById('entrada-preview-subtitulo').textContent = 'A entrada vai consumir os componentes do estoque escolhido e gerar a submontagem pronta no destino.';
+  document.getElementById('entrada-preview-componentes-chip').textContent = 'Componentes: 0';
+  document.getElementById('entrada-preview-consumo-chip').textContent = 'Consumo total: 0';
+  document.getElementById('entrada-preview-status-chip').textContent = 'Status: aguardando origem';
+  document.getElementById('entrada-preview-tbody').innerHTML = '<tr><td colspan="6" class="empty-state">Selecione a submontagem e o estoque de origem para visualizar o consumo.</td></tr>';
+}
+
+async function atualizarPainelEntradaSubmontagem() {
+  const itemId = Number.parseInt(entradaItemIdInput.value, 10);
+  const item = itensCache.find((registro) => Number(registro.id) === itemId);
+
+  if (!item || item.classificacao !== 'SUBMONTAGEM') {
+    esconderPainelEntradaSubmontagem();
+    return;
+  }
+
+  entradaOrigemWrapper.classList.remove('hidden');
+  entradaSubmontagemPreview.classList.remove('hidden');
+  entradaEstoqueOrigemComponentesSelect.required = true;
+
+  const quantidadeInformada = Number.parseFloat(document.getElementById('entrada-quantidade').value);
+  const quantidade = Number.isFinite(quantidadeInformada) && quantidadeInformada > 0 ? quantidadeInformada : 0;
+  const estoqueOrigemId = Number.parseInt(entradaEstoqueOrigemComponentesSelect.value, 10);
+  const estoqueDestinoId = Number.parseInt(document.getElementById('entrada-estoque').value, 10);
+  const estoqueOrigem = estoquesCache.find((estoque) => Number(estoque.id) === estoqueOrigemId) || null;
+  const estoqueDestino = estoquesCache.find((estoque) => Number(estoque.id) === estoqueDestinoId) || null;
+
+  document.getElementById('entrada-preview-titulo').textContent = `${item.codigo} - ${item.descricao}`;
+  document.getElementById('entrada-preview-subtitulo').textContent = [
+    estoqueOrigem ? `Origem dos componentes: ${estoqueOrigem.nome}` : 'Selecione a origem dos componentes',
+    estoqueDestino ? `Destino da submontagem: ${estoqueDestino.nome}` : 'Selecione o destino da submontagem'
+  ].join(' | ');
+
+  try {
+    const componentes = await carregarEstruturaSubmontagem(item.id);
+
+    if (componentes.length === 0) {
+      document.getElementById('entrada-preview-componentes-chip').textContent = 'Componentes: 0';
+      document.getElementById('entrada-preview-consumo-chip').textContent = 'Consumo total: 0';
+      document.getElementById('entrada-preview-status-chip').textContent = 'Status: sem estrutura';
+      document.getElementById('entrada-preview-tbody').innerHTML = '<tr><td colspan="6" class="empty-state">Esta submontagem nao possui componentes cadastrados.</td></tr>';
+      return;
+    }
+
+    const totalConsumo = componentes.reduce(
+      (total, componente) => total + (Number(componente.quantidade) * quantidade),
+      0
+    );
+
+    const linhas = componentes.map((componente) => {
+      const quantidadeNecessaria = Number((Number(componente.quantidade) * quantidade).toFixed(2));
+      const saldoOrigem = estoqueOrigem
+        ? obterSaldoEmEstoque(estoqueOrigem.id, componente.id_item_componente)
+        : 0;
+      const suficiente = estoqueOrigem && quantidade > 0 && saldoOrigem >= quantidadeNecessaria;
+
+      return {
+        ...componente,
+        quantidade_necessaria: quantidadeNecessaria,
+        saldo_origem: saldoOrigem,
+        suficiente
+      };
+    });
+
+    const prontoParaMontar = (
+      Boolean(estoqueOrigem)
+      && quantidade > 0
+      && linhas.every((componente) => componente.suficiente)
+    );
+
+    document.getElementById('entrada-preview-componentes-chip').textContent = `Componentes: ${componentes.length}`;
+    document.getElementById('entrada-preview-consumo-chip').textContent = `Consumo total: ${formatarQuantidade(totalConsumo)}`;
+    document.getElementById('entrada-preview-status-chip').textContent = prontoParaMontar
+      ? 'Status: pronto para montar'
+      : estoqueOrigem
+        ? 'Status: saldo insuficiente'
+        : 'Status: aguardando origem';
+
+    document.getElementById('entrada-preview-tbody').innerHTML = linhas.map((componente) => `
+      <tr>
+        <td class="table-code">${escapeHtml(componente.codigo_componente)}</td>
+        <td class="table-description">${escapeHtml(componente.descricao_componente)}</td>
+        <td>${formatarQuantidade(componente.quantidade)}</td>
+        <td>${formatarQuantidade(componente.quantidade_necessaria)}</td>
+        <td>${estoqueOrigem ? formatarQuantidade(componente.saldo_origem) : '-'}</td>
+        <td>${componente.suficiente ? 'OK' : (estoqueOrigem ? 'Faltando' : 'Aguardando origem')}</td>
+      </tr>
+    `).join('');
+  } catch (error) {
+    document.getElementById('entrada-preview-componentes-chip').textContent = 'Componentes: 0';
+    document.getElementById('entrada-preview-consumo-chip').textContent = 'Consumo total: 0';
+    document.getElementById('entrada-preview-status-chip').textContent = 'Status: erro';
+    document.getElementById('entrada-preview-tbody').innerHTML = `<tr><td colspan="6" class="empty-state">${escapeHtml(error.message)}</td></tr>`;
+  }
+}
+
 function obterSaldoExpedicao(itemId) {
   const saldo = saldosOperacionaisCache.find((registro) => (
     isRegistroExpedicao(registro) &&
@@ -629,7 +756,7 @@ async function obterItemSelecionadoSaida() {
   }
 
   if (item.classificacao === 'SUBMONTAGEM') {
-    const componentes = await carregarEstruturaSubmontagemSaida(item.id);
+    const componentes = await carregarEstruturaSubmontagem(item.id);
     const saldoPronto = obterSaldoExpedicao(item.id);
     const saldoDisponivel = calcularDisponibilidadeTotalSubmontagem(item.id, componentes);
 
@@ -672,7 +799,7 @@ async function atualizarSaldoDisponivelSaida() {
 
   if (item.classificacao === 'SUBMONTAGEM') {
     try {
-      const componentes = await carregarEstruturaSubmontagemSaida(item.id);
+      const componentes = await carregarEstruturaSubmontagem(item.id);
       document.getElementById('saida-saldo-disponivel').value = formatarQuantidade(
         calcularDisponibilidadeTotalSubmontagem(item.id, componentes)
       );
@@ -994,6 +1121,8 @@ function atualizarIndicadores(saldos) {
 function resetEntradaForm() {
   entradaForm.reset();
   entradaItemIdInput.value = '';
+  entradaEstoqueOrigemComponentesSelect.value = '';
+  esconderPainelEntradaSubmontagem();
   esconderMensagemEntrada();
   esconderTodasSugestoesItem();
 }

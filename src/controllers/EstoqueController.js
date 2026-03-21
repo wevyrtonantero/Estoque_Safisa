@@ -24,6 +24,7 @@ function normalizeDecimal(value, defaultValue = Number.NaN) {
 function buildEntradaPayload(body) {
   return {
     id_peca: normalizeOptionalInteger(body.id_peca),
+    id_estoque_origem_componentes: normalizeOptionalInteger(body.id_estoque_origem_componentes),
     id_estoque_destino: normalizeOptionalInteger(body.id_estoque_destino ?? body.id_estoque),
     quantidade: normalizeDecimal(body.quantidade),
     observacao: body.observacao ? String(body.observacao).trim() : null
@@ -71,6 +72,13 @@ function validateEntradaPayload(payload) {
 
   if (!Number.isInteger(payload.id_estoque_destino)) {
     errors.push('O estoque de destino deve ser valido.');
+  }
+
+  if (
+    payload.id_estoque_origem_componentes !== null
+    && !Number.isInteger(payload.id_estoque_origem_componentes)
+  ) {
+    errors.push('O estoque de origem dos componentes deve ser valido.');
   }
 
   if (!Number.isFinite(payload.quantidade) || payload.quantidade <= 0) {

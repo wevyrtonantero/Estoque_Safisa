@@ -227,6 +227,50 @@
           <input id="entrada-quantidade" type="number" min="1" step="1" placeholder="0" required>
         </div>
 
+        <div id="entrada-origem-wrapper" class="field span-12 hidden">
+          <label for="entrada-estoque-origem-componentes">Estoque de origem dos componentes</label>
+          <select id="entrada-estoque-origem-componentes">
+            <option value="">Selecione</option>
+          </select>
+          <span class="search-helper">A submontagem sera montada consumindo as pecas desse estoque.</span>
+        </div>
+
+        <div id="entrada-submontagem-preview" class="span-12 embedded-section hidden">
+          <div class="structure-highlight">
+            <div>
+              <p class="page-kicker">Montagem da Submontagem</p>
+              <h3 id="entrada-preview-titulo">Selecione uma submontagem</h3>
+              <p id="entrada-preview-subtitulo">A entrada vai consumir os componentes do estoque escolhido e gerar a submontagem pronta no destino.</p>
+            </div>
+
+            <div class="structure-kpis">
+              <span id="entrada-preview-componentes-chip" class="mini-chip">Componentes: 0</span>
+              <span id="entrada-preview-consumo-chip" class="mini-chip">Consumo total: 0</span>
+              <span id="entrada-preview-status-chip" class="mini-chip">Status: aguardando origem</span>
+            </div>
+          </div>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Codigo</th>
+                  <th>Descricao</th>
+                  <th>Qtd. Estrutura</th>
+                  <th>Qtd. Necessaria</th>
+                  <th>Disponivel na Origem</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="entrada-preview-tbody">
+                <tr>
+                  <td colspan="6" class="empty-state">Selecione a submontagem e o estoque de origem para visualizar o consumo.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         <div class="field span-12">
           <label for="entrada-observacao">Observacao</label>
           <input id="entrada-observacao" type="text" maxlength="255" placeholder="Opcional">
