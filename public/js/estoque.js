@@ -7,13 +7,14 @@ const entradaInicialApiBaseUrl = '/api/estoque/entrada-inicial';
 const transferenciaApiBaseUrl = '/api/estoque/transferencia';
 const ajusteApiBaseUrl = '/api/estoque/ajuste';
 const saidaApiBaseUrl = '/api/estoque/saida';
-const expedicaoNome = 'Expedição';
+const expedicaoNome = 'ExpediÃ§Ã£o';
 
 let estoquesCache = [];
 let itensCache = [];
 let saldosCache = [];
 let saldosOperacionaisCache = [];
 let saidaLista = [];
+let estruturasSubmontagemCache = new Map();
 let filtroDebounceTimer = null;
 
 const filtroForm = document.getElementById('estoque-filtro-form');
@@ -289,7 +290,11 @@ function renderizarSugestoesItem(tipo, termo) {
   const config = getItemAutocompleteConfig(tipo);
   const filtro = termo.toLowerCase();
   const itensFiltrados = itensCache.filter((item) => {
-    if (tipo === 'saida' && obterSaldoExpedicao(item.id) <= 0) {
+    if (
+      tipo === 'saida'
+      && item.classificacao !== 'SUBMONTAGEM'
+      && obterSaldoExpedicao(item.id) <= 0
+    ) {
       return false;
     }
 
@@ -314,7 +319,7 @@ function renderizarSugestoesItem(tipo, termo) {
       <strong>${escapeHtml(item.codigo)} - ${escapeHtml(item.descricao)}</strong>
       <span>${escapeHtml(
         tipo === 'saida'
-          ? `${item.classificacao} | ${item.tipo} | Saldo Expedição: ${formatarQuantidade(obterSaldoExpedicao(item.id))}`
+          ? `${item.classificacao} | ${item.tipo} | Saldo ExpediÃ§Ã£o: ${formatarQuantidade(obterSaldoExpedicao(item.id))}`
           : `${item.classificacao} | ${item.tipo} | Maquina: ${item.maquina_nome || '-'}`
       )}</span>
     </button>
@@ -322,7 +327,7 @@ function renderizarSugestoesItem(tipo, termo) {
   config.panel.classList.remove('hidden');
 }
 
-function handleSugestaoItemClick(event, tipo) {
+async function handleSugestaoItemClick(event, tipo) {
   const option = event.target.closest('button[data-item-id]');
   if (!option) return;
 
@@ -330,7 +335,7 @@ function handleSugestaoItemClick(event, tipo) {
   config.hidden.value = option.dataset.itemId;
   config.input.value = `${option.dataset.itemCodigo} - ${option.dataset.itemDescricao}`;
   if (tipo === 'saida') {
-    atualizarSaldoDisponivelSaida();
+    await atualizarSaldoDisponivelSaida();
   }
   esconderTodasSugestoesItem();
 }
@@ -467,13 +472,13 @@ async function handleTransferencia(event) {
 }
 
 // Modal da saida de venda sempre usando o estoque de expedicao.
-function abrirModalSaida(saldo = null) {
+async function abrirModalSaida(saldo = null) {
   resetSaidaForm();
 
   if (saldo && saldo.estoque_nome === expedicaoNome) {
     saidaItemIdInput.value = saldo.id_peca;
     saidaItemBuscaInput.value = `${saldo.codigo} - ${saldo.descricao}`;
-    atualizarSaldoDisponivelSaida();
+    await atualizarSaldoDisponivelSaida();
   }
 
   abrirModal(saidaModal);
@@ -484,8 +489,128 @@ function fecharModalSaida() {
   fecharModal(saidaModal);
 }
 
-function adicionarItemNaListaSaida() {
-  const item = obterItemSelecionadoSaida();
+async function carregarEstruturaSubmontagemSaida(submontagemId) {
+  if (estruturasSubmontagemCache.has(submontagemId)) {
+    return estruturasSubmontagemCache.get(submontagemId);
+  }
+
+  const response = await fetch(`/api/submontagens/${submontagemId}/componentes`);
+  const componentes = await response.json();
+
+  if (!response.ok) {
+    throw new Error(componentes.message || 'Nao foi possivel carregar a estrutura da submontagem.');
+  }
+
+  estruturasSubmontagemCache.set(submontagemId, componentes);
+  return componentes;
+}
+
+function obterSaldoExpedicao(itemId) {
+  const saldo = saldosOperacionaisCache.find((registro) => (
+    registro.estoque_nome === expedicaoNome &&
+    Number(registro.id_peca) === Number(itemId)
+  ));
+
+  return saldo ? Number(saldo.quantidade) : 0;
+}
+
+function calcularDisponibilidadeSubmontagem(componentes) {
+  if (!Array.isArray(componentes) || componentes.length === 0) {
+    return 0;
+  }
+
+  return componentes.reduce((menorDisponibilidade, componente) => {
+    const saldoComponente = obterSaldoExpedicao(componente.id_item_componente);
+    const quantidadePorSubmontagem = Number(componente.quantidade);
+    const disponibilidadeComponente = quantidadePorSubmontagem > 0
+      ? Math.floor(saldoComponente / quantidadePorSubmontagem)
+      : 0;
+
+    return Math.min(menorDisponibilidade, disponibilidadeComponente);
+  }, Number.POSITIVE_INFINITY);
+}
+
+function obterSaldoDisponivelRegistroSaida(registro) {
+  if (registro.classificacao !== 'SUBMONTAGEM') {
+    return obterSaldoExpedicao(registro.id_peca);
+  }
+
+  const componentes = estruturasSubmontagemCache.get(registro.id_peca) || [];
+  return calcularDisponibilidadeSubmontagem(componentes);
+}
+
+async function obterItemSelecionadoSaida() {
+  const itemId = Number.parseInt(saidaItemIdInput.value, 10);
+  const item = itensCache.find((registro) => Number(registro.id) === itemId);
+
+  if (!item) {
+    mostrarMensagemSaida('Escolha um item ou submontagem valida para a lista de venda.', 'error');
+    return null;
+  }
+
+  if (item.classificacao === 'SUBMONTAGEM') {
+    const componentes = await carregarEstruturaSubmontagemSaida(item.id);
+    const saldoDisponivel = calcularDisponibilidadeSubmontagem(componentes);
+
+    if (componentes.length === 0) {
+      mostrarMensagemSaida(`A submontagem ${item.codigo} nao possui componentes cadastrados.`, 'error');
+      return null;
+    }
+
+    if (saldoDisponivel <= 0) {
+      mostrarMensagemSaida(`A submontagem ${item.codigo} nao possui saldo suficiente nos componentes da Expedicao.`, 'error');
+      return null;
+    }
+
+    return {
+      ...item,
+      saldo_disponivel: saldoDisponivel
+    };
+  }
+
+  const saldoDisponivel = obterSaldoExpedicao(item.id);
+  if (saldoDisponivel <= 0) {
+    mostrarMensagemSaida(`O item ${item.codigo} nao possui saldo disponivel na Expedicao.`, 'error');
+    return null;
+  }
+
+  return {
+    ...item,
+    saldo_disponivel: saldoDisponivel
+  };
+}
+
+async function atualizarSaldoDisponivelSaida() {
+  const itemId = Number.parseInt(saidaItemIdInput.value, 10);
+  if (!Number.isInteger(itemId)) {
+    document.getElementById('saida-saldo-disponivel').value = '0';
+    return;
+  }
+
+  const item = itensCache.find((registro) => Number(registro.id) === itemId);
+  if (!item) {
+    document.getElementById('saida-saldo-disponivel').value = '0';
+    return;
+  }
+
+  if (item.classificacao === 'SUBMONTAGEM') {
+    try {
+      const componentes = await carregarEstruturaSubmontagemSaida(item.id);
+      document.getElementById('saida-saldo-disponivel').value = formatarQuantidade(
+        calcularDisponibilidadeSubmontagem(componentes)
+      );
+    } catch (error) {
+      document.getElementById('saida-saldo-disponivel').value = '0';
+    }
+
+    return;
+  }
+
+  document.getElementById('saida-saldo-disponivel').value = formatarQuantidade(obterSaldoExpedicao(item.id));
+}
+
+async function adicionarItemNaListaSaida() {
+  const item = await obterItemSelecionadoSaida();
   if (!item) return;
 
   const quantidade = Number.parseFloat(document.getElementById('saida-quantidade').value);
@@ -493,13 +618,12 @@ function adicionarItemNaListaSaida() {
     return mostrarMensagemSaida('Informe uma quantidade valida para a lista de venda.', 'error');
   }
 
-  const saldoDisponivel = obterSaldoExpedicao(item.id);
   const itemExistente = saidaLista.find((registro) => Number(registro.id_peca) === Number(item.id));
   const quantidadeAtualLista = itemExistente ? Number(itemExistente.quantidade) : 0;
   const novaQuantidade = Number((quantidadeAtualLista + quantidade).toFixed(2));
 
-  if (novaQuantidade > saldoDisponivel) {
-    return mostrarMensagemSaida(`A quantidade da lista excede o saldo atual na Expedição para ${item.codigo}.`, 'error');
+  if (novaQuantidade > Number(item.saldo_disponivel)) {
+    return mostrarMensagemSaida(`A quantidade da lista excede o disponivel na Expedicao para ${item.codigo}.`, 'error');
   }
 
   upsertItemNaSaida(item, quantidade);
@@ -507,16 +631,15 @@ function adicionarItemNaListaSaida() {
   mostrarMensagemSaida('Item adicionado na lista de baixa.', 'success');
 }
 
-function adicionarMaisUmNaListaSaida() {
-  const item = obterItemSelecionadoSaida();
+async function adicionarMaisUmNaListaSaida() {
+  const item = await obterItemSelecionadoSaida();
   if (!item) return;
 
-  const saldoDisponivel = obterSaldoExpedicao(item.id);
   const itemExistente = saidaLista.find((registro) => Number(registro.id_peca) === Number(item.id));
   const quantidadeAtualLista = itemExistente ? Number(itemExistente.quantidade) : 0;
 
-  if (quantidadeAtualLista + 1 > saldoDisponivel) {
-    return mostrarMensagemSaida(`Nao ha saldo suficiente na Expedição para adicionar mais 1 de ${item.codigo}.`, 'error');
+  if (quantidadeAtualLista + 1 > Number(item.saldo_disponivel)) {
+    return mostrarMensagemSaida(`Nao ha saldo suficiente na Expedicao para adicionar mais 1 de ${item.codigo}.`, 'error');
   }
 
   upsertItemNaSaida(item, 1);
@@ -533,8 +656,9 @@ function upsertItemNaSaida(item, quantidadeSomada) {
       id_peca: item.id,
       codigo: item.codigo,
       descricao: item.descricao,
+      classificacao: item.classificacao,
       quantidade: Number(Number(quantidadeSomada).toFixed(2)),
-      saldo_disponivel: obterSaldoExpedicao(item.id)
+      saldo_disponivel: Number(item.saldo_disponivel)
     });
   }
 
@@ -546,7 +670,7 @@ function limparItemSaidaAtual(limparMensagem = true) {
   saidaItemIdInput.value = '';
   saidaItemBuscaInput.value = '';
   document.getElementById('saida-quantidade').value = '1';
-  atualizarSaldoDisponivelSaida();
+  document.getElementById('saida-saldo-disponivel').value = '0';
   if (limparMensagem) {
     esconderMensagemSaida();
   }
@@ -567,9 +691,9 @@ function handleSaidaListActions(event) {
   if (!registro) return;
 
   if (actionButton.dataset.saidaAction === 'plus') {
-    const saldoDisponivel = obterSaldoExpedicao(itemId);
+    const saldoDisponivel = obterSaldoDisponivelRegistroSaida(registro);
     if (Number(registro.quantidade) + 1 > saldoDisponivel) {
-      return mostrarMensagemSaida(`Nao ha saldo suficiente na Expedição para adicionar mais 1 de ${registro.codigo}.`, 'error');
+      return mostrarMensagemSaida(`Nao ha saldo suficiente na Expedicao para adicionar mais 1 de ${registro.codigo}.`, 'error');
     }
     registro.quantidade = Number((Number(registro.quantidade) + 1).toFixed(2));
   }
@@ -613,50 +737,17 @@ async function baixarTudoSaida() {
     }
 
     fecharModalSaida();
-    mostrarMensagemEstoque('Baixa de venda realizada com sucesso na Expedição.', 'success');
+    mostrarMensagemEstoque('Baixa de venda realizada com sucesso na Expedicao.', 'success');
     await Promise.all([carregarSaldosOperacionais(), carregarSaldos()]);
   } catch (error) {
     mostrarMensagemSaida(error.message, 'error');
   }
 }
 
-function obterItemSelecionadoSaida() {
-  const itemId = Number.parseInt(saidaItemIdInput.value, 10);
-  const item = itensCache.find((registro) => Number(registro.id) === itemId);
-
-  if (!item) {
-    mostrarMensagemSaida('Escolha um item valido para montar a lista de venda.', 'error');
-    return null;
-  }
-
-  const saldoDisponivel = obterSaldoExpedicao(item.id);
-  if (saldoDisponivel <= 0) {
-    mostrarMensagemSaida(`O item ${item.codigo} nao possui saldo disponivel na Expedição.`, 'error');
-    return null;
-  }
-
-  return item;
-}
-
-function obterSaldoExpedicao(itemId) {
-  const saldo = saldosOperacionaisCache.find((registro) => (
-    registro.estoque_nome === expedicaoNome &&
-    Number(registro.id_peca) === Number(itemId)
-  ));
-
-  return saldo ? Number(saldo.quantidade) : 0;
-}
-
-function atualizarSaldoDisponivelSaida() {
-  const itemId = Number.parseInt(saidaItemIdInput.value, 10);
-  const saldoDisponivel = Number.isInteger(itemId) ? obterSaldoExpedicao(itemId) : 0;
-  document.getElementById('saida-saldo-disponivel').value = formatarQuantidade(saldoDisponivel);
-}
-
 function sincronizarSaldosDaListaSaida() {
   saidaLista = saidaLista.map((item) => ({
     ...item,
-    saldo_disponivel: obterSaldoExpedicao(item.id_peca)
+    saldo_disponivel: obterSaldoDisponivelRegistroSaida(item)
   }));
 }
 

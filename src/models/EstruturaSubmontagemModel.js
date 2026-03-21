@@ -3,8 +3,8 @@ const { pool } = require('../../database/connection');
 
 class EstruturaSubmontagemModel {
   // Recalcula a massa da submontagem pela soma das massas dos itens * quantidade.
-  static async recalculateSubmontagemMass(submontagemId) {
-    await pool.query(
+  static async recalculateSubmontagemMass(submontagemId, connection = pool) {
+    await connection.query(
       `
         UPDATE pecas sub
         LEFT JOIN (

@@ -244,6 +244,26 @@ class EstoqueModel {
     return rows[0] || null;
   }
 
+  // Lista os componentes de uma submontagem para expandir a baixa de venda.
+  static async findSubmontagemComponents(submontagemId, connection = pool) {
+    const [rows] = await connection.query(
+      `
+        SELECT
+          es.id_item_componente,
+          es.quantidade,
+          p.codigo,
+          p.descricao
+        FROM estrutura_submontagem es
+        INNER JOIN pecas p ON p.id = es.id_item_componente
+        WHERE es.id_submontagem = ?
+        ORDER BY p.codigo ASC
+      `,
+      [submontagemId]
+    );
+
+    return rows;
+  }
+
   // Busca um estoque pelo ID para validar origem e destino.
   static async findStockById(id, connection = pool) {
     const [rows] = await connection.query(
@@ -589,17 +609,73 @@ class EstoqueModel {
       }
 
       const itensAgrupados = new Map();
+      const contextosPorItem = new Map();
+      const solicitacoes = [];
 
-      data.itens.forEach((item) => {
-        const idPeca = Number(item.id_peca);
-        const quantidade = Number(item.quantidade);
+      for (const itemSolicitado of data.itens) {
+        const idPeca = Number(itemSolicitado.id_peca);
+        const quantidadeSolicitada = Number(itemSolicitado.quantidade);
+        const item = await this.findItemById(idPeca, connection);
+
+        if (!item) {
+          throw this.createBusinessError('Um dos itens informados nao foi encontrado para a baixa de venda.');
+        }
+
+        solicitacoes.push({
+          id_peca: idPeca,
+          codigo: item.codigo,
+          descricao: item.descricao,
+          classificacao: item.classificacao,
+          quantidade_solicitada: quantidadeSolicitada
+        });
+
+        if (item.classificacao === 'SUBMONTAGEM') {
+          const componentes = await this.findSubmontagemComponents(idPeca, connection);
+
+          if (componentes.length === 0) {
+            throw this.createBusinessError(`A submontagem ${item.codigo} nao possui componentes cadastrados para a baixa.`);
+          }
+
+          componentes.forEach((component) => {
+            const idComponente = Number(component.id_item_componente);
+            const quantidadeComponente = Number(
+              (Number(component.quantidade) * quantidadeSolicitada).toFixed(2)
+            );
+
+            if (!itensAgrupados.has(idComponente)) {
+              itensAgrupados.set(idComponente, 0);
+            }
+
+            itensAgrupados.set(
+              idComponente,
+              Number((itensAgrupados.get(idComponente) + quantidadeComponente).toFixed(2))
+            );
+
+            if (!contextosPorItem.has(idComponente)) {
+              contextosPorItem.set(idComponente, new Set());
+            }
+
+            contextosPorItem.get(idComponente).add(`Submontagem ${item.codigo}`);
+          });
+
+          continue;
+        }
 
         if (!itensAgrupados.has(idPeca)) {
           itensAgrupados.set(idPeca, 0);
         }
 
-        itensAgrupados.set(idPeca, Number((itensAgrupados.get(idPeca) + quantidade).toFixed(2)));
-      });
+        itensAgrupados.set(
+          idPeca,
+          Number((itensAgrupados.get(idPeca) + quantidadeSolicitada).toFixed(2))
+        );
+
+        if (!contextosPorItem.has(idPeca)) {
+          contextosPorItem.set(idPeca, new Set());
+        }
+
+        contextosPorItem.get(idPeca).add(`Item ${item.codigo}`);
+      }
 
       const resultados = [];
 
@@ -618,6 +694,11 @@ class EstoqueModel {
         }
 
         const novoSaldo = Number((quantidadeAtual - quantidade).toFixed(2));
+        const contextos = Array.from(contextosPorItem.get(idPeca) || []);
+        const observacaoContextual = contextos.length > 0
+          ? ` Origem: ${contextos.slice(0, 3).join(', ')}${contextos.length > 3 ? '...' : ''}.`
+          : '';
+        const observacao = `${data.observacao || 'Baixa de venda pela ExpediÃ§Ã£o.'}${observacaoContextual}`.slice(0, 255);
 
         await this.persistSaldo(connection, expedicao.id, idPeca, novoSaldo, saldoExpedicao);
 
@@ -627,7 +708,7 @@ class EstoqueModel {
           id_estoque_destino: null,
           tipo_movimentacao: 'SAIDA',
           quantidade,
-          observacao: data.observacao || 'Baixa de venda pela Expedição.'
+          observacao
         });
 
         resultados.push({
@@ -643,7 +724,8 @@ class EstoqueModel {
 
       return {
         estoque_origem: expedicao,
-        itens: resultados
+        itens: resultados,
+        solicitacoes
       };
     } catch (error) {
       await connection.rollback();

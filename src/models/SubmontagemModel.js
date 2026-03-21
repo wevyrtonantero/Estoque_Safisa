@@ -1,7 +1,41 @@
 // Model responsavel pelas operacoes de pecas classificadas como SUBMONTAGEM.
 const { pool } = require('../../database/connection');
+const EstruturaSubmontagemModel = require('./EstruturaSubmontagemModel');
 
 class SubmontagemModel {
+  static async replaceComponents(connection, submontagemId, componentes = []) {
+    await connection.query(
+      `
+        DELETE FROM estrutura_submontagem
+        WHERE id_submontagem = ?
+      `,
+      [submontagemId]
+    );
+
+    if (componentes.length === 0) {
+      return;
+    }
+
+    await connection.query(
+      `
+        INSERT INTO estrutura_submontagem (
+          id_submontagem,
+          id_item_componente,
+          quantidade,
+          observacao
+        ) VALUES ?
+      `,
+      [
+        componentes.map((componente) => ([
+          submontagemId,
+          componente.id_item_componente,
+          componente.quantidade,
+          componente.observacao
+        ]))
+      ]
+    );
+  }
+
   // Lista as submontagens com contagem de componentes para a grade principal.
   static async findAll(filters = {}) {
     const conditions = ["p.classificacao = 'SUBMONTAGEM'"];
@@ -96,84 +130,115 @@ class SubmontagemModel {
   }
 
   // Insere uma nova submontagem na mesma tabela de pecas.
-  static async create(submontagemData) {
-    const [result] = await pool.query(
-      `
-        INSERT INTO pecas (
-          codigo,
-          descricao,
-          comprimento_mm,
-          tipo,
-          classificacao,
-          id_materia_prima,
-          id_fornecedor,
-          id_maquina,
-          estoque_minimo,
-          estoque_seguranca,
-          consumo_mensal,
-          massa_kg
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-      [
-        submontagemData.codigo,
-        submontagemData.descricao,
-        submontagemData.comprimento_mm,
-        submontagemData.tipo,
-        'SUBMONTAGEM',
-        submontagemData.id_materia_prima,
-        submontagemData.id_fornecedor,
-        submontagemData.id_maquina,
-        submontagemData.estoque_minimo,
-        submontagemData.estoque_seguranca,
-        submontagemData.consumo_mensal,
-        submontagemData.massa_kg
-      ]
-    );
+  static async create(submontagemData, componentes = []) {
+    const connection = await pool.getConnection();
 
-    return this.findById(result.insertId);
+    try {
+      await connection.beginTransaction();
+
+      const [result] = await connection.query(
+        `
+          INSERT INTO pecas (
+            codigo,
+            descricao,
+            comprimento_mm,
+            tipo,
+            classificacao,
+            id_materia_prima,
+            id_fornecedor,
+            id_maquina,
+            estoque_minimo,
+            estoque_seguranca,
+            consumo_mensal,
+            massa_kg
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          submontagemData.codigo,
+          submontagemData.descricao,
+          submontagemData.comprimento_mm,
+          'PRODUZIDA',
+          'SUBMONTAGEM',
+          submontagemData.id_materia_prima,
+          submontagemData.id_fornecedor,
+          submontagemData.id_maquina,
+          submontagemData.estoque_minimo,
+          submontagemData.estoque_seguranca,
+          submontagemData.consumo_mensal,
+          0
+        ]
+      );
+
+      await this.replaceComponents(connection, result.insertId, componentes);
+      await EstruturaSubmontagemModel.recalculateSubmontagemMass(result.insertId, connection);
+      await connection.commit();
+
+      return this.findById(result.insertId);
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
   }
 
   // Atualiza uma submontagem mantendo a classificacao fixa.
-  static async update(id, submontagemData) {
-    const [result] = await pool.query(
-      `
-        UPDATE pecas
-        SET
-          codigo = ?,
-          descricao = ?,
-          comprimento_mm = ?,
-          tipo = ?,
-          classificacao = 'SUBMONTAGEM',
-          id_materia_prima = ?,
-          id_fornecedor = ?,
-          id_maquina = ?,
-          estoque_minimo = ?,
-          estoque_seguranca = ?,
-          consumo_mensal = ?,
-          massa_kg = ?
-        WHERE id = ? AND classificacao = 'SUBMONTAGEM'
-      `,
-      [
-        submontagemData.codigo,
-        submontagemData.descricao,
-        submontagemData.comprimento_mm,
-        submontagemData.tipo,
-        submontagemData.id_materia_prima,
-        submontagemData.id_fornecedor,
-        submontagemData.id_maquina,
-        submontagemData.estoque_minimo,
-        submontagemData.estoque_seguranca,
-        submontagemData.consumo_mensal,
-        submontagemData.massa_kg,
-        id
-      ]
-    );
+  static async update(id, submontagemData, componentes = null) {
+    const connection = await pool.getConnection();
 
-    if (result.affectedRows === 0) {
-      return null;
+    try {
+      await connection.beginTransaction();
+
+      const [result] = await connection.query(
+        `
+          UPDATE pecas
+          SET
+            codigo = ?,
+            descricao = ?,
+            comprimento_mm = ?,
+            tipo = 'PRODUZIDA',
+            classificacao = 'SUBMONTAGEM',
+            id_materia_prima = ?,
+            id_fornecedor = ?,
+            id_maquina = ?,
+            estoque_minimo = ?,
+            estoque_seguranca = ?,
+            consumo_mensal = ?
+          WHERE id = ? AND classificacao = 'SUBMONTAGEM'
+        `,
+        [
+          submontagemData.codigo,
+          submontagemData.descricao,
+          submontagemData.comprimento_mm,
+          submontagemData.id_materia_prima,
+          submontagemData.id_fornecedor,
+          submontagemData.id_maquina,
+          submontagemData.estoque_minimo,
+          submontagemData.estoque_seguranca,
+          submontagemData.consumo_mensal,
+          id
+        ]
+      );
+
+      if (result.affectedRows === 0) {
+        await connection.rollback();
+        return null;
+      }
+
+      if (Array.isArray(componentes)) {
+        await this.replaceComponents(connection, id, componentes);
+      }
+
+      await EstruturaSubmontagemModel.recalculateSubmontagemMass(id, connection);
+      await connection.commit();
+
+      return this.findById(id);
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
     }
-
-    return this.findById(id);
   }
 
   // Remove uma submontagem; a estrutura sai junto pela FK com cascade.

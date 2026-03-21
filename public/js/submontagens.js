@@ -1,193 +1,929 @@
-const api='/api/submontagens',itensApi='/api/itens-simples',opcoesApi='/api/opcoes-cadastro';
-const $=s=>document.querySelector(s);
-let subs=[],comps=[],itens=[],opcoes={materias_primas:[],fornecedores:[],maquinas:[]},atual=null,editSub=null,editComp=null,timer=null;
+const submontagensApiUrl = '/api/submontagens';
+const itensSimplesApiUrl = '/api/itens-simples';
 
-const el={
- msg:$('#submontagem-mensagem'),msgEstr:$('#estrutura-mensagem'),msgSub:$('#submontagem-modal-mensagem'),msgComp:$('#componente-modal-mensagem'),
- tbody:$('#submontagens-tbody'),ctbody:$('#componentes-tbody'),filtro:$('#submontagem-filtro-form'),
- subModal:$('#submontagem-modal'),compModal:$('#componente-modal'),drawer:$('#app-drawer'),scrim:$('#drawer-scrim')
+let submontagensCache = [];
+let itensCache = [];
+let componentesEstruturaCache = [];
+let componentesDraft = [];
+let submontagemAtual = null;
+let editandoSubmontagemId = null;
+let editandoComponenteId = null;
+let modoComponente = 'draft';
+let filtroDebounceTimer = null;
+
+const refs = {
+  mensagem: document.getElementById('submontagem-mensagem'),
+  mensagemEstrutura: document.getElementById('estrutura-mensagem'),
+  mensagemSubmontagem: document.getElementById('submontagem-modal-mensagem'),
+  mensagemComponente: document.getElementById('componente-modal-mensagem'),
+  tabelaSubmontagens: document.getElementById('submontagens-tbody'),
+  tabelaEstrutura: document.getElementById('componentes-tbody'),
+  tabelaDraft: document.getElementById('submontagem-componentes-tbody'),
+  filtroForm: document.getElementById('submontagem-filtro-form'),
+  submontagemForm: document.getElementById('submontagem-form'),
+  componenteForm: document.getElementById('componente-form'),
+  submontagemModal: document.getElementById('submontagem-modal'),
+  componenteModal: document.getElementById('componente-modal'),
+  drawer: document.getElementById('app-drawer'),
+  drawerScrim: document.getElementById('drawer-scrim')
 };
 
-document.addEventListener('DOMContentLoaded',async()=>{bind();await Promise.all([carregarOpcoes(),carregarItens()]);await carregarSubmontagens();});
+const campos = {
+  subId: document.getElementById('submontagem-id'),
+  subCodigo: document.getElementById('submontagem-codigo'),
+  subDescricao: document.getElementById('submontagem-descricao'),
+  subMassa: document.getElementById('submontagem-massa'),
+  subEstoqueMinimo: document.getElementById('submontagem-estoque-minimo'),
+  subEstoqueSeguranca: document.getElementById('submontagem-estoque-seguranca'),
+  subConsumoMensal: document.getElementById('submontagem-consumo-mensal'),
+  componenteItemId: document.getElementById('componente-item-id'),
+  componenteItemIdAtual: document.getElementById('componente-item-id-atual'),
+  componenteItemBusca: document.getElementById('componente-item-busca'),
+  componenteQuantidade: document.getElementById('componente-quantidade'),
+  componenteObservacao: document.getElementById('componente-observacao'),
+  componenteSugestoes: document.getElementById('componente-item-sugestoes')
+};
 
-function bind(){
- $('#btn-nova-submontagem').onclick=abrirNovaSubmontagem;
- $('#btn-novo-componente').onclick=abrirNovoComponente;
- $('#btn-atualizar-submontagem').onclick=atualizarSubmontagem;
- $('#btn-atualizar-componente').onclick=atualizarComponente;
- $('#btn-limpar-filtros-submontagem').onclick=()=>{el.filtro.reset();carregarSubmontagens();};
- $('#btn-cancelar-modal-submontagem').onclick=fecharSubmontagem;
- $('#btn-fechar-modal-submontagem').onclick=fecharSubmontagem;
- $('#btn-cancelar-modal-componente').onclick=fecharComponente;
- $('#btn-fechar-modal-componente').onclick=fecharComponente;
- $('#menu-toggle').onclick=()=>toggleDrawer(true);
- $('#drawer-close').onclick=()=>toggleDrawer(false);
- el.scrim.onclick=()=>toggleDrawer(false);
- el.subModal.onclick=e=>e.target.dataset.closeModal==='submontagem'&&fecharSubmontagem();
- el.compModal.onclick=e=>e.target.dataset.closeModal==='componente'&&fecharComponente();
- document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;hideAllPanels();if(!el.compModal.classList.contains('hidden'))return fecharComponente();if(!el.subModal.classList.contains('hidden'))return fecharSubmontagem();toggleDrawer(false);});
- el.filtro.onsubmit=e=>{e.preventDefault();carregarSubmontagens();};
- el.filtro.querySelectorAll('input,select').forEach(f=>f.oninput=f.onchange=()=>{clearTimeout(timer);timer=setTimeout(carregarSubmontagens,220);});
- $('#submontagem-form').onsubmit=criarSubmontagem;
- $('#componente-form').onsubmit=criarComponente;
- el.tbody.onclick=acaoSubmontagem;
- el.ctbody.onclick=acaoComponente;
- bindLookup('materias_primas','#submontagem-busca-materia-prima','#submontagem-id-materia-prima','#submontagem-sugestoes-materia-prima',i=>`${i.codigo} - ${i.nome}`,i=>`${i.geometria} | ${i.bitola}`);
- bindLookup('fornecedores','#submontagem-busca-fornecedor','#submontagem-id-fornecedor','#submontagem-sugestoes-fornecedor',i=>i.nome,i=>`${i.contato||'-'} | ${i.cidade||'-'}`);
- bindLookup('maquinas','#submontagem-busca-maquina','#submontagem-id-maquina','#submontagem-sugestoes-maquina',i=>i.nome,i=>i.tipo);
- bindItensLookup();
- document.addEventListener('click',e=>{if(!e.target.closest('.autocomplete'))hideAllPanels();});
+document.addEventListener('DOMContentLoaded', async () => {
+  bindEvents();
+  await Promise.all([carregarItensSimples(), carregarSubmontagens()]);
+});
+
+function bindEvents() {
+  document.getElementById('btn-nova-submontagem').addEventListener('click', abrirNovaSubmontagem);
+  document.getElementById('btn-novo-componente').addEventListener('click', abrirNovoComponenteLive);
+  document.getElementById('btn-submontagem-adicionar-componente').addEventListener('click', abrirNovoComponenteDraft);
+  document.getElementById('btn-atualizar-submontagem').addEventListener('click', atualizarSubmontagem);
+  document.getElementById('btn-atualizar-componente').addEventListener('click', atualizarComponente);
+  document.getElementById('btn-limpar-filtros-submontagem').addEventListener('click', limparFiltros);
+  document.getElementById('btn-cancelar-modal-submontagem').addEventListener('click', fecharModalSubmontagem);
+  document.getElementById('btn-fechar-modal-submontagem').addEventListener('click', fecharModalSubmontagem);
+  document.getElementById('btn-cancelar-modal-componente').addEventListener('click', fecharModalComponente);
+  document.getElementById('btn-fechar-modal-componente').addEventListener('click', fecharModalComponente);
+  document.getElementById('menu-toggle').addEventListener('click', () => toggleDrawer(true));
+  document.getElementById('drawer-close').addEventListener('click', () => toggleDrawer(false));
+  refs.drawerScrim.addEventListener('click', () => toggleDrawer(false));
+
+  refs.submontagemModal.addEventListener('click', (event) => {
+    if (event.target.dataset.closeModal === 'submontagem') {
+      fecharModalSubmontagem();
+    }
+  });
+
+  refs.componenteModal.addEventListener('click', (event) => {
+    if (event.target.dataset.closeModal === 'componente') {
+      fecharModalComponente();
+    }
+  });
+
+  document.addEventListener('keydown', handleKeyboardShortcuts);
+
+  refs.filtroForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    carregarSubmontagens();
+  });
+
+  refs.filtroForm.querySelectorAll('input, select').forEach((field) => {
+    field.addEventListener('input', agendarCarregamentoSubmontagens);
+    field.addEventListener('change', agendarCarregamentoSubmontagens);
+  });
+
+  refs.submontagemForm.addEventListener('submit', criarSubmontagem);
+  refs.componenteForm.addEventListener('submit', criarComponente);
+  refs.tabelaSubmontagens.addEventListener('click', handleTabelaSubmontagens);
+  refs.tabelaEstrutura.addEventListener('click', handleTabelaEstrutura);
+  refs.tabelaDraft.addEventListener('click', handleTabelaDraft);
+
+  bindAutocompleteItens();
 }
 
-function bindLookup(chave,inputSel,hiddenSel,panelSel,labelFn,descFn){
- const input=$(inputSel),hidden=$(hiddenSel),panel=$(panelSel);
- const render=termo=>{
-  const filtro=(termo||'').toLowerCase();
-  const lista=(opcoes[chave]||[]).filter(i=>!filtro||Object.values(i).join(' ').toLowerCase().includes(filtro)).slice(0,8);
-  panel.innerHTML=lista.length?lista.map(i=>`<button type="button" class="autocomplete-option" data-id="${i.id}"><strong>${esc(labelFn(i))}</strong><span>${esc(descFn(i))}</span></button>`).join(''):'<div class="autocomplete-empty">Nenhum registro encontrado.</div>';
-  panel.classList.remove('hidden');
- };
- input.oninput=()=>{hidden.value='';render(input.value.trim());};
- input.onfocus=()=>render(input.value.trim());
- panel.onclick=e=>{const b=e.target.closest('button[data-id]');if(!b)return;const item=(opcoes[chave]||[]).find(i=>Number(i.id)===Number(b.dataset.id));if(!item)return;hidden.value=item.id;input.value=labelFn(item);panel.classList.add('hidden');panel.innerHTML='';};
+function bindAutocompleteItens() {
+  campos.componenteItemBusca.addEventListener('input', () => {
+    campos.componenteItemId.value = '';
+    renderizarSugestoesItens(campos.componenteItemBusca.value.trim());
+  });
+
+  campos.componenteItemBusca.addEventListener('focus', () => {
+    renderizarSugestoesItens(campos.componenteItemBusca.value.trim());
+  });
+
+  campos.componenteSugestoes.addEventListener('click', (event) => {
+    const option = event.target.closest('button[data-item-id]');
+    if (!option) {
+      return;
+    }
+
+    const item = itensCache.find((registro) => Number(registro.id) === Number(option.dataset.itemId));
+    if (!item) {
+      return;
+    }
+
+    campos.componenteItemId.value = item.id;
+    campos.componenteItemBusca.value = `${item.codigo} - ${item.descricao}`;
+    esconderSugestoesItens();
+  });
+
+  document.addEventListener('click', (event) => {
+    if (!event.target.closest('.autocomplete')) {
+      esconderSugestoesItens();
+    }
+  });
 }
 
-function bindItensLookup(){
- const input=$('#componente-item-busca'),hidden=$('#componente-item-id'),panel=$('#componente-item-sugestoes');
- const render=termo=>{
-  const filtro=(termo||'').toLowerCase();
-  const lista=itens.filter(i=>!filtro||`${i.codigo} ${i.descricao} ${i.tipo}`.toLowerCase().includes(filtro)).slice(0,8);
-  panel.innerHTML=lista.length?lista.map(i=>`<button type="button" class="autocomplete-option" data-id="${i.id}"><strong>${esc(i.codigo)} - ${esc(i.descricao)}</strong><span>${esc(`${i.tipo} | Massa: ${fmt(i.massa_kg||0,3)} kg`)}</span></button>`).join(''):'<div class="autocomplete-empty">Nenhum item simples encontrado.</div>';
-  panel.classList.remove('hidden');
- };
- input.oninput=()=>{hidden.value='';render(input.value.trim());};
- input.onfocus=()=>render(input.value.trim());
- panel.onclick=e=>{const b=e.target.closest('button[data-id]');if(!b)return;const item=itens.find(i=>Number(i.id)===Number(b.dataset.id));if(!item)return;hidden.value=item.id;input.value=`${item.codigo} - ${item.descricao}`;panel.classList.add('hidden');panel.innerHTML='';};
+async function carregarItensSimples() {
+  try {
+    const response = await fetch(itensSimplesApiUrl);
+    const itens = await response.json();
+
+    if (!response.ok) {
+      throw new Error(itens.message || 'Erro ao carregar itens simples.');
+    }
+
+    itensCache = itens;
+  } catch (error) {
+    showMessage(refs.mensagem, error.message, 'error');
+  }
 }
 
-async function carregarOpcoes(){const r=await fetch(opcoesApi),j=await r.json();if(!r.ok)throwMsg(el.msg,j.message||'Erro ao carregar opcoes.');else opcoes=j;}
-async function carregarItens(){const r=await fetch(itensApi),j=await r.json();if(!r.ok)throwMsg(el.msg,j.message||'Erro ao carregar itens.');else itens=j;}
+async function carregarSubmontagens() {
+  const params = new URLSearchParams();
+  const codigo = document.getElementById('filtro-sub-codigo').value.trim();
+  const descricao = document.getElementById('filtro-sub-descricao').value.trim();
 
-async function carregarSubmontagens(){
- const p=new URLSearchParams(),codigo=$('#filtro-sub-codigo').value.trim(),descricao=$('#filtro-sub-descricao').value.trim(),tipo=$('#filtro-sub-tipo').value;
- if(codigo)p.append('codigo',codigo);if(descricao)p.append('descricao',descricao);if(tipo)p.append('tipo',tipo);
- const r=await fetch(p.toString()?`${api}?${p}`:api),j=await r.json();
- if(!r.ok)return throwMsg(el.msg,j.message||'Erro ao carregar submontagens.');
- subs=j;renderSubs();metrics();
- if(atual){const ok=subs.find(s=>Number(s.id)===Number(atual.id));ok?setAtual(ok,false):limparEstrutura();}
+  if (codigo) {
+    params.append('codigo', codigo);
+  }
+
+  if (descricao) {
+    params.append('descricao', descricao);
+  }
+
+  try {
+    const endpoint = params.toString()
+      ? `${submontagensApiUrl}?${params.toString()}`
+      : submontagensApiUrl;
+    const response = await fetch(endpoint);
+    const submontagens = await response.json();
+
+    if (!response.ok) {
+      throw new Error(submontagens.message || 'Erro ao carregar submontagens.');
+    }
+
+    submontagensCache = submontagens;
+    renderizarTabelaSubmontagens();
+    atualizarMetricasSubmontagens();
+
+    if (submontagemAtual) {
+      const atualizada = submontagensCache.find((item) => Number(item.id) === Number(submontagemAtual.id));
+      if (atualizada) {
+        await selecionarSubmontagem(atualizada, true);
+      } else {
+        limparEstruturaAtual();
+      }
+    }
+  } catch (error) {
+    showMessage(refs.mensagem, error.message, 'error');
+  }
 }
 
-function renderSubs(){
- $('#total-submontagens').textContent=`${subs.length} registro(s) encontrado(s)`;
- el.tbody.innerHTML=subs.length?subs.map(s=>`<tr><td class="table-code">${esc(s.codigo)}</td><td class="table-description">${esc(s.descricao)}</td><td>${esc(s.tipo)}</td><td>${int(s.total_componentes||0)}</td><td>${fmt(s.massa_kg||0,3)} kg</td><td class="table-actions-cell"><details class="row-menu"><summary class="row-menu-trigger" aria-label="Abrir acoes">...</summary><div class="row-menu-panel"><button type="button" class="row-menu-item" data-act="estrutura" data-id="${s.id}">Estrutura</button><button type="button" class="row-menu-item" data-act="editar" data-id="${s.id}">Editar</button><button type="button" class="row-menu-item danger" data-act="excluir" data-id="${s.id}">Excluir</button></div></details></td></tr>`).join(''):'<tr><td colspan="6" class="empty-state">Nenhuma submontagem encontrada para os filtros informados.</td></tr>';
+function renderizarTabelaSubmontagens() {
+  document.getElementById('total-submontagens').textContent = `${submontagensCache.length} registro(s) encontrado(s)`;
+
+  if (submontagensCache.length === 0) {
+    refs.tabelaSubmontagens.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhuma submontagem encontrada para os filtros informados.</td></tr>';
+    return;
+  }
+
+  refs.tabelaSubmontagens.innerHTML = submontagensCache.map((submontagem) => `
+    <tr>
+      <td class="table-code">${escapeHtml(submontagem.codigo)}</td>
+      <td class="table-description">${escapeHtml(submontagem.descricao)}</td>
+      <td>${formatInteger(submontagem.total_componentes || 0)}</td>
+      <td>${formatDecimal(submontagem.massa_kg || 0, 3)} kg</td>
+      <td class="table-actions-cell">
+        <details class="row-menu">
+          <summary class="row-menu-trigger" aria-label="Abrir acoes">...</summary>
+          <div class="row-menu-panel">
+            <button type="button" class="row-menu-item" data-sub-act="estrutura" data-id="${submontagem.id}">Estrutura</button>
+            <button type="button" class="row-menu-item" data-sub-act="editar" data-id="${submontagem.id}">Editar</button>
+            <button type="button" class="row-menu-item danger" data-sub-act="excluir" data-id="${submontagem.id}">Excluir</button>
+          </div>
+        </details>
+      </td>
+    </tr>
+  `).join('');
 }
 
-function metrics(){
- $('#metric-total-submontagens').textContent=String(subs.length);
- $('#metric-total-componentes').textContent=String(subs.reduce((t,s)=>t+Number(s.total_componentes||0),0));
- $('#metric-massa-total').textContent=`${fmt(subs.reduce((t,s)=>t+Number(s.massa_kg||0),0),3)} kg`;
+function atualizarMetricasSubmontagens() {
+  document.getElementById('metric-total-submontagens').textContent = String(submontagensCache.length);
+  document.getElementById('metric-total-componentes').textContent = String(
+    submontagensCache.reduce((total, submontagem) => total + Number(submontagem.total_componentes || 0), 0)
+  );
+  document.getElementById('metric-massa-total').textContent = `${formatDecimal(
+    submontagensCache.reduce((total, submontagem) => total + Number(submontagem.massa_kg || 0), 0),
+    3
+  )} kg`;
 }
 
-async function acaoSubmontagem(e){
- const b=e.target.closest('button[data-act]');if(!b)return;
- const id=Number(b.dataset.id),sub=subs.find(s=>Number(s.id)===id);if(!sub)return;
- if(b.dataset.act==='estrutura')return setAtual(sub,true);
- if(b.dataset.act==='editar')return carregarEdicao(id);
- if(b.dataset.act==='excluir')return excluirSub(id);
+async function handleTabelaSubmontagens(event) {
+  const actionButton = event.target.closest('button[data-sub-act]');
+  if (!actionButton) {
+    return;
+  }
+
+  const id = Number.parseInt(actionButton.dataset.id, 10);
+  const submontagem = submontagensCache.find((item) => Number(item.id) === id);
+
+  if (!submontagem) {
+    return;
+  }
+
+  if (actionButton.dataset.subAct === 'estrutura') {
+    await selecionarSubmontagem(submontagem, true);
+    return;
+  }
+
+  if (actionButton.dataset.subAct === 'editar') {
+    await carregarSubmontagemParaEdicao(id);
+    return;
+  }
+
+  if (!window.confirm('Deseja realmente excluir esta submontagem?')) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`${submontagensApiUrl}/${id}`, { method: 'DELETE' });
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.message || 'Erro ao excluir submontagem.');
+    }
+
+    if (submontagemAtual && Number(submontagemAtual.id) === id) {
+      limparEstruturaAtual();
+    }
+
+    showMessage(refs.mensagem, 'Submontagem excluida com sucesso.', 'success');
+    await carregarSubmontagens();
+  } catch (error) {
+    showMessage(refs.mensagem, error.message, 'error');
+  }
 }
 
-async function setAtual(sub,carregar){
- atual=sub;$('#btn-novo-componente').disabled=false;
- $('#estrutura-titulo').textContent=`Estrutura de ${sub.codigo}`;
- $('#estrutura-subtitulo').textContent=sub.descricao;
- $('#estrutura-codigo').textContent=`${sub.codigo} - ${sub.descricao}`;
- $('#estrutura-detalhe').textContent=`${sub.tipo} | Componentes cadastrados: ${sub.total_componentes||0}`;
- $('#estrutura-total-componentes').textContent=`Componentes: ${sub.total_componentes||0}`;
- $('#estrutura-massa-total').textContent=`Massa: ${fmt(sub.massa_kg||0,3)} kg`;
- if(!carregar)return;
- const r=await fetch(`${api}/${sub.id}/componentes`),j=await r.json();
- if(!r.ok)return throwMsg(el.msgEstr,j.message||'Erro ao carregar estrutura.');
- comps=j;renderComps();
+async function selecionarSubmontagem(submontagem, carregarEstrutura = true) {
+  submontagemAtual = submontagem;
+  document.getElementById('btn-novo-componente').disabled = false;
+  document.getElementById('estrutura-titulo').textContent = `Estrutura de ${submontagem.codigo}`;
+  document.getElementById('estrutura-subtitulo').textContent = submontagem.descricao;
+  document.getElementById('estrutura-codigo').textContent = `${submontagem.codigo} - ${submontagem.descricao}`;
+  document.getElementById('estrutura-detalhe').textContent = `Submontagem produzida | Componentes cadastrados: ${submontagem.total_componentes || 0}`;
+  document.getElementById('estrutura-total-componentes').textContent = `Componentes: ${submontagem.total_componentes || 0}`;
+  document.getElementById('estrutura-massa-total').textContent = `Massa: ${formatDecimal(submontagem.massa_kg || 0, 3)} kg`;
+
+  if (!carregarEstrutura) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`${submontagensApiUrl}/${submontagem.id}/componentes`);
+    const componentes = await response.json();
+
+    if (!response.ok) {
+      throw new Error(componentes.message || 'Erro ao carregar estrutura.');
+    }
+
+    componentesEstruturaCache = componentes;
+    renderizarEstruturaAtual();
+  } catch (error) {
+    showMessage(refs.mensagemEstrutura, error.message, 'error');
+  }
 }
 
-function renderComps(){
- el.ctbody.innerHTML=comps.length?comps.map(c=>`<tr><td class="table-code">${esc(c.codigo_componente)}</td><td class="table-description">${esc(c.descricao_componente)}</td><td>${int(c.quantidade)}</td><td>${esc(c.tipo_componente||'-')}</td><td>${fmt(c.massa_kg||0,3)} kg</td><td class="table-actions-cell"><details class="row-menu"><summary class="row-menu-trigger" aria-label="Abrir acoes">...</summary><div class="row-menu-panel"><button type="button" class="row-menu-item" data-cact="editar" data-id="${c.id_item_componente}">Editar</button><button type="button" class="row-menu-item danger" data-cact="excluir" data-id="${c.id_item_componente}">Excluir</button></div></details></td></tr>`).join(''):'<tr><td colspan="6" class="empty-state">Nenhum componente cadastrado para a submontagem selecionada.</td></tr>';
+function renderizarEstruturaAtual() {
+  if (componentesEstruturaCache.length === 0) {
+    refs.tabelaEstrutura.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhum componente cadastrado para a submontagem selecionada.</td></tr>';
+    return;
+  }
+
+  refs.tabelaEstrutura.innerHTML = componentesEstruturaCache.map((component) => `
+    <tr>
+      <td class="table-code">${escapeHtml(component.codigo_componente)}</td>
+      <td class="table-description">${escapeHtml(component.descricao_componente)}</td>
+      <td>${formatInteger(component.quantidade)}</td>
+      <td>${escapeHtml(component.tipo_componente || '-')}</td>
+      <td>${formatDecimal(component.massa_kg || 0, 3)} kg</td>
+      <td class="table-actions-cell">
+        <details class="row-menu">
+          <summary class="row-menu-trigger" aria-label="Abrir acoes">...</summary>
+          <div class="row-menu-panel">
+            <button type="button" class="row-menu-item" data-live-component-act="editar" data-id="${component.id_item_componente}">Editar</button>
+            <button type="button" class="row-menu-item danger" data-live-component-act="excluir" data-id="${component.id_item_componente}">Excluir</button>
+          </div>
+        </details>
+      </td>
+    </tr>
+  `).join('');
 }
 
-async function acaoComponente(e){
- const b=e.target.closest('button[data-cact]');if(!b||!atual)return;
- const id=Number(b.dataset.id),c=comps.find(x=>Number(x.id_item_componente)===id);if(!c)return;
- if(b.dataset.cact==='editar'){editComp=id;$('#componente-item-id-atual').value=id;$('#componente-item-id').value=id;$('#componente-item-busca').value=`${c.codigo_componente} - ${c.descricao_componente}`;$('#componente-quantidade').value=c.quantidade;$('#componente-observacao').value=c.observacao||'';$('#btn-atualizar-componente').disabled=false;$('#btn-salvar-componente').disabled=true;$('#componente-modal-title').textContent='Editar Componente';$('#componente-modal-subtitle').textContent=`${atual.codigo} - ${atual.descricao}`;return open(el.compModal);}
- if(!confirm('Deseja realmente remover este componente da estrutura?'))return;
- const r=await fetch(`${api}/${atual.id}/componentes/${id}`,{method:'DELETE'}),j=await r.json();if(!r.ok)return throwMsg(el.msgEstr,j.message||'Erro ao remover componente.');show(el.msgEstr,'Componente removido com sucesso.','success');await carregarSubmontagens();await setAtual(atual,true);
+async function handleTabelaEstrutura(event) {
+  const actionButton = event.target.closest('button[data-live-component-act]');
+  if (!actionButton || !submontagemAtual) {
+    return;
+  }
+
+  const componenteId = Number.parseInt(actionButton.dataset.id, 10);
+  const componente = componentesEstruturaCache.find((item) => Number(item.id_item_componente) === componenteId);
+
+  if (!componente) {
+    return;
+  }
+
+  if (actionButton.dataset.liveComponentAct === 'editar') {
+    abrirEdicaoComponenteLive(componente);
+    return;
+  }
+
+  if (!window.confirm('Deseja realmente remover este componente da estrutura?')) {
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      `${submontagensApiUrl}/${submontagemAtual.id}/componentes/${componenteId}`,
+      { method: 'DELETE' }
+    );
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.message || 'Erro ao remover componente.');
+    }
+
+    showMessage(refs.mensagemEstrutura, 'Componente removido com sucesso.', 'success');
+    await carregarSubmontagens();
+  } catch (error) {
+    showMessage(refs.mensagemEstrutura, error.message, 'error');
+  }
 }
 
-function abrirNovaSubmontagem(){resetSub();$('#submontagem-modal-title').textContent='Nova Submontagem';open(el.subModal);}
-function abrirNovoComponente(){if(!atual)return show(el.msgEstr,'Selecione uma submontagem antes de adicionar componentes.','error');resetComp();$('#componente-modal-title').textContent='Adicionar Componente';$('#componente-modal-subtitle').textContent=`${atual.codigo} - ${atual.descricao}`;open(el.compModal);}
-function fecharSubmontagem(){resetSub();close(el.subModal);}
-function fecharComponente(){resetComp();close(el.compModal);}
-
-async function criarSubmontagem(e){
- e.preventDefault();if(editSub)return show(el.msgSub,'Use Atualizar para salvar a submontagem em edicao.','error');
- const r=await fetch(api,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payloadSub())}),j=await r.json();
- if(!r.ok)return show(el.msgSub,err(j),'error');fecharSubmontagem();show(el.msg,'Submontagem cadastrada com sucesso.','success');await carregarSubmontagens();
+function abrirNovaSubmontagem() {
+  resetFormSubmontagem();
+  document.getElementById('submontagem-modal-title').textContent = 'Nova Submontagem';
+  openModal(refs.submontagemModal);
 }
 
-async function atualizarSubmontagem(){
- if(!editSub)return show(el.msgSub,'Selecione uma submontagem antes de atualizar.','error');
- const id=editSub,r=await fetch(`${api}/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payloadSub())}),j=await r.json();
- if(!r.ok)return show(el.msgSub,err(j),'error');fecharSubmontagem();show(el.msg,'Submontagem atualizada com sucesso.','success');await carregarSubmontagens();if(atual&&Number(atual.id)===Number(id))await setAtual(j,true);
+async function carregarSubmontagemParaEdicao(id) {
+  try {
+    const [submontagemResponse, componentesResponse] = await Promise.all([
+      fetch(`${submontagensApiUrl}/${id}`),
+      fetch(`${submontagensApiUrl}/${id}/componentes`)
+    ]);
+
+    const submontagem = await submontagemResponse.json();
+    const componentes = await componentesResponse.json();
+
+    if (!submontagemResponse.ok) {
+      throw new Error(submontagem.message || 'Erro ao carregar submontagem.');
+    }
+
+    if (!componentesResponse.ok) {
+      throw new Error(componentes.message || 'Erro ao carregar estrutura da submontagem.');
+    }
+
+    editandoSubmontagemId = submontagem.id;
+    campos.subId.value = submontagem.id;
+    campos.subCodigo.value = submontagem.codigo;
+    campos.subDescricao.value = submontagem.descricao;
+    campos.subEstoqueMinimo.value = formatOptionalNumber(submontagem.estoque_minimo);
+    campos.subEstoqueSeguranca.value = formatOptionalNumber(submontagem.estoque_seguranca);
+    campos.subConsumoMensal.value = formatOptionalNumber(submontagem.consumo_mensal);
+    componentesDraft = componentes.map(mapearComponenteParaDraft);
+    renderizarTabelaDraft();
+    document.getElementById('btn-atualizar-submontagem').disabled = false;
+    document.getElementById('btn-salvar-submontagem').disabled = true;
+    document.getElementById('submontagem-modal-title').textContent = `Editar ${submontagem.codigo}`;
+    openModal(refs.submontagemModal);
+  } catch (error) {
+    showMessage(refs.mensagem, error.message, 'error');
+  }
 }
 
-async function carregarEdicao(id){
- const r=await fetch(`${api}/${id}`),j=await r.json();if(!r.ok)return show(el.msg,j.message||'Erro ao carregar submontagem.','error');
- editSub=j.id;$('#submontagem-id').value=j.id;$('#submontagem-codigo').value=j.codigo;$('#submontagem-descricao').value=j.descricao;$('#submontagem-comprimento').value=Number(j.comprimento_mm);$('#submontagem-unidade-comprimento').value='mm';$('#submontagem-tipo').value=j.tipo;$('#submontagem-massa').value=Number(j.massa_kg);$('#submontagem-unidade-massa').value='kg';$('#submontagem-estoque-minimo').value=j.estoque_minimo;$('#submontagem-estoque-seguranca').value=j.estoque_seguranca;$('#submontagem-consumo-mensal').value=j.consumo_mensal;
- preencher('materias_primas','#submontagem-id-materia-prima','#submontagem-busca-materia-prima',j.id_materia_prima,i=>`${i.codigo} - ${i.nome}`);
- preencher('fornecedores','#submontagem-id-fornecedor','#submontagem-busca-fornecedor',j.id_fornecedor,i=>i.nome);
- preencher('maquinas','#submontagem-id-maquina','#submontagem-busca-maquina',j.id_maquina,i=>i.nome);
- $('#btn-atualizar-submontagem').disabled=false;$('#btn-salvar-submontagem').disabled=true;$('#submontagem-modal-title').textContent=`Editar ${j.codigo}`;open(el.subModal);
+function mapearComponenteParaDraft(component) {
+  return {
+    id_item_componente: Number(component.id_item_componente),
+    codigo_componente: component.codigo_componente,
+    descricao_componente: component.descricao_componente,
+    tipo_componente: component.tipo_componente,
+    massa_kg: Number(component.massa_kg || 0),
+    quantidade: Number(component.quantidade),
+    observacao: component.observacao || null
+  };
 }
 
-async function excluirSub(id){
- if(!confirm('Deseja realmente excluir esta submontagem?'))return;
- const r=await fetch(`${api}/${id}`,{method:'DELETE'}),j=await r.json();if(!r.ok)return show(el.msg,j.message||'Erro ao excluir submontagem.','error');
- if(atual&&Number(atual.id)===id)limparEstrutura();show(el.msg,'Submontagem excluida com sucesso.','success');await carregarSubmontagens();
+function renderizarTabelaDraft() {
+  if (componentesDraft.length === 0) {
+    refs.tabelaDraft.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhuma peca adicionada na composicao.</td></tr>';
+  } else {
+    refs.tabelaDraft.innerHTML = componentesDraft.map((component) => `
+      <tr>
+        <td class="table-code">${escapeHtml(component.codigo_componente)}</td>
+        <td class="table-description">${escapeHtml(component.descricao_componente)}</td>
+        <td>${formatInteger(component.quantidade)}</td>
+        <td>${formatDecimal(Number(component.quantidade) * Number(component.massa_kg || 0), 3)} kg</td>
+        <td class="table-actions-cell">
+          <details class="row-menu">
+            <summary class="row-menu-trigger" aria-label="Abrir acoes">...</summary>
+            <div class="row-menu-panel">
+              <button type="button" class="row-menu-item" data-draft-component-act="editar" data-id="${component.id_item_componente}">Editar</button>
+              <button type="button" class="row-menu-item danger" data-draft-component-act="excluir" data-id="${component.id_item_componente}">Excluir</button>
+            </div>
+          </details>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  const massaTotal = componentesDraft.reduce(
+    (total, component) => total + (Number(component.quantidade) * Number(component.massa_kg || 0)),
+    0
+  );
+
+  campos.subMassa.value = massaTotal.toFixed(3);
+  document.getElementById('submontagem-estrutura-titulo').textContent = componentesDraft.length > 0
+    ? 'Pecas prontas para salvar'
+    : 'Nenhuma peca adicionada';
+  document.getElementById('submontagem-estrutura-subtitulo').textContent = componentesDraft.length > 0
+    ? 'A massa da submontagem sera recalculada automaticamente na gravacao.'
+    : 'Monte a lista de componentes antes de salvar a submontagem.';
+  document.getElementById('submontagem-total-componentes').textContent = `Componentes: ${componentesDraft.length}`;
+  document.getElementById('submontagem-massa-chip').textContent = `Massa total: ${formatDecimal(massaTotal, 3)} kg`;
 }
 
-async function criarComponente(e){
- e.preventDefault();if(editComp)return show(el.msgComp,'Use Atualizar para salvar o componente em edicao.','error');
- if(!atual)return show(el.msgComp,'Selecione uma submontagem antes de salvar a estrutura.','error');
- const r=await fetch(`${api}/${atual.id}/componentes`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payloadComp())}),j=await r.json();
- if(!r.ok)return show(el.msgComp,err(j),'error');fecharComponente();show(el.msgEstr,'Componente adicionado com sucesso.','success');await carregarSubmontagens();await setAtual(atual,true);
+function handleTabelaDraft(event) {
+  const actionButton = event.target.closest('button[data-draft-component-act]');
+  if (!actionButton) {
+    return;
+  }
+
+  const componenteId = Number.parseInt(actionButton.dataset.id, 10);
+  const componente = componentesDraft.find((item) => Number(item.id_item_componente) === componenteId);
+
+  if (!componente) {
+    return;
+  }
+
+  if (actionButton.dataset.draftComponentAct === 'editar') {
+    abrirEdicaoComponenteDraft(componente);
+    return;
+  }
+
+  componentesDraft = componentesDraft.filter((item) => Number(item.id_item_componente) !== componenteId);
+  renderizarTabelaDraft();
+  showMessage(refs.mensagemSubmontagem, 'Componente removido da composicao.', 'success');
 }
 
-async function atualizarComponente(){
- if(!editComp||!atual)return show(el.msgComp,'Selecione um componente antes de atualizar.','error');
- const r=await fetch(`${api}/${atual.id}/componentes/${editComp}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payloadComp())}),j=await r.json();
- if(!r.ok)return show(el.msgComp,err(j),'error');fecharComponente();show(el.msgEstr,'Componente atualizado com sucesso.','success');await carregarSubmontagens();await setAtual(atual,true);
+function abrirNovoComponenteDraft() {
+  modoComponente = 'draft';
+  resetFormComponente();
+  document.getElementById('componente-modal-title').textContent = 'Adicionar Peca';
+  document.getElementById('componente-modal-subtitle').textContent = 'Adicione um item simples na composicao da submontagem.';
+  openModal(refs.componenteModal);
 }
 
-function payloadSub(){
- return {codigo:$('#submontagem-codigo').value.trim(),descricao:$('#submontagem-descricao').value.trim(),comprimento_mm:mm($('#submontagem-comprimento').value,$('#submontagem-unidade-comprimento').value),tipo:$('#submontagem-tipo').value,id_materia_prima:nv($('#submontagem-id-materia-prima').value),id_fornecedor:nv($('#submontagem-id-fornecedor').value),id_maquina:nv($('#submontagem-id-maquina').value),estoque_minimo:$('#submontagem-estoque-minimo').value,estoque_seguranca:$('#submontagem-estoque-seguranca').value,consumo_mensal:$('#submontagem-consumo-mensal').value,massa_kg:kg($('#submontagem-massa').value,$('#submontagem-unidade-massa').value)};
+function abrirNovoComponenteLive() {
+  if (!submontagemAtual) {
+    showMessage(refs.mensagemEstrutura, 'Selecione uma submontagem antes de adicionar componentes.', 'error');
+    return;
+  }
+
+  modoComponente = 'live';
+  resetFormComponente();
+  document.getElementById('componente-modal-title').textContent = 'Adicionar Componente';
+  document.getElementById('componente-modal-subtitle').textContent = `${submontagemAtual.codigo} - ${submontagemAtual.descricao}`;
+  openModal(refs.componenteModal);
 }
 
-function payloadComp(){return{id_item_componente:$('#componente-item-id').value,quantidade:$('#componente-quantidade').value,observacao:$('#componente-observacao').value.trim()};}
-function preencher(chave,hiddenSel,inputSel,id,label){const item=(opcoes[chave]||[]).find(i=>Number(i.id)===Number(id));$(hiddenSel).value=id||'';$(inputSel).value=item?label(item):id?`ID ${id}`:'';}
-function resetSub(){$('#submontagem-form').reset();editSub=null;$('#submontagem-id').value='';$('#submontagem-id-materia-prima').value='';$('#submontagem-id-fornecedor').value='';$('#submontagem-id-maquina').value='';$('#submontagem-unidade-comprimento').value='mm';$('#submontagem-unidade-massa').value='kg';$('#submontagem-busca-materia-prima').value='';$('#submontagem-busca-fornecedor').value='';$('#submontagem-busca-maquina').value='';$('#btn-atualizar-submontagem').disabled=true;$('#btn-salvar-submontagem').disabled=false;hide(el.msgSub);hideAllPanels();}
-function resetComp(){$('#componente-form').reset();editComp=null;$('#componente-item-id').value='';$('#componente-item-id-atual').value='';$('#componente-item-busca').value='';$('#componente-quantidade').value='1';$('#btn-atualizar-componente').disabled=true;$('#btn-salvar-componente').disabled=false;hide(el.msgComp);hideAllPanels();}
-function limparEstrutura(){atual=null;comps=[];$('#btn-novo-componente').disabled=true;$('#estrutura-titulo').textContent='Selecione uma submontagem';$('#estrutura-subtitulo').textContent='Abra a estrutura a partir da listagem para consultar ou editar os componentes.';$('#estrutura-codigo').textContent='Nenhuma submontagem selecionada';$('#estrutura-detalhe').textContent='Escolha um registro para visualizar a composicao.';$('#estrutura-total-componentes').textContent='Componentes: 0';$('#estrutura-massa-total').textContent='Massa: 0,000 kg';renderComps();hide(el.msgEstr);}
-function open(m){m.classList.remove('hidden');m.setAttribute('aria-hidden','false');syncBody();}
-function close(m){m.classList.add('hidden');m.setAttribute('aria-hidden','true');syncBody();}
-function syncBody(){document.body.classList.toggle('has-modal',![el.subModal,el.compModal].every(m=>m.classList.contains('hidden')));}
-function toggleDrawer(open){el.drawer.classList.toggle('is-open',!!open);el.scrim.classList.toggle('hidden',!open);document.body.classList.toggle('has-drawer',!!open);}
-function hideAllPanels(){document.querySelectorAll('.autocomplete-panel').forEach(p=>{p.classList.add('hidden');p.innerHTML='';});}
-function show(box,text,type){box.textContent=text;box.className=`message ${type}`;box.classList.remove('hidden');}
-function hide(box){box.className='message hidden';box.textContent='';}
-function throwMsg(box,text){show(box,text,'error');}
-function err(r){return Array.isArray(r.errors)&&r.errors.length?r.errors.join(' '):(r.message||'Operacao nao concluida.');}
-function nv(v){return v===''?null:v;}
-function mm(v,u){const n=Number.parseFloat(v);return Number.isFinite(n)?(u==='m'?n*1000:n):n;}
-function kg(v,u){const n=Number.parseFloat(v);return Number.isFinite(n)?(u==='g'?n/1000:n):n;}
-function fmt(v,c){return Number(v).toLocaleString('pt-BR',{minimumFractionDigits:c,maximumFractionDigits:c});}
-function int(v){return Number(v).toLocaleString('pt-BR',{maximumFractionDigits:0});}
-function esc(v){return String(v).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');}
+function abrirEdicaoComponenteDraft(componente) {
+  modoComponente = 'draft';
+  preencherFormularioComponente(componente);
+  document.getElementById('componente-modal-title').textContent = 'Editar Peca';
+  document.getElementById('componente-modal-subtitle').textContent = 'Atualize os dados da composicao antes de salvar a submontagem.';
+  openModal(refs.componenteModal);
+}
+
+function abrirEdicaoComponenteLive(componente) {
+  modoComponente = 'live';
+  preencherFormularioComponente(componente);
+  document.getElementById('componente-modal-title').textContent = 'Editar Componente';
+  document.getElementById('componente-modal-subtitle').textContent = `${submontagemAtual.codigo} - ${submontagemAtual.descricao}`;
+  openModal(refs.componenteModal);
+}
+
+function preencherFormularioComponente(componente) {
+  editandoComponenteId = Number(componente.id_item_componente);
+  campos.componenteItemIdAtual.value = componente.id_item_componente;
+  campos.componenteItemId.value = componente.id_item_componente;
+  campos.componenteItemBusca.value = `${componente.codigo_componente} - ${componente.descricao_componente}`;
+  campos.componenteQuantidade.value = Number(componente.quantidade);
+  campos.componenteObservacao.value = componente.observacao || '';
+  document.getElementById('btn-atualizar-componente').disabled = false;
+  document.getElementById('btn-salvar-componente').disabled = true;
+}
+
+async function criarSubmontagem(event) {
+  event.preventDefault();
+
+  if (editandoSubmontagemId) {
+    showMessage(refs.mensagemSubmontagem, 'Use Atualizar para salvar a submontagem em edicao.', 'error');
+    return;
+  }
+
+  try {
+    const response = await fetch(submontagensApiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(montarPayloadSubmontagem())
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(extractErrorMessage(result));
+    }
+
+    fecharModalSubmontagem();
+    showMessage(refs.mensagem, 'Submontagem cadastrada com sucesso.', 'success');
+    await carregarSubmontagens();
+
+    const criada = submontagensCache.find((item) => Number(item.id) === Number(result.id));
+    if (criada) {
+      await selecionarSubmontagem(criada, true);
+    }
+  } catch (error) {
+    showMessage(refs.mensagemSubmontagem, error.message, 'error');
+  }
+}
+
+async function atualizarSubmontagem() {
+  if (!editandoSubmontagemId) {
+    showMessage(refs.mensagemSubmontagem, 'Selecione uma submontagem antes de atualizar.', 'error');
+    return;
+  }
+
+  try {
+    const response = await fetch(`${submontagensApiUrl}/${editandoSubmontagemId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(montarPayloadSubmontagem())
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(extractErrorMessage(result));
+    }
+
+    fecharModalSubmontagem();
+    showMessage(refs.mensagem, 'Submontagem atualizada com sucesso.', 'success');
+    await carregarSubmontagens();
+
+    const atualizada = submontagensCache.find((item) => Number(item.id) === Number(result.id));
+    if (atualizada) {
+      await selecionarSubmontagem(atualizada, true);
+    }
+  } catch (error) {
+    showMessage(refs.mensagemSubmontagem, error.message, 'error');
+  }
+}
+
+function montarPayloadSubmontagem() {
+  return {
+    codigo: campos.subCodigo.value.trim(),
+    descricao: campos.subDescricao.value.trim(),
+    estoque_minimo: normalizeOptionalValue(campos.subEstoqueMinimo.value),
+    estoque_seguranca: normalizeOptionalValue(campos.subEstoqueSeguranca.value),
+    consumo_mensal: normalizeOptionalValue(campos.subConsumoMensal.value),
+    componentes: componentesDraft.map((component) => ({
+      id_item_componente: component.id_item_componente,
+      quantidade: component.quantidade,
+      observacao: component.observacao || null
+    }))
+  };
+}
+
+async function criarComponente(event) {
+  event.preventDefault();
+
+  if (editandoComponenteId) {
+    showMessage(refs.mensagemComponente, 'Use Atualizar para salvar o componente em edicao.', 'error');
+    return;
+  }
+
+  if (modoComponente === 'draft') {
+    salvarComponenteDraft();
+    return;
+  }
+
+  await salvarComponenteLive('POST');
+}
+
+async function atualizarComponente() {
+  if (!editandoComponenteId) {
+    showMessage(refs.mensagemComponente, 'Selecione um componente antes de atualizar.', 'error');
+    return;
+  }
+
+  if (modoComponente === 'draft') {
+    salvarComponenteDraft(true);
+    return;
+  }
+
+  await salvarComponenteLive('PUT');
+}
+
+function salvarComponenteDraft(isUpdate = false) {
+  const componente = montarPayloadComponente();
+  if (!componente) {
+    return;
+  }
+
+  const jaExiste = componentesDraft.find((item) => (
+    Number(item.id_item_componente) === Number(componente.id_item_componente)
+    && Number(item.id_item_componente) !== Number(editandoComponenteId)
+  ));
+
+  if (jaExiste) {
+    showMessage(refs.mensagemComponente, 'Esta peca ja foi adicionada na composicao.', 'error');
+    return;
+  }
+
+  if (isUpdate) {
+    componentesDraft = componentesDraft.map((item) => (
+      Number(item.id_item_componente) === Number(editandoComponenteId)
+        ? componente
+        : item
+    ));
+  } else {
+    componentesDraft.push(componente);
+  }
+
+  renderizarTabelaDraft();
+  fecharModalComponente();
+  showMessage(
+    refs.mensagemSubmontagem,
+    isUpdate ? 'Peca atualizada na composicao.' : 'Peca adicionada na composicao.',
+    'success'
+  );
+}
+
+async function salvarComponenteLive(method) {
+  if (!submontagemAtual) {
+    showMessage(refs.mensagemComponente, 'Selecione uma submontagem antes de salvar a estrutura.', 'error');
+    return;
+  }
+
+  const componente = montarPayloadComponente();
+  if (!componente) {
+    return;
+  }
+
+  const endpoint = method === 'PUT'
+    ? `${submontagensApiUrl}/${submontagemAtual.id}/componentes/${editandoComponenteId}`
+    : `${submontagensApiUrl}/${submontagemAtual.id}/componentes`;
+
+  try {
+    const response = await fetch(endpoint, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id_item_componente: componente.id_item_componente,
+        quantidade: componente.quantidade,
+        observacao: componente.observacao
+      })
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(extractErrorMessage(result));
+    }
+
+    fecharModalComponente();
+    showMessage(
+      refs.mensagemEstrutura,
+      method === 'PUT' ? 'Componente atualizado com sucesso.' : 'Componente adicionado com sucesso.',
+      'success'
+    );
+    await carregarSubmontagens();
+  } catch (error) {
+    showMessage(refs.mensagemComponente, error.message, 'error');
+  }
+}
+
+function montarPayloadComponente() {
+  const itemId = Number.parseInt(campos.componenteItemId.value, 10);
+  const quantidade = Number.parseInt(campos.componenteQuantidade.value, 10);
+  const item = itensCache.find((registro) => Number(registro.id) === itemId);
+
+  if (!item) {
+    showMessage(refs.mensagemComponente, 'Selecione uma peca valida para a composicao.', 'error');
+    return null;
+  }
+
+  if (!Number.isInteger(quantidade) || quantidade <= 0) {
+    showMessage(refs.mensagemComponente, 'A quantidade deve ser um numero inteiro maior que zero.', 'error');
+    return null;
+  }
+
+  return {
+    id_item_componente: item.id,
+    codigo_componente: item.codigo,
+    descricao_componente: item.descricao,
+    tipo_componente: item.tipo,
+    massa_kg: Number(item.massa_kg || 0),
+    quantidade,
+    observacao: campos.componenteObservacao.value.trim() || null
+  };
+}
+
+function limparFiltros() {
+  refs.filtroForm.reset();
+  carregarSubmontagens();
+}
+
+function agendarCarregamentoSubmontagens() {
+  window.clearTimeout(filtroDebounceTimer);
+  filtroDebounceTimer = window.setTimeout(() => carregarSubmontagens(), 220);
+}
+
+function resetFormSubmontagem() {
+  refs.submontagemForm.reset();
+  editandoSubmontagemId = null;
+  componentesDraft = [];
+  campos.subId.value = '';
+  campos.subMassa.value = '0';
+  document.getElementById('submontagem-unidade-massa').value = 'kg';
+  document.getElementById('btn-atualizar-submontagem').disabled = true;
+  document.getElementById('btn-salvar-submontagem').disabled = false;
+  renderizarTabelaDraft();
+  hideMessage(refs.mensagemSubmontagem);
+}
+
+function fecharModalSubmontagem() {
+  resetFormSubmontagem();
+  closeModal(refs.submontagemModal);
+}
+
+function resetFormComponente() {
+  refs.componenteForm.reset();
+  editandoComponenteId = null;
+  campos.componenteItemId.value = '';
+  campos.componenteItemIdAtual.value = '';
+  campos.componenteItemBusca.value = '';
+  campos.componenteQuantidade.value = '1';
+  document.getElementById('btn-atualizar-componente').disabled = true;
+  document.getElementById('btn-salvar-componente').disabled = false;
+  hideMessage(refs.mensagemComponente);
+  esconderSugestoesItens();
+}
+
+function fecharModalComponente() {
+  resetFormComponente();
+  closeModal(refs.componenteModal);
+}
+
+function limparEstruturaAtual() {
+  submontagemAtual = null;
+  componentesEstruturaCache = [];
+  document.getElementById('btn-novo-componente').disabled = true;
+  document.getElementById('estrutura-titulo').textContent = 'Selecione uma submontagem';
+  document.getElementById('estrutura-subtitulo').textContent = 'Abra a estrutura a partir da listagem para consultar ou editar os componentes.';
+  document.getElementById('estrutura-codigo').textContent = 'Nenhuma submontagem selecionada';
+  document.getElementById('estrutura-detalhe').textContent = 'Escolha um registro para visualizar a composicao.';
+  document.getElementById('estrutura-total-componentes').textContent = 'Componentes: 0';
+  document.getElementById('estrutura-massa-total').textContent = 'Massa: 0,000 kg';
+  renderizarEstruturaAtual();
+  hideMessage(refs.mensagemEstrutura);
+}
+
+function renderizarSugestoesItens(termo) {
+  const filtro = termo.toLowerCase();
+  const itensFiltrados = itensCache.filter((item) => {
+    if (!filtro) {
+      return true;
+    }
+
+    return `${item.codigo} ${item.descricao} ${item.tipo}`.toLowerCase().includes(filtro);
+  }).slice(0, 8);
+
+  if (itensFiltrados.length === 0) {
+    campos.componenteSugestoes.innerHTML = '<div class="autocomplete-empty">Nenhum item simples encontrado.</div>';
+    campos.componenteSugestoes.classList.remove('hidden');
+    return;
+  }
+
+  campos.componenteSugestoes.innerHTML = itensFiltrados.map((item) => `
+    <button type="button" class="autocomplete-option" data-item-id="${item.id}">
+      <strong>${escapeHtml(item.codigo)} - ${escapeHtml(item.descricao)}</strong>
+      <span>${escapeHtml(`${item.tipo} | Massa: ${formatDecimal(item.massa_kg || 0, 3)} kg`)}</span>
+    </button>
+  `).join('');
+  campos.componenteSugestoes.classList.remove('hidden');
+}
+
+function esconderSugestoesItens() {
+  campos.componenteSugestoes.classList.add('hidden');
+  campos.componenteSugestoes.innerHTML = '';
+}
+
+function handleKeyboardShortcuts(event) {
+  if (event.key !== 'Escape') {
+    return;
+  }
+
+  esconderSugestoesItens();
+
+  if (!refs.componenteModal.classList.contains('hidden')) {
+    fecharModalComponente();
+    return;
+  }
+
+  if (!refs.submontagemModal.classList.contains('hidden')) {
+    fecharModalSubmontagem();
+    return;
+  }
+
+  if (refs.drawer.classList.contains('is-open')) {
+    toggleDrawer(false);
+  }
+}
+
+function openModal(modal) {
+  modal.classList.remove('hidden');
+  modal.setAttribute('aria-hidden', 'false');
+  syncBodyModalState();
+}
+
+function closeModal(modal) {
+  modal.classList.add('hidden');
+  modal.setAttribute('aria-hidden', 'true');
+  syncBodyModalState();
+}
+
+function syncBodyModalState() {
+  const modalAberto = !refs.submontagemModal.classList.contains('hidden')
+    || !refs.componenteModal.classList.contains('hidden');
+  document.body.classList.toggle('has-modal', modalAberto);
+}
+
+function toggleDrawer(shouldOpen) {
+  refs.drawer.classList.toggle('is-open', shouldOpen);
+  refs.drawerScrim.classList.toggle('hidden', !shouldOpen);
+  document.body.classList.toggle('has-drawer', shouldOpen);
+}
+
+function showMessage(element, text, type) {
+  element.textContent = text;
+  element.className = `message ${type}`;
+  element.classList.remove('hidden');
+}
+
+function hideMessage(element) {
+  element.className = 'message hidden';
+  element.textContent = '';
+}
+
+function extractErrorMessage(result) {
+  if (Array.isArray(result.errors) && result.errors.length > 0) {
+    return result.errors.join(' ');
+  }
+
+  return result.message || 'Operacao nao concluida.';
+}
+
+function normalizeOptionalValue(value) {
+  return value === '' ? null : value;
+}
+
+function formatOptionalNumber(value) {
+  return value === null || value === undefined ? '' : Number(value);
+}
+
+function formatDecimal(value, decimalPlaces) {
+  return Number(value).toLocaleString('pt-BR', {
+    minimumFractionDigits: decimalPlaces,
+    maximumFractionDigits: decimalPlaces
+  });
+}
+
+function formatInteger(value) {
+  return Number(value).toLocaleString('pt-BR', {
+    maximumFractionDigits: 0
+  });
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}

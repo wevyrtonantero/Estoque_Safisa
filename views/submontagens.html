@@ -55,7 +55,7 @@
         <div class="topbar-copy">
           <p class="page-kicker">Area Administrativa SAFISA</p>
           <h1 class="page-title">Submontagens</h1>
-          <p class="page-subtitle">Monte estruturas de componentes, acompanhe a massa e mantenha os vinculos tecnicos da peca.</p>
+          <p class="page-subtitle">Cadastre a submontagem com codigo, descricao, estrutura e massa automatica pela soma dos componentes.</p>
         </div>
       </div>
 
@@ -124,7 +124,6 @@
             <tr>
               <th>Codigo</th>
               <th>Descricao</th>
-              <th>Tipo</th>
               <th>Componentes</th>
               <th>Massa</th>
               <th>Acoes</th>
@@ -132,7 +131,7 @@
           </thead>
           <tbody id="submontagens-tbody">
             <tr>
-              <td colspan="6" class="empty-state">Carregando submontagens cadastradas...</td>
+              <td colspan="5" class="empty-state">Carregando submontagens cadastradas...</td>
             </tr>
           </tbody>
         </table>
@@ -192,12 +191,12 @@
   <div id="submontagem-modal" class="modal hidden" aria-hidden="true">
     <div class="modal-backdrop" data-close-modal="submontagem"></div>
 
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-wide">
       <div class="modal-header">
         <div>
           <span class="section-pill">Cadastro</span>
           <h2 id="submontagem-modal-title">Nova Submontagem</h2>
-          <p>Preencha os campos tecnicos da submontagem e mantenha os vinculos principais.</p>
+          <p>Informe os dados principais e monte as pecas da composicao antes de salvar.</p>
         </div>
 
         <button id="btn-fechar-modal-submontagem" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
@@ -219,76 +218,74 @@
         </div>
 
         <div class="field span-4">
-          <label for="submontagem-comprimento">Comprimento</label>
-          <div class="inline-field">
-            <input id="submontagem-comprimento" type="number" min="0.01" step="0.01" placeholder="0,00" required>
-            <select id="submontagem-unidade-comprimento">
-              <option value="mm" selected>mm</option>
-              <option value="m">m</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="field span-4">
-          <label for="submontagem-tipo">Tipo</label>
-          <select id="submontagem-tipo" required>
-            <option value="">Selecione</option>
-            <option value="COMPRADA">COMPRADA</option>
-            <option value="PRODUZIDA">PRODUZIDA</option>
-          </select>
-        </div>
-
-        <div class="field span-4">
           <label for="submontagem-massa">Massa</label>
           <div class="inline-field">
-            <input id="submontagem-massa" type="number" min="0" step="0.001" value="0" required>
+            <input id="submontagem-massa" type="number" min="0" step="0.001" value="0" readonly>
             <select id="submontagem-unidade-massa">
               <option value="kg" selected>kg</option>
-              <option value="g">g</option>
             </select>
           </div>
-        </div>
-
-        <div class="field span-4">
-          <label for="submontagem-id-materia-prima">Materia-prima</label>
-          <input type="hidden" id="submontagem-id-materia-prima">
-          <div class="autocomplete">
-            <input id="submontagem-busca-materia-prima" type="text" placeholder="Digite nome, geometria ou bitola">
-            <div id="submontagem-sugestoes-materia-prima" class="autocomplete-panel hidden"></div>
-          </div>
-        </div>
-
-        <div class="field span-4">
-          <label for="submontagem-id-fornecedor">Fornecedor</label>
-          <input type="hidden" id="submontagem-id-fornecedor">
-          <div class="autocomplete">
-            <input id="submontagem-busca-fornecedor" type="text" placeholder="Digite nome, contato ou cidade">
-            <div id="submontagem-sugestoes-fornecedor" class="autocomplete-panel hidden"></div>
-          </div>
-        </div>
-
-        <div class="field span-4">
-          <label for="submontagem-id-maquina">Maquina</label>
-          <input type="hidden" id="submontagem-id-maquina">
-          <div class="autocomplete">
-            <input id="submontagem-busca-maquina" type="text" placeholder="Digite nome ou tipo da maquina">
-            <div id="submontagem-sugestoes-maquina" class="autocomplete-panel hidden"></div>
-          </div>
+          <span class="search-helper">Calculada automaticamente pela soma das massas dos componentes.</span>
         </div>
 
         <div class="field span-4">
           <label for="submontagem-estoque-minimo">Quantidade por pacote</label>
-          <input id="submontagem-estoque-minimo" type="number" min="0" step="1" value="0" required>
+          <input id="submontagem-estoque-minimo" type="number" min="0" step="1" placeholder="Opcional">
         </div>
 
         <div class="field span-4">
           <label for="submontagem-estoque-seguranca">Estoque de seguranca</label>
-          <input id="submontagem-estoque-seguranca" type="number" min="0" step="1" value="0" required>
+          <input id="submontagem-estoque-seguranca" type="number" min="0" step="1" placeholder="Opcional">
         </div>
 
         <div class="field span-4">
           <label for="submontagem-consumo-mensal">Consumo mensal</label>
-          <input id="submontagem-consumo-mensal" type="number" min="0" step="0.01" value="0" required>
+          <input id="submontagem-consumo-mensal" type="number" min="0" step="0.01" placeholder="Opcional">
+        </div>
+
+        <div class="span-12 embedded-section">
+          <div class="card-top compact-top">
+            <div>
+              <span class="section-pill">Composicao</span>
+              <h3>Pecas da Submontagem</h3>
+            </div>
+
+            <div class="topbar-actions">
+              <button type="button" id="btn-submontagem-adicionar-componente" class="btn btn-secondary">Adicionar Peca</button>
+            </div>
+          </div>
+
+          <div class="structure-highlight">
+            <div>
+              <p class="page-kicker">Estrutura em edicao</p>
+              <h3 id="submontagem-estrutura-titulo">Nenhuma peca adicionada</h3>
+              <p id="submontagem-estrutura-subtitulo">Monte a lista de componentes antes de salvar a submontagem.</p>
+            </div>
+
+            <div class="structure-kpis">
+              <span id="submontagem-total-componentes" class="mini-chip">Componentes: 0</span>
+              <span id="submontagem-massa-chip" class="mini-chip">Massa total: 0,000 kg</span>
+            </div>
+          </div>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Codigo</th>
+                  <th>Descricao</th>
+                  <th>Quantidade</th>
+                  <th>Massa</th>
+                  <th>Acoes</th>
+                </tr>
+              </thead>
+              <tbody id="submontagem-componentes-tbody">
+                <tr>
+                  <td colspan="5" class="empty-state">Nenhuma peca adicionada na composicao.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
 
         <div class="span-12 modal-actions">
