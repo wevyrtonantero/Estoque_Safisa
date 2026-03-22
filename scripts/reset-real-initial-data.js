@@ -1,4 +1,4 @@
-const fs = require('fs/promises');
+﻿const fs = require('fs/promises');
 const path = require('path');
 const mysql = require('mysql2/promise');
 
@@ -95,7 +95,7 @@ const suppliers = [
   },
   {
     id: 10,
-    nome: 'Açovisa',
+    nome: 'Acovisa',
     cep: '07220-030',
     endereco: 'Rua Angatuba, 350, Cumbica',
     cidade: 'Guarulhos - SP',
@@ -341,6 +341,7 @@ async function main() {
           id,
           codigo,
           nome,
+          categoria,
           material,
           geometria,
           bitola,
@@ -350,19 +351,21 @@ async function main() {
           peso_unitario_kg,
           densidade_g_cm3,
           estoque_minimo,
+          unidade_estoque,
+          id_fornecedor_principal,
           observacao
         ) VALUES ?
       `,
       [[
-        [1, 'MP-GENERICA', 'MATERIA-PRIMA GENERICA', 'NA', 'NA', 'NA', null, null, null, null, null, 0, 'Registro generico legado para pecas produzidas ainda nao mapeadas.'],
-        [2, '250FD', 'CORPO CJ--015', 'Ferro fundido cinzento ou ferro fundido nodular', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'Materia-prima fundida.'],
-        [3, '300FD', 'CORPO MBF-040', 'Ferro fundido cinzento ou ferro fundido nodular', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'Materia-prima fundida.'],
-        [4, '350FD', 'CORPO BR-040', 'Ferro fundido cinzento ou ferro fundido nodular', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'Materia-prima fundida.'],
-        [5, '355FD', 'CORPO PRINCIPAL DO BR-040 C/ FURAÇÃO', 'Ferro fundido cinzento ou ferro fundido nodular', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'Materia-prima fundida.'],
-        [6, '400FD', 'CORPO DO VF', 'Ferro fundido cinzento ou ferro fundido nodular', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'Materia-prima fundida.'],
-        [7, '401FD', 'CORPO MC-040', 'Ferro fundido cinzento ou ferro fundido nodular', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'Materia-prima fundida.'],
-        [8, '450FD', 'CORPO DO MBF-032', 'Ferro fundido cinzento ou ferro fundido nodular', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'Materia-prima fundida.'],
-        [9, '500FD', 'CORPO DO TR - 100', 'Ferro fundido cinzento ou ferro fundido nodular', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'Materia-prima fundida.']
+        [1, 'MP-GENERICA', 'MATERIA-PRIMA GENERICA', 'LAMINADO', 'NA', 'NA', 'NA', null, null, null, null, null, 0, 'KG', 9, 'Registro generico legado para pecas produzidas ainda nao mapeadas.'],
+        [2, '250FD', 'CORPO CJ--015', 'FUNDIDO', 'Ferro fundido cinzento ou ferro fundido nodular', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'UN', 6, 'Materia-prima fundida.'],
+        [3, '300FD', 'CORPO MBF-040', 'FUNDIDO', 'Ferro fundido cinzento ou ferro fundido nodular', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'UN', 6, 'Materia-prima fundida.'],
+        [4, '350FD', 'CORPO BR-040', 'FUNDIDO', 'Ferro fundido cinzento ou ferro fundido nodular', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'UN', 6, 'Materia-prima fundida.'],
+        [5, '355FD', 'CORPO PRINCIPAL DO BR-040 C/ FURACAO', 'FUNDIDO', 'Ferro fundido cinzento ou ferro fundido nodular', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'UN', 6, 'Materia-prima fundida.'],
+        [6, '400FD', 'CORPO DO VF', 'FUNDIDO', 'Ferro fundido cinzento ou ferro fundido nodular', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'UN', 6, 'Materia-prima fundida.'],
+        [7, '401FD', 'CORPO MC-040', 'FUNDIDO', 'Ferro fundido cinzento ou ferro fundido nodular', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'UN', 6, 'Materia-prima fundida.'],
+        [8, '450FD', 'CORPO DO MBF-032', 'FUNDIDO', 'Ferro fundido cinzento ou ferro fundido nodular', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'UN', 6, 'Materia-prima fundida.'],
+        [9, '500FD', 'CORPO DO TR - 100', 'FUNDIDO', 'Ferro fundido cinzento ou ferro fundido nodular', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'UN', 6, 'Materia-prima fundida.']
       ]]
     );
 
@@ -375,6 +378,7 @@ async function main() {
         ) VALUES ?
       `,
       [[
+        [1, 9, 'Fornecedor principal legado para materia-prima generica'],
         [2, 6, 'Fornecedor padrao para fundidos'],
         [3, 6, 'Fornecedor padrao para fundidos'],
         [4, 6, 'Fornecedor padrao para fundidos'],
@@ -538,3 +542,4 @@ async function main() {
 }
 
 main();
+

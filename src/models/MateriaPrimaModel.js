@@ -8,51 +8,66 @@ class MateriaPrimaModel {
     const values = [];
 
     if (filters.codigo) {
-      conditions.push('codigo LIKE ?');
+      conditions.push('mp.codigo LIKE ?');
       values.push(`%${filters.codigo}%`);
     }
 
     if (filters.nome) {
-      conditions.push('nome LIKE ?');
+      conditions.push('mp.nome LIKE ?');
       values.push(`%${filters.nome}%`);
     }
 
     if (filters.material) {
-      conditions.push('COALESCE(material, \'\') LIKE ?');
+      conditions.push('COALESCE(mp.material, \'\') LIKE ?');
       values.push(`%${filters.material}%`);
     }
 
+    if (filters.categoria) {
+      conditions.push('mp.categoria = ?');
+      values.push(filters.categoria);
+    }
+
     if (filters.geometria) {
-      conditions.push('geometria LIKE ?');
+      conditions.push('mp.geometria LIKE ?');
       values.push(`%${filters.geometria}%`);
     }
 
     if (filters.bitola) {
-      conditions.push('bitola LIKE ?');
+      conditions.push('mp.bitola LIKE ?');
       values.push(`%${filters.bitola}%`);
+    }
+
+    if (filters.id_fornecedor_principal) {
+      conditions.push('mp.id_fornecedor_principal = ?');
+      values.push(filters.id_fornecedor_principal);
     }
 
     const [rows] = await pool.query(
       `
         SELECT
-          id,
-          codigo,
-          nome,
-          material,
-          geometria,
-          bitola,
-          bitola_mm,
-          comprimento_padrao_mm,
-          peso_por_metro,
-          peso_unitario_kg,
-          densidade_g_cm3,
-          estoque_minimo,
-          observacao,
-          created_at,
-          updated_at
-        FROM materias_primas
+          mp.id,
+          mp.codigo,
+          mp.nome,
+          mp.categoria,
+          mp.material,
+          mp.geometria,
+          mp.bitola,
+          mp.bitola_mm,
+          mp.comprimento_padrao_mm,
+          mp.peso_por_metro,
+          mp.peso_unitario_kg,
+          mp.densidade_g_cm3,
+          mp.estoque_minimo,
+          mp.unidade_estoque,
+          mp.id_fornecedor_principal,
+          fp.nome AS fornecedor_principal_nome,
+          mp.observacao,
+          mp.created_at,
+          mp.updated_at
+        FROM materias_primas mp
+        LEFT JOIN fornecedores fp ON fp.id = mp.id_fornecedor_principal
         WHERE ${conditions.join(' AND ')}
-        ORDER BY nome ASC
+        ORDER BY mp.nome ASC
       `,
       values
     );
@@ -65,23 +80,28 @@ class MateriaPrimaModel {
     const [rows] = await pool.query(
       `
         SELECT
-          id,
-          codigo,
-          nome,
-          material,
-          geometria,
-          bitola,
-          bitola_mm,
-          comprimento_padrao_mm,
-          peso_por_metro,
-          peso_unitario_kg,
-          densidade_g_cm3,
-          estoque_minimo,
-          observacao,
-          created_at,
-          updated_at
-        FROM materias_primas
-        WHERE id = ?
+          mp.id,
+          mp.codigo,
+          mp.nome,
+          mp.categoria,
+          mp.material,
+          mp.geometria,
+          mp.bitola,
+          mp.bitola_mm,
+          mp.comprimento_padrao_mm,
+          mp.peso_por_metro,
+          mp.peso_unitario_kg,
+          mp.densidade_g_cm3,
+          mp.estoque_minimo,
+          mp.unidade_estoque,
+          mp.id_fornecedor_principal,
+          fp.nome AS fornecedor_principal_nome,
+          mp.observacao,
+          mp.created_at,
+          mp.updated_at
+        FROM materias_primas mp
+        LEFT JOIN fornecedores fp ON fp.id = mp.id_fornecedor_principal
+        WHERE mp.id = ?
       `,
       [id]
     );
@@ -97,10 +117,12 @@ class MateriaPrimaModel {
           id,
           codigo,
           nome,
+          categoria,
           material,
           geometria,
           bitola,
-          bitola_mm
+          bitola_mm,
+          id_fornecedor_principal
         FROM materias_primas
         ORDER BY codigo ASC
       `
@@ -116,6 +138,7 @@ class MateriaPrimaModel {
         INSERT INTO materias_primas (
           codigo,
           nome,
+          categoria,
           material,
           geometria,
           bitola,
@@ -125,12 +148,15 @@ class MateriaPrimaModel {
           peso_unitario_kg,
           densidade_g_cm3,
           estoque_minimo,
+          unidade_estoque,
+          id_fornecedor_principal,
           observacao
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         data.codigo,
         data.nome,
+        data.categoria,
         data.material,
         data.geometria,
         data.bitola,
@@ -140,6 +166,8 @@ class MateriaPrimaModel {
         data.peso_unitario_kg,
         data.densidade_g_cm3,
         data.estoque_minimo,
+        data.unidade_estoque,
+        data.id_fornecedor_principal,
         data.observacao
       ]
     );
@@ -155,6 +183,7 @@ class MateriaPrimaModel {
         SET
           codigo = ?,
           nome = ?,
+          categoria = ?,
           material = ?,
           geometria = ?,
           bitola = ?,
@@ -164,12 +193,15 @@ class MateriaPrimaModel {
           peso_unitario_kg = ?,
           densidade_g_cm3 = ?,
           estoque_minimo = ?,
+          unidade_estoque = ?,
+          id_fornecedor_principal = ?,
           observacao = ?
         WHERE id = ?
       `,
       [
         data.codigo,
         data.nome,
+        data.categoria,
         data.material,
         data.geometria,
         data.bitola,
@@ -179,6 +211,8 @@ class MateriaPrimaModel {
         data.peso_unitario_kg,
         data.densidade_g_cm3,
         data.estoque_minimo,
+        data.unidade_estoque,
+        data.id_fornecedor_principal,
         data.observacao,
         id
       ]
