@@ -36,6 +36,42 @@ const TratamentoExternoController = {
       console.error('Erro ao listar movimentacoes de tratamento externo:', error);
       return res.status(500).json({ message: 'Erro ao listar movimentacoes de tratamento externo.' });
     }
+  },
+
+  async sendToStock(req, res) {
+    try {
+      const idPeca = normalizeOptionalInteger(req.body.id_peca);
+      const idEstoqueDestino = normalizeOptionalInteger(req.body.id_estoque_destino);
+      const quantidade = Number.parseFloat(String(req.body.quantidade || '').replace(',', '.'));
+
+      if (!Number.isInteger(idPeca)) {
+        return res.status(400).json({ message: 'A peca informada deve ser valida.' });
+      }
+
+      if (!Number.isInteger(idEstoqueDestino)) {
+        return res.status(400).json({ message: 'O estoque de destino deve ser valido.' });
+      }
+
+      if (!Number.isFinite(quantidade) || quantidade <= 0) {
+        return res.status(400).json({ message: 'A quantidade deve ser maior que zero.' });
+      }
+
+      const result = await TratamentoExternoModel.sendToStock({
+        id_peca: idPeca,
+        id_estoque_destino: idEstoqueDestino,
+        quantidade,
+        observacao: req.body.observacao ? String(req.body.observacao).trim() : null
+      });
+
+      return res.status(200).json(result);
+    } catch (error) {
+      if (error.statusCode) {
+        return res.status(error.statusCode).json({ message: error.message });
+      }
+
+      console.error('Erro ao enviar item do tratamento externo para o estoque:', error);
+      return res.status(500).json({ message: 'Erro ao enviar item do tratamento externo para o estoque.' });
+    }
   }
 };
 

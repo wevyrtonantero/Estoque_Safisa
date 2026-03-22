@@ -19,7 +19,7 @@
             <h2 class="brand-title">Painel Administrativo</h2>
           </div>
         </div>
-        <p class="brand-copy">Fila de pecas prontas aguardando o proximo processo externo.</p>
+        <p class="brand-copy">Fila operacional para terceirizacao ou envio direto ao estoque final.</p>
       </div>
 
       <button id="drawer-close" class="icon-btn" type="button" aria-label="Fechar menu">X</button>
@@ -36,6 +36,7 @@
       <a class="nav-link" href="/pagina-estoque"><span class="nav-icon">ES</span><span>Estoque</span></a>
       <a class="nav-link" href="/pagina-producao"><span class="nav-icon">PR</span><span>Producao</span></a>
       <a class="nav-link is-active" href="/pagina-tratamento-externo"><span class="nav-icon">TE</span><span>Tratamento Externo</span></a>
+      <a class="nav-link" href="/pagina-remessas-terceiros"><span class="nav-icon">NF</span><span>Remessas / NF</span></a>
       <a class="nav-link" href="#"><span class="nav-icon">RL</span><span>Relatorios</span></a>
     </nav>
   </aside>
@@ -52,12 +53,13 @@
         <div class="topbar-copy">
           <p class="page-kicker">Area Administrativa SAFISA</p>
           <h1 class="page-title">Tratamento Externo</h1>
-          <p class="page-subtitle">As pecas finalizadas na producao chegam aqui automaticamente para seguir o proximo processo.</p>
+          <p class="page-subtitle">As pecas finalizadas na producao chegam aqui e podem seguir para terceirizacao ou direto para o estoque final.</p>
         </div>
       </div>
 
       <div class="topbar-actions">
-        <a href="/pagina-producao" class="btn btn-neutral">Voltar para Producao</a>
+        <a href="/pagina-producao" class="btn btn-neutral">Producao</a>
+        <a href="/pagina-remessas-terceiros" class="btn btn-secondary">Remessas / NF</a>
       </div>
     </header>
 
@@ -84,7 +86,7 @@
       <div class="card-top">
         <div>
           <span class="section-pill">Fila</span>
-          <h2>Pecas Aguardando Tratamento</h2>
+          <h2>Pecas Disponiveis</h2>
           <p id="total-tratamento-externo">0 registro(s) encontrado(s)</p>
         </div>
       </div>
@@ -114,11 +116,12 @@
               <th>Maquina</th>
               <th>Quantidade</th>
               <th>Ultima Atualizacao</th>
+              <th>Acoes</th>
             </tr>
           </thead>
           <tbody id="tratamento-externo-tbody">
             <tr>
-              <td colspan="5" class="empty-state">Carregando fila de tratamento externo...</td>
+              <td colspan="6" class="empty-state">Carregando fila de tratamento externo...</td>
             </tr>
           </tbody>
         </table>
@@ -129,7 +132,7 @@
       <div class="card-top">
         <div>
           <span class="section-pill">Historico</span>
-          <h2>Entradas Recentes</h2>
+          <h2>Movimentacoes Recentes</h2>
           <p id="total-tratamento-externo-movimentacoes">0 movimentacao(oes)</p>
         </div>
       </div>
@@ -143,7 +146,7 @@
               <th>Peca</th>
               <th>Quantidade</th>
               <th>Saldo Resultante</th>
-              <th>Ordem</th>
+              <th>Observacao</th>
             </tr>
           </thead>
           <tbody id="tratamento-externo-movimentacoes-tbody">
@@ -155,6 +158,144 @@
       </div>
     </section>
   </main>
+
+  <div id="encaminhamento-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="encaminhamento"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Encaminhamento</span>
+          <h2>Encaminhar Peca</h2>
+          <p>Escolha a empresa, defina o tratamento e registre a saida mesmo que a NF fique para depois.</p>
+        </div>
+
+        <button id="btn-fechar-modal-encaminhamento" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="encaminhamento-mensagem" class="message hidden"></div>
+
+      <form id="encaminhamento-form" class="form-grid">
+        <input type="hidden" id="encaminhamento-id-peca">
+        <input type="hidden" id="encaminhamento-tipo-tratamento">
+
+        <div id="encaminhamento-resumo" class="span-12 selected-tags empty">Selecione uma peca na tabela para continuar.</div>
+
+        <div class="field span-4">
+          <label for="encaminhamento-quantidade">Quantidade a enviar</label>
+          <input id="encaminhamento-quantidade" type="number" min="0" step="1" value="1" required>
+        </div>
+
+        <div class="field span-8">
+          <label for="encaminhamento-fornecedor">Empresa destino</label>
+          <select id="encaminhamento-fornecedor" required>
+            <option value="">Selecione</option>
+          </select>
+        </div>
+
+        <div id="encaminhamento-servicos-wrap" class="span-12 hidden">
+          <div class="mode-panel">
+            <div class="card-top">
+              <div>
+                <h3>Servicos na Multielos</h3>
+                <p>Selecione um ou mais tratamentos para a mesma remessa.</p>
+              </div>
+            </div>
+            <div id="encaminhamento-servicos-lista" class="selected-tags"></div>
+          </div>
+        </div>
+
+        <div id="encaminhamento-tempera-wrap" class="span-12 hidden">
+          <div class="mode-panel">
+            <div class="card-top">
+              <div>
+                <h3>Parametros de Tempera</h3>
+                <p>Os valores padrao ja ficam preenchidos, mas podem ser ajustados.</p>
+              </div>
+            </div>
+            <div class="form-grid">
+              <div class="field span-6">
+                <label for="encaminhamento-dureza">Dureza</label>
+                <input id="encaminhamento-dureza" type="text" maxlength="60" placeholder="Ex.: 56 a 58 HRC">
+              </div>
+
+              <div class="field span-6">
+                <label for="encaminhamento-profundidade">Profundidade</label>
+                <input id="encaminhamento-profundidade" type="text" maxlength="60" placeholder="Ex.: 0,3 a 0,6 mm">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="field span-6">
+          <label for="encaminhamento-numero-nf">Numero da NF</label>
+          <input id="encaminhamento-numero-nf" type="text" maxlength="60" placeholder="Opcional">
+          <span class="form-hint">Pode sair sem NF e o fiscal completa depois.</span>
+        </div>
+
+        <div class="field span-6">
+          <label for="encaminhamento-data-nf">Data da NF</label>
+          <input id="encaminhamento-data-nf" type="date">
+        </div>
+
+        <div class="field span-12">
+          <label for="encaminhamento-observacao">Observacao</label>
+          <input id="encaminhamento-observacao" type="text" maxlength="255" placeholder="Opcional">
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button id="btn-cancelar-modal-encaminhamento" class="btn btn-neutral" type="button">Cancelar</button>
+          <button class="btn btn-primary" type="submit">Encaminhar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="estoque-direto-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="estoque-direto"></div>
+
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Estoque</span>
+          <h2>Enviar para Estoque</h2>
+          <p>Use este fluxo quando a peca nao precisar de tratamento externo.</p>
+        </div>
+
+        <button id="btn-fechar-modal-estoque-direto" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="estoque-direto-mensagem" class="message hidden"></div>
+
+      <form id="estoque-direto-form" class="form-grid">
+        <input type="hidden" id="estoque-direto-id-peca">
+
+        <div id="estoque-direto-resumo" class="span-12 selected-tags empty">Selecione uma peca na tabela para continuar.</div>
+
+        <div class="field span-6">
+          <label for="estoque-direto-quantidade">Quantidade</label>
+          <input id="estoque-direto-quantidade" type="number" min="0" step="1" value="1" required>
+        </div>
+
+        <div class="field span-6">
+          <label for="estoque-direto-destino">Estoque de destino</label>
+          <select id="estoque-direto-destino" required>
+            <option value="">Selecione</option>
+          </select>
+        </div>
+
+        <div class="field span-12">
+          <label for="estoque-direto-observacao">Observacao</label>
+          <input id="estoque-direto-observacao" type="text" maxlength="255" placeholder="Opcional">
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button id="btn-cancelar-modal-estoque-direto" class="btn btn-neutral" type="button">Cancelar</button>
+          <button class="btn btn-success" type="submit">Enviar para Estoque</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <script src="/js/tratamento-externo.js"></script>
 </body>

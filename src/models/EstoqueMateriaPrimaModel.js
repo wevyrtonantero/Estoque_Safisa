@@ -359,6 +359,35 @@ class EstoqueMateriaPrimaModel {
       unidade: data.unidade || materiaPrima.unidade_estoque
     };
   }
+
+  static async registerReturnFromProductionDelete(connection, data) {
+    const materiaPrima = await this.findMateriaPrimaById(data.id_materia_prima, connection);
+    if (!materiaPrima) {
+      throw this.createBusinessError('Materia-prima nao encontrada para estorno.');
+    }
+
+    const saldoAtual = await this.findSaldoForUpdate(connection, data.id_materia_prima);
+    const quantidadeAtual = saldoAtual ? Number(saldoAtual.quantidade) : 0;
+    const quantidadeEntrada = Number(Number(data.quantidade).toFixed(4));
+    const novoSaldo = Number((quantidadeAtual + quantidadeEntrada).toFixed(4));
+
+    await this.persistSaldo(connection, data.id_materia_prima, novoSaldo, saldoAtual);
+    await this.createMovimentacao(connection, {
+      id_materia_prima: data.id_materia_prima,
+      id_producao_ordem: data.id_producao_ordem || null,
+      tipo_movimentacao: 'AJUSTE',
+      quantidade: quantidadeEntrada,
+      unidade: data.unidade || materiaPrima.unidade_estoque,
+      saldo_resultante: novoSaldo,
+      observacao: data.observacao || 'Estorno de consumo da producao.'
+    });
+
+    return {
+      quantidade_entrada: quantidadeEntrada,
+      saldo_resultante: novoSaldo,
+      unidade: data.unidade || materiaPrima.unidade_estoque
+    };
+  }
 }
 
 module.exports = EstoqueMateriaPrimaModel;

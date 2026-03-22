@@ -11,6 +11,7 @@ const materiaPrimaRoutes = require('./src/routes/materiaPrimaRoutes');
 const estoqueRoutes = require('./src/routes/estoqueRoutes');
 const estoqueMateriaPrimaRoutes = require('./src/routes/estoqueMateriaPrimaRoutes');
 const producaoRoutes = require('./src/routes/producaoRoutes');
+const terceirizacaoRemessaRoutes = require('./src/routes/terceirizacaoRemessaRoutes');
 const tratamentoExternoRoutes = require('./src/routes/tratamentoExternoRoutes');
 const { testConnection } = require('./database/connection');
 
@@ -63,6 +64,10 @@ app.get('/pagina-tratamento-externo', (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'tratamento-externo.html'));
 });
 
+app.get('/pagina-remessas-terceiros', (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'remessas-terceiros.html'));
+});
+
 // Rotas REST dos modulos administrativos.
 app.use('/api', pecaRoutes);
 app.use('/api', submontagemRoutes);
@@ -73,6 +78,7 @@ app.use('/api', materiaPrimaRoutes);
 app.use('/api', estoqueRoutes);
 app.use('/api', estoqueMateriaPrimaRoutes);
 app.use('/api', producaoRoutes);
+app.use('/api', terceirizacaoRemessaRoutes);
 app.use('/api', tratamentoExternoRoutes);
 
 // Resposta padrao para qualquer rota nao mapeada.

@@ -345,6 +345,69 @@ class ProducaoModel {
       connection.release();
     }
   }
+
+  static async delete(id) {
+    const connection = await pool.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      const ordem = await this.findById(id, connection);
+      if (!ordem) {
+        throw this.createBusinessError('Ordem de producao nao encontrada.');
+      }
+
+      if (ordem.status === 'FINALIZADA') {
+        if (!ordem.id_materia_prima) {
+          throw this.createBusinessError('A ordem finalizada nao possui materia-prima vinculada para estorno.');
+        }
+
+        const isFundido = String(ordem.materia_prima_geometria || '').toUpperCase() === 'FUNDIDO';
+        const quantidadeEstornoMp = isFundido
+          ? Number(ordem.quantidade_consumida_materia_prima || 0)
+          : Number(ordem.peso_consumido_kg || 0);
+        const unidadeEstorno = isFundido ? 'UN' : 'KG';
+
+        await TratamentoExternoModel.removeProducedEntry(connection, {
+          id_peca: ordem.id_peca,
+          id_producao_ordem: ordem.id,
+          quantidade: Number(ordem.quantidade_produzida || 0),
+          observacao: `Estorno da ordem de producao ${ordem.id}.`
+        });
+
+        if (quantidadeEstornoMp > 0) {
+          await EstoqueMateriaPrimaModel.registerReturnFromProductionDelete(connection, {
+            id_materia_prima: ordem.id_materia_prima,
+            id_producao_ordem: ordem.id,
+            quantidade: quantidadeEstornoMp,
+            unidade: unidadeEstorno,
+            observacao: `Estorno da ordem de producao ${ordem.id}.`
+          });
+        }
+      }
+
+      await connection.query(
+        `
+          DELETE FROM producao_ordens
+          WHERE id = ?
+        `,
+        [id]
+      );
+
+      await connection.commit();
+      return {
+        id: ordem.id,
+        status: ordem.status,
+        peca_codigo: ordem.peca_codigo,
+        peca_descricao: ordem.peca_descricao
+      };
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }
 }
 
 module.exports = ProducaoModel;

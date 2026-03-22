@@ -146,6 +146,7 @@ function renderizarTabela() {
             ${producao.status === 'EM_ANDAMENTO'
               ? `<button type="button" class="row-menu-item" data-action="finalizar" data-id="${producao.id}">Finalizar</button>`
               : '<span class="row-menu-item">Finalizada</span>'}
+            <button type="button" class="row-menu-item danger" data-action="excluir" data-id="${producao.id}">Excluir producao</button>
           </div>
         </details>
       </td>
@@ -270,6 +271,11 @@ function handleTabelaActions(event) {
 
   if (actionButton.dataset.action === 'finalizar') {
     abrirModalFinalizacao(producao);
+    return;
+  }
+
+  if (actionButton.dataset.action === 'excluir') {
+    excluirProducao(producao);
   }
 }
 
@@ -404,6 +410,32 @@ function handleKeyboardShortcuts(event) {
 
   if (refs.drawer.classList.contains('is-open')) {
     toggleDrawer(false);
+  }
+}
+
+async function excluirProducao(producao) {
+  const confirmed = window.confirm(
+    `Excluir a ordem ${producao.id} de ${producao.peca_codigo} - ${producao.peca_descricao}?`
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`${producaoApiBaseUrl}/${producao.id}`, {
+      method: 'DELETE'
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(extractErrorMessage(result));
+    }
+
+    mostrarMensagem('Ordem de producao excluida com sucesso.', 'success');
+    await carregarProducoes();
+  } catch (error) {
+    mostrarMensagem(error.message, 'error');
   }
 }
 

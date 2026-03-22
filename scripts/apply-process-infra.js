@@ -18,6 +18,7 @@ async function runSqlFile(relativePath) {
 async function main() {
   await runSqlFile('database/schema_estoque_materias_primas.sql');
   await runSqlFile('database/schema_tratamento_externo.sql');
+  await runSqlFile('database/schema_terceirizacao_remessas.sql');
   console.log('Infraestrutura de processo aplicada com sucesso.');
 }
 

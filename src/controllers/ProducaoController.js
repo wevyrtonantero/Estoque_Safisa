@@ -146,6 +146,16 @@ const ProducaoController = {
       const response = extractErrorResponse(error, 'Erro ao finalizar producao.');
       return res.status(response.status).json(response.body);
     }
+  },
+
+  async delete(req, res) {
+    try {
+      const producao = await ProducaoModel.delete(req.params.id);
+      return res.status(200).json(producao);
+    } catch (error) {
+      const response = extractErrorResponse(error, 'Erro ao excluir producao.');
+      return res.status(response.status).json(response.body);
+    }
   }
 };
 
