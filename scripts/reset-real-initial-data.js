@@ -428,6 +428,23 @@ async function main() {
 
     await connection.query(
       `
+        INSERT INTO peca_fornecedor (
+          id_peca,
+          id_fornecedor,
+          observacao
+        )
+        SELECT
+          p.id,
+          p.id_fornecedor,
+          'Fornecedor principal importado na carga inicial.'
+        FROM pecas p
+        WHERE p.classificacao = 'ITEM'
+          AND p.id_fornecedor IS NOT NULL
+      `
+    );
+
+    await connection.query(
+      `
         INSERT INTO estoques (nome, descricao, ativo)
         VALUES
           ('Almoxarifado', 'Estoque principal de itens e submontagens.', 1),

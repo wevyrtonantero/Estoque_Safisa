@@ -4,6 +4,7 @@ const cadastroOptionsApiUrl = '/api/opcoes-cadastro';
 
 let editingId = null;
 let filtroDebounceTimer = null;
+let selectedFornecedorIds = [];
 let cadastroOptionsCache = {
   materias_primas: [],
   fornecedores: [],
@@ -30,11 +31,12 @@ const appDrawer = document.getElementById('app-drawer');
 const materiaPrimaIdInput = document.getElementById('id-materia-prima');
 const fornecedorIdInput = document.getElementById('id-fornecedor');
 const maquinaIdInput = document.getElementById('id-maquina');
+const fornecedorSelect = document.getElementById('fornecedor-select');
+const adicionarFornecedorButton = document.getElementById('btn-adicionar-fornecedor-peca');
+const fornecedoresLista = document.getElementById('peca-fornecedores-lista');
 const buscaMateriaPrimaInput = document.getElementById('busca-materia-prima');
-const buscaFornecedorInput = document.getElementById('busca-fornecedor');
 const buscaMaquinaInput = document.getElementById('busca-maquina');
 const sugestoesMateriaPrima = document.getElementById('sugestoes-materia-prima');
-const sugestoesFornecedor = document.getElementById('sugestoes-fornecedor');
 const sugestoesMaquina = document.getElementById('sugestoes-maquina');
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -53,6 +55,8 @@ function bindEvents() {
   filtroForm.addEventListener('submit', handleFilter);
   limparFiltrosButton.addEventListener('click', clearFilters);
   tabelaBody.addEventListener('click', handleTableActions);
+  adicionarFornecedorButton.addEventListener('click', adicionarFornecedorSelecionado);
+  fornecedoresLista.addEventListener('click', handleFornecedorChipClick);
   menuToggleButton.addEventListener('click', abrirDrawer);
   drawerCloseButton.addEventListener('click', fecharDrawer);
   drawerScrim.addEventListener('click', fecharDrawer);
@@ -75,19 +79,13 @@ function bindAutocompleteEvents() {
     materiaPrimaIdInput.value = '';
     renderizarSugestoes('materia-prima', buscaMateriaPrimaInput.value.trim());
   });
-  buscaFornecedorInput.addEventListener('input', () => {
-    fornecedorIdInput.value = '';
-    renderizarSugestoes('fornecedor', buscaFornecedorInput.value.trim());
-  });
   buscaMaquinaInput.addEventListener('input', () => {
     maquinaIdInput.value = '';
     renderizarSugestoes('maquina', buscaMaquinaInput.value.trim());
   });
   buscaMateriaPrimaInput.addEventListener('focus', () => renderizarSugestoes('materia-prima', buscaMateriaPrimaInput.value.trim()));
-  buscaFornecedorInput.addEventListener('focus', () => renderizarSugestoes('fornecedor', buscaFornecedorInput.value.trim()));
   buscaMaquinaInput.addEventListener('focus', () => renderizarSugestoes('maquina', buscaMaquinaInput.value.trim()));
   sugestoesMateriaPrima.addEventListener('click', (event) => handleSugestaoClick(event, 'materia-prima'));
-  sugestoesFornecedor.addEventListener('click', (event) => handleSugestaoClick(event, 'fornecedor'));
   sugestoesMaquina.addEventListener('click', (event) => handleSugestaoClick(event, 'maquina'));
   document.addEventListener('click', handleClickForaDoAutocomplete);
 }
@@ -104,6 +102,7 @@ async function carregarOpcoesCadastro() {
 
     cadastroOptionsCache = opcoes;
     preencherFiltrosRelacionamento();
+    preencherFornecedorSelect();
   } catch (error) {
     mostrarMensagem(error.message, 'error');
   }
@@ -223,6 +222,15 @@ function preencherFiltrosRelacionamento() {
   );
 }
 
+function preencherFornecedorSelect() {
+  const valorAtual = fornecedorSelect.value;
+  fornecedorSelect.innerHTML = `
+    <option value="">Selecione</option>
+    ${cadastroOptionsCache.fornecedores.map((item) => `<option value="${item.id}">${escapeHtml(item.nome)}</option>`).join('')}
+  `;
+  fornecedorSelect.value = valorAtual;
+}
+
 function preencherSelectFiltro(selectElement, itens, placeholder, labelBuilder) {
   const valorAtual = selectElement.value;
   selectElement.innerHTML = `
@@ -254,6 +262,7 @@ function montarPayloadDoFormulario() {
     tipo: document.getElementById('tipo').value,
     id_materia_prima: normalizeOptionalValue(materiaPrimaIdInput.value),
     id_fornecedor: normalizeOptionalValue(fornecedorIdInput.value),
+    fornecedores: selectedFornecedorIds,
     id_maquina: normalizeOptionalValue(maquinaIdInput.value),
     estoque_minimo: normalizeOptionalValue(document.getElementById('estoque-minimo').value),
     estoque_seguranca: normalizeOptionalValue(document.getElementById('estoque-seguranca').value),
@@ -264,9 +273,14 @@ function montarPayloadDoFormulario() {
 
 async function carregarPecaParaEdicao(id) {
   try {
-    const response = await fetch(`${apiBaseUrl}/${id}`);
+    const [response, fornecedoresResponse] = await Promise.all([
+      fetch(`${apiBaseUrl}/${id}`),
+      fetch(`${apiBaseUrl}/${id}/fornecedores`)
+    ]);
     const peca = await response.json();
+    const fornecedores = await fornecedoresResponse.json();
     if (!response.ok) throw new Error(peca.message || 'Nao foi possivel carregar a peca.');
+    if (!fornecedoresResponse.ok) throw new Error(fornecedores.message || 'Nao foi possivel carregar os fornecedores da peca.');
 
     editingId = peca.id;
     document.getElementById('peca-id').value = peca.id;
@@ -276,8 +290,13 @@ async function carregarPecaParaEdicao(id) {
     document.getElementById('unidade-comprimento').value = 'mm';
     document.getElementById('tipo').value = peca.tipo;
     preencherCampoRelacionamento('materia-prima', peca.id_materia_prima);
-    preencherCampoRelacionamento('fornecedor', peca.id_fornecedor);
     preencherCampoRelacionamento('maquina', peca.id_maquina);
+    selectedFornecedorIds = fornecedores.map((item) => Number(item.id_fornecedor));
+    if (selectedFornecedorIds.length === 0 && peca.id_fornecedor) {
+      selectedFornecedorIds = [Number(peca.id_fornecedor)];
+    }
+    sincronizarFornecedorPrincipal();
+    renderizarFornecedoresSelecionados();
     document.getElementById('estoque-minimo').value = formatOptionalNumber(peca.estoque_minimo);
     document.getElementById('estoque-seguranca').value = formatOptionalNumber(peca.estoque_seguranca);
     document.getElementById('consumo-mensal').value = formatOptionalNumber(peca.consumo_mensal);
@@ -326,9 +345,11 @@ function resetForm() {
   materiaPrimaIdInput.value = '';
   fornecedorIdInput.value = '';
   maquinaIdInput.value = '';
+  selectedFornecedorIds = [];
   buscaMateriaPrimaInput.value = '';
-  buscaFornecedorInput.value = '';
   buscaMaquinaInput.value = '';
+  fornecedorSelect.value = '';
+  renderizarFornecedoresSelecionados();
   atualizarButton.disabled = true;
   salvarButton.disabled = false;
   esconderMensagemModal();
@@ -413,7 +434,7 @@ function handleClickForaDoAutocomplete(event) {
 }
 
 function esconderTodasSugestoes() {
-  [sugestoesMateriaPrima, sugestoesFornecedor, sugestoesMaquina].forEach((panel) => {
+  [sugestoesMateriaPrima, sugestoesMaquina].forEach((panel) => {
     panel.classList.add('hidden');
     panel.innerHTML = '';
   });
@@ -432,18 +453,6 @@ function getAutocompleteConfig(tipo) {
     };
   }
 
-  if (tipo === 'fornecedor') {
-    return {
-      lista: cadastroOptionsCache.fornecedores,
-      input: buscaFornecedorInput,
-      hidden: fornecedorIdInput,
-      panel: sugestoesFornecedor,
-      label: (item) => item.nome,
-      secondary: (item) => `${item.contato || '-'} | ${item.cidade || '-'}`,
-      search: (item) => `${item.nome} ${item.contato || ''} ${item.telefone || ''} ${item.cidade || ''}`.toLowerCase()
-    };
-  }
-
   return {
     lista: cadastroOptionsCache.maquinas,
     input: buscaMaquinaInput,
@@ -453,6 +462,57 @@ function getAutocompleteConfig(tipo) {
     secondary: (item) => item.tipo,
     search: (item) => `${item.nome} ${item.tipo}`.toLowerCase()
   };
+}
+
+function adicionarFornecedorSelecionado() {
+  const fornecedorId = Number.parseInt(fornecedorSelect.value, 10);
+
+  if (!Number.isInteger(fornecedorId)) {
+    return mostrarMensagemModal('Selecione um fornecedor antes de adicionar.', 'error');
+  }
+
+  if (selectedFornecedorIds.includes(fornecedorId)) {
+    return mostrarMensagemModal('Esse fornecedor ja foi adicionado.', 'error');
+  }
+
+  selectedFornecedorIds.push(fornecedorId);
+  sincronizarFornecedorPrincipal();
+  renderizarFornecedoresSelecionados();
+  esconderMensagemModal();
+}
+
+function handleFornecedorChipClick(event) {
+  const removeButton = event.target.closest('button[data-remove-fornecedor-id]');
+  if (!removeButton) return;
+
+  const fornecedorId = Number.parseInt(removeButton.dataset.removeFornecedorId, 10);
+  selectedFornecedorIds = selectedFornecedorIds.filter((id) => id !== fornecedorId);
+  sincronizarFornecedorPrincipal();
+  renderizarFornecedoresSelecionados();
+}
+
+function sincronizarFornecedorPrincipal() {
+  fornecedorIdInput.value = selectedFornecedorIds.length > 0 ? String(selectedFornecedorIds[0]) : '';
+}
+
+function renderizarFornecedoresSelecionados() {
+  if (selectedFornecedorIds.length === 0) {
+    fornecedoresLista.className = 'span-12 selected-tags empty';
+    fornecedoresLista.innerHTML = '<span>Nenhum fornecedor selecionado.</span>';
+    return;
+  }
+
+  fornecedoresLista.className = 'span-12 selected-tags';
+  fornecedoresLista.innerHTML = selectedFornecedorIds
+    .map((fornecedorId) => cadastroOptionsCache.fornecedores.find((item) => Number(item.id) === fornecedorId))
+    .filter(Boolean)
+    .map((fornecedor) => `
+      <span class="selected-tag">
+        ${escapeHtml(fornecedor.nome)}
+        <button type="button" data-remove-fornecedor-id="${fornecedor.id}" aria-label="Remover fornecedor">X</button>
+      </span>
+    `)
+    .join('');
 }
 
 function renderizarTabela(pecas) {

@@ -225,11 +225,13 @@
         </div>
 
         <div class="field span-4">
-          <label for="id-fornecedor">Fornecedor</label>
+          <label for="fornecedor-select">Fornecedores</label>
           <input type="hidden" id="id-fornecedor">
-          <div class="autocomplete">
-            <input id="busca-fornecedor" type="text" placeholder="Digite nome, contato ou cidade">
-            <div id="sugestoes-fornecedor" class="autocomplete-panel hidden"></div>
+          <div class="supplier-picker">
+            <select id="fornecedor-select">
+              <option value="">Selecione</option>
+            </select>
+            <button id="btn-adicionar-fornecedor-peca" class="btn btn-secondary" type="button">+ Fornecedor</button>
           </div>
         </div>
 
@@ -240,6 +242,10 @@
             <input id="busca-maquina" type="text" placeholder="Digite nome ou tipo da maquina">
             <div id="sugestoes-maquina" class="autocomplete-panel hidden"></div>
           </div>
+        </div>
+
+        <div id="peca-fornecedores-lista" class="span-12 selected-tags empty">
+          <span>Nenhum fornecedor selecionado.</span>
         </div>
 
         <div class="field span-4">

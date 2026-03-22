@@ -1,5 +1,7 @@
 // Controller do CRUD de pecas simples.
 const PecaModel = require('../models/PecaModel');
+const FornecedorModel = require('../models/FornecedorModel');
+const PecaFornecedorModel = require('../models/PecaFornecedorModel');
 
 const TIPOS_VALIDOS = ['COMPRADA', 'PRODUZIDA'];
 
@@ -32,8 +34,32 @@ function normalizeOptionalNonNegativeInteger(value) {
   return Number.isInteger(parsedValue) ? parsedValue : Number.NaN;
 }
 
+function normalizeSupplierIds(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const uniqueIds = [];
+  const usedIds = new Set();
+
+  value.forEach((entry) => {
+    const candidate = typeof entry === 'object' && entry !== null ? entry.id_fornecedor ?? entry.id : entry;
+    const parsed = normalizeOptionalInteger(candidate);
+
+    if (Number.isInteger(parsed) && !usedIds.has(parsed)) {
+      usedIds.add(parsed);
+      uniqueIds.push(parsed);
+    }
+  });
+
+  return uniqueIds;
+}
+
 // Monta o payload padronizado da entidade peca.
 function buildPayload(body) {
+  const fornecedorIds = normalizeSupplierIds(body.fornecedores);
+  const principalFornecedorId = fornecedorIds[0] || normalizeOptionalInteger(body.id_fornecedor);
+
   return {
     codigo: String(body.codigo || '').trim(),
     descricao: String(body.descricao || '').trim(),
@@ -41,8 +67,11 @@ function buildPayload(body) {
     tipo: String(body.tipo || '').trim().toUpperCase(),
     classificacao: 'ITEM',
     id_materia_prima: normalizeOptionalInteger(body.id_materia_prima),
-    id_fornecedor: normalizeOptionalInteger(body.id_fornecedor),
+    id_fornecedor: principalFornecedorId,
     id_maquina: normalizeOptionalInteger(body.id_maquina),
+    fornecedor_ids: fornecedorIds.length > 0
+      ? fornecedorIds
+      : (Number.isInteger(principalFornecedorId) ? [principalFornecedorId] : []),
     estoque_minimo: normalizeOptionalNonNegativeInteger(body.estoque_minimo),
     estoque_seguranca: normalizeOptionalNonNegativeInteger(body.estoque_seguranca),
     consumo_mensal: normalizeOptionalDecimal(body.consumo_mensal),
@@ -99,6 +128,21 @@ function validatePayload(payload) {
   });
 
   return errors;
+}
+
+async function ensureSuppliersExist(fornecedorIds) {
+  for (const fornecedorId of fornecedorIds) {
+    const fornecedor = await FornecedorModel.findById(fornecedorId);
+    if (!fornecedor) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+async function syncSuppliers(pecaId, fornecedorIds) {
+  await PecaFornecedorModel.replaceAll(pecaId, fornecedorIds);
 }
 
 const PecaController = {
@@ -180,8 +224,15 @@ const PecaController = {
         return res.status(400).json({ message: 'Dados invalidos.', errors });
       }
 
+      const suppliersExist = await ensureSuppliersExist(payload.fornecedor_ids);
+      if (!suppliersExist) {
+        return res.status(400).json({ message: 'Um ou mais fornecedores nao foram encontrados.' });
+      }
+
       const createdPeca = await PecaModel.create(payload);
-      return res.status(201).json(createdPeca);
+      await syncSuppliers(createdPeca.id, payload.fornecedor_ids);
+      const pecaAtualizada = await PecaModel.findById(createdPeca.id);
+      return res.status(201).json(pecaAtualizada);
     } catch (error) {
       console.error('Erro ao criar peca:', error);
       return res.status(500).json({ message: 'Erro ao criar peca.' });
@@ -198,13 +249,20 @@ const PecaController = {
         return res.status(400).json({ message: 'Dados invalidos.', errors });
       }
 
+      const suppliersExist = await ensureSuppliersExist(payload.fornecedor_ids);
+      if (!suppliersExist) {
+        return res.status(400).json({ message: 'Um ou mais fornecedores nao foram encontrados.' });
+      }
+
       const updatedPeca = await PecaModel.update(req.params.id, payload);
 
       if (!updatedPeca) {
         return res.status(404).json({ message: 'Peca nao encontrada.' });
       }
 
-      return res.status(200).json(updatedPeca);
+      await syncSuppliers(updatedPeca.id, payload.fornecedor_ids);
+      const pecaAtualizada = await PecaModel.findById(updatedPeca.id);
+      return res.status(200).json(pecaAtualizada);
     } catch (error) {
       console.error('Erro ao atualizar peca:', error);
       return res.status(500).json({ message: 'Erro ao atualizar peca.' });
