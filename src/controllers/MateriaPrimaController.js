@@ -1,37 +1,12 @@
-// Controller do cadastro de materia-prima com peso por metro em kg/m.
+// Controller do cadastro de materia-prima com modos de laminado e fundido.
 const MateriaPrimaModel = require('../models/MateriaPrimaModel');
 const FornecedorModel = require('../models/FornecedorModel');
 const MateriaPrimaFornecedorModel = require('../models/MateriaPrimaFornecedorModel');
 
 const CATEGORIAS_VALIDAS = ['LAMINADO', 'FUNDIDO'];
 const GEOMETRIAS_LAMINADO = ['REDONDO', 'QUADRADO', 'SEXTAVADO'];
-const UNIDADES_LAMINADO = ['KG', 'BARRAS', 'M'];
-const UNIDADES_FUNDIDO = ['UN', 'KG'];
-
-function normalizeDecimal(value, defaultValue = 0) {
-  if (value === undefined || value === null || value === '') {
-    return Number.parseFloat(defaultValue);
-  }
-
-  return parseLocaleDecimal(value);
-}
-
-function normalizeOptionalDecimal(value) {
-  if (value === undefined || value === null || value === '') {
-    return null;
-  }
-
-  return parseLocaleDecimal(value);
-}
-
-function normalizeOptionalInteger(value) {
-  if (value === undefined || value === null || value === '') {
-    return null;
-  }
-
-  const parsed = Number.parseInt(String(value).trim(), 10);
-  return Number.isInteger(parsed) ? parsed : Number.NaN;
-}
+const UNIDADES_LAMINADO = ['KG'];
+const UNIDADES_FUNDIDO = ['UN'];
 
 function parseLocaleDecimal(value) {
   const text = String(value || '').trim();
@@ -59,34 +34,21 @@ function parseLocaleDecimal(value) {
   return Number.parseFloat(normalized);
 }
 
-function buildPayload(body) {
-  const categoria = String(body.categoria || '').trim().toUpperCase() || 'LAMINADO';
-  const isFundido = categoria === 'FUNDIDO';
-  const geometria = isFundido
-    ? 'FUNDIDO'
-    : String(body.geometria || '').trim().toUpperCase();
-  const comprimentoPadraoMetros = normalizeOptionalDecimal(body.comprimento_padrao_m);
-  const comprimentoPadraoMm = comprimentoPadraoMetros === null
-    ? normalizeOptionalDecimal(body.comprimento_padrao_mm)
-    : Number((comprimentoPadraoMetros * 1000).toFixed(2));
+function normalizeOptionalDecimal(value) {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
 
-  return {
-    codigo: String(body.codigo || '').trim(),
-    nome: String(body.nome || '').trim(),
-    categoria,
-    material: body.material ? String(body.material).trim() : null,
-    geometria,
-    bitola: isFundido ? null : (body.bitola ? String(body.bitola).trim() : null),
-    bitola_mm: isFundido ? null : normalizeOptionalDecimal(body.bitola_mm),
-    comprimento_padrao_mm: isFundido ? null : comprimentoPadraoMm,
-    peso_por_metro: isFundido ? null : normalizeOptionalDecimal(body.peso_por_metro),
-    peso_unitario_kg: isFundido ? normalizeOptionalDecimal(body.peso_unitario_kg) : null,
-    densidade_g_cm3: isFundido ? null : normalizeOptionalDecimal(body.densidade_g_cm3),
-    estoque_minimo: normalizeDecimal(body.estoque_minimo, 0),
-    unidade_estoque: String(body.unidade_estoque || '').trim().toUpperCase() || (isFundido ? 'UN' : 'KG'),
-    id_fornecedor_principal: normalizeOptionalInteger(body.id_fornecedor_principal),
-    observacao: body.observacao ? String(body.observacao).trim() : null
-  };
+  return parseLocaleDecimal(value);
+}
+
+function normalizeOptionalInteger(value) {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  const parsed = Number.parseInt(String(value).trim(), 10);
+  return Number.isInteger(parsed) ? parsed : Number.NaN;
 }
 
 function normalizeText(value) {
@@ -96,146 +58,143 @@ function normalizeText(value) {
     .toUpperCase();
 }
 
-function resolveDefaultSupplierTerms(payload) {
-  const geometria = normalizeText(payload.geometria);
-  const codigo = normalizeText(payload.codigo);
-  const material = normalizeText(payload.material);
-
-  if (
-    geometria === 'FUNDIDO'
-    || codigo.endsWith('FD')
-    || material.includes('FERRO FUNDIDO')
-  ) {
-    return ['Fundicao Tiger'];
+function normalizeSupplierIds(value) {
+  if (!Array.isArray(value)) {
+    return [];
   }
 
-  if (
-    material.includes('ACO')
-    || material.includes('SAE')
-    || material.includes('INOX')
-  ) {
-    return ['Acovisa', 'Açovisa'];
-  }
+  const uniqueIds = [];
+  const usedIds = new Set();
 
-  return [];
-}
+  value.forEach((entry) => {
+    const candidate = typeof entry === 'object' && entry !== null ? entry.id_fornecedor ?? entry.id : entry;
+    const parsed = normalizeOptionalInteger(candidate);
 
-async function applyDefaultSupplierLink(materiaPrima, payload) {
-  if (!Number.isInteger(payload.id_fornecedor_principal)) {
-    return;
-  }
-
-  const duplicate = await MateriaPrimaFornecedorModel.findDuplicate(
-    materiaPrima.id,
-    payload.id_fornecedor_principal
-  );
-
-  if (duplicate) {
-    return;
-  }
-
-  await MateriaPrimaFornecedorModel.create(materiaPrima.id, {
-    id_fornecedor: payload.id_fornecedor_principal,
-    observacao: 'Vinculo padrao criado automaticamente.'
+    if (Number.isInteger(parsed) && !usedIds.has(parsed)) {
+      usedIds.add(parsed);
+      uniqueIds.push(parsed);
+    }
   });
+
+  return uniqueIds;
 }
 
-async function resolvePrincipalSupplierId(payload) {
-  if (Number.isInteger(payload.id_fornecedor_principal)) {
-    return payload.id_fornecedor_principal;
-  }
+function buildPayload(body) {
+  const categoria = String(body.categoria || '').trim().toUpperCase() || 'LAMINADO';
+  const isFundido = categoria === 'FUNDIDO';
+  const comprimentoPadraoMetros = normalizeOptionalDecimal(body.comprimento_padrao_m);
 
-  const supplierTerms = resolveDefaultSupplierTerms(payload);
-  if (supplierTerms.length === 0) {
-    return null;
-  }
+  const fornecedorIds = normalizeSupplierIds(body.fornecedores);
 
-  const fornecedor = await FornecedorModel.findFirstByNameTerms(supplierTerms);
-  return fornecedor ? fornecedor.id : null;
+  return {
+    codigo: String(body.codigo || '').trim(),
+    nome: String(body.nome || '').trim(),
+    categoria,
+    material: isFundido ? null : (body.material ? String(body.material).trim() : null),
+    liga: body.liga ? String(body.liga).trim() : null,
+    geometria: isFundido
+      ? 'FUNDIDO'
+      : String(body.geometria || '').trim().toUpperCase(),
+    bitola: isFundido ? null : (body.bitola ? String(body.bitola).trim() : null),
+    bitola_mm: isFundido ? null : normalizeOptionalDecimal(body.bitola_mm),
+    comprimento_padrao_mm: isFundido || comprimentoPadraoMetros === null
+      ? null
+      : Number((comprimentoPadraoMetros * 1000).toFixed(2)),
+    peso_por_metro: isFundido ? null : normalizeOptionalDecimal(body.peso_por_metro),
+    peso_unitario_kg: isFundido ? normalizeOptionalDecimal(body.peso_unitario_kg) : null,
+    densidade_g_cm3: null,
+    estoque_minimo: 0,
+    unidade_estoque: isFundido ? 'UN' : 'KG',
+    id_fornecedor_principal: fornecedorIds[0] || null,
+    fornecedor_ids: fornecedorIds,
+    observacao: body.observacao ? String(body.observacao).trim() : null
+  };
 }
 
 function validatePayload(payload) {
   const errors = [];
 
   if (!payload.codigo) {
-    errors.push('O campo codigo e obrigatorio.');
+    errors.push('O campo ID e obrigatorio.');
   }
 
   if (!payload.nome) {
-    errors.push('O campo nome e obrigatorio.');
+    errors.push('O campo descricao e obrigatorio.');
   }
 
   if (!CATEGORIAS_VALIDAS.includes(payload.categoria)) {
-    errors.push('O campo categoria deve ser LAMINADO ou FUNDIDO.');
+    errors.push('O tipo de materia-prima deve ser LAMINADO ou FUNDIDO.');
   }
 
-  if (!payload.material) {
-    errors.push('O campo material tecnico e obrigatorio.');
+  if (!payload.liga) {
+    errors.push('O campo liga e obrigatorio.');
+  }
+
+  if (payload.fornecedor_ids.length === 0) {
+    errors.push('Selecione pelo menos um fornecedor.');
+  }
+
+  if (payload.categoria === 'LAMINADO' && !payload.material) {
+    errors.push('Informe a descricao tecnica do laminado.');
   }
 
   if (payload.categoria === 'LAMINADO' && !GEOMETRIAS_LAMINADO.includes(payload.geometria)) {
-    errors.push('Selecione uma geometria valida para material laminado.');
+    errors.push('Selecione uma geometria valida para o laminado.');
   }
 
   if (payload.categoria === 'LAMINADO' && !payload.bitola && payload.bitola_mm === null) {
-    errors.push('Informe a bitola em polegada ou em mm para o laminado.');
+    errors.push('Informe a bitola em polegada ou em mm.');
   }
 
   if (payload.bitola_mm !== null && (!Number.isFinite(payload.bitola_mm) || payload.bitola_mm <= 0)) {
-    errors.push('O campo bitola_mm deve ser maior que zero quando informado.');
+    errors.push('A bitola em mm deve ser maior que zero.');
   }
 
   if (
     payload.categoria === 'LAMINADO'
-    && payload.comprimento_padrao_mm !== null
     && (!Number.isFinite(payload.comprimento_padrao_mm) || payload.comprimento_padrao_mm <= 0)
   ) {
-    errors.push('O campo comprimento_padrao_mm deve ser maior que zero quando informado.');
-  }
-
-  if (payload.categoria === 'LAMINADO' && payload.comprimento_padrao_mm === null) {
-    errors.push('Informe o comprimento padrao da barra em metros.');
-  }
-
-  if (payload.peso_por_metro !== null && (!Number.isFinite(payload.peso_por_metro) || payload.peso_por_metro <= 0)) {
-    errors.push('O campo peso_por_metro deve ser maior que zero quando informado.');
+    errors.push('Informe o comprimento da barra em metros.');
   }
 
   if (
-    payload.peso_unitario_kg !== null
+    payload.categoria === 'LAMINADO'
+    && (!Number.isFinite(payload.peso_por_metro) || payload.peso_por_metro <= 0)
+  ) {
+    errors.push('Informe o peso por metro do laminado.');
+  }
+
+  if (
+    payload.categoria === 'FUNDIDO'
     && (!Number.isFinite(payload.peso_unitario_kg) || payload.peso_unitario_kg <= 0)
   ) {
-    errors.push('O campo peso_unitario_kg deve ser maior que zero quando informado.');
-  }
-
-  if (
-    payload.densidade_g_cm3 !== null
-    && (!Number.isFinite(payload.densidade_g_cm3) || payload.densidade_g_cm3 <= 0)
-  ) {
-    errors.push('O campo densidade_g_cm3 deve ser maior que zero quando informado.');
-  }
-
-  if (!Number.isFinite(payload.estoque_minimo) || payload.estoque_minimo < 0) {
-    errors.push('O campo estoque_minimo nao pode ser negativo.');
+    errors.push('Informe a massa do fundido.');
   }
 
   if (payload.categoria === 'LAMINADO' && !UNIDADES_LAMINADO.includes(payload.unidade_estoque)) {
-    errors.push('A unidade de controle do laminado deve ser KG, BARRAS ou M.');
+    errors.push('O laminado deve usar unidade de controle KG.');
   }
 
   if (payload.categoria === 'FUNDIDO' && !UNIDADES_FUNDIDO.includes(payload.unidade_estoque)) {
-    errors.push('A unidade de controle do fundido deve ser UN ou KG.');
-  }
-
-  if (!Number.isInteger(payload.id_fornecedor_principal)) {
-    errors.push('Selecione o fornecedor principal da materia-prima.');
-  }
-
-  if (payload.observacao && payload.observacao.length > 255) {
-    errors.push('O campo observacao deve ter no maximo 255 caracteres.');
+    errors.push('O fundido deve usar unidade de controle UN.');
   }
 
   return errors;
+}
+
+async function ensureSuppliersExist(fornecedorIds) {
+  for (const fornecedorId of fornecedorIds) {
+    const fornecedor = await FornecedorModel.findById(fornecedorId);
+    if (!fornecedor) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+async function syncSuppliers(materiaPrimaId, fornecedorIds) {
+  await MateriaPrimaFornecedorModel.replaceAll(materiaPrimaId, fornecedorIds);
 }
 
 const MateriaPrimaController = {
@@ -249,7 +208,7 @@ const MateriaPrimaController = {
         categoria: req.query.categoria ? String(req.query.categoria).trim().toUpperCase() : '',
         geometria: req.query.geometria ? String(req.query.geometria).trim() : '',
         bitola: req.query.bitola ? String(req.query.bitola).trim() : '',
-        id_fornecedor_principal: normalizeOptionalInteger(req.query.id_fornecedor_principal)
+        id_fornecedor: normalizeOptionalInteger(req.query.id_fornecedor_principal || req.query.id_fornecedor)
       });
 
       res.status(200).json(materiasPrimas);
@@ -290,29 +249,25 @@ const MateriaPrimaController = {
   async create(req, res) {
     try {
       const payload = buildPayload(req.body);
-      payload.id_fornecedor_principal = await resolvePrincipalSupplierId(payload);
       const errors = validatePayload(payload);
 
       if (errors.length > 0) {
         return res.status(400).json({ message: 'Dados invalidos.', errors });
       }
 
-      const fornecedorPrincipal = await FornecedorModel.findById(payload.id_fornecedor_principal);
-      if (!fornecedorPrincipal) {
-        return res.status(400).json({ message: 'Fornecedor principal nao encontrado.' });
+      const suppliersExist = await ensureSuppliersExist(payload.fornecedor_ids);
+      if (!suppliersExist) {
+        return res.status(400).json({ message: 'Um ou mais fornecedores nao foram encontrados.' });
       }
 
       const materiaPrima = await MateriaPrimaModel.create(payload);
-      try {
-        await applyDefaultSupplierLink(materiaPrima, payload);
-      } catch (linkError) {
-        console.warn('Nao foi possivel aplicar o fornecedor padrao da materia-prima:', linkError.message);
-      }
-      return res.status(201).json(materiaPrima);
+      await syncSuppliers(materiaPrima.id, payload.fornecedor_ids);
+      const materiaPrimaAtualizada = await MateriaPrimaModel.findById(materiaPrima.id);
+      return res.status(201).json(materiaPrimaAtualizada);
     } catch (error) {
       console.error('Erro ao criar materia-prima:', error);
       if (error.code === 'ER_DUP_ENTRY') {
-        return res.status(400).json({ message: 'Ja existe uma materia-prima com este codigo.' });
+        return res.status(400).json({ message: 'Ja existe uma materia-prima com este ID.' });
       }
       return res.status(500).json({ message: 'Erro ao criar materia-prima.' });
     }
@@ -322,16 +277,15 @@ const MateriaPrimaController = {
   async update(req, res) {
     try {
       const payload = buildPayload(req.body);
-      payload.id_fornecedor_principal = await resolvePrincipalSupplierId(payload);
       const errors = validatePayload(payload);
 
       if (errors.length > 0) {
         return res.status(400).json({ message: 'Dados invalidos.', errors });
       }
 
-      const fornecedorPrincipal = await FornecedorModel.findById(payload.id_fornecedor_principal);
-      if (!fornecedorPrincipal) {
-        return res.status(400).json({ message: 'Fornecedor principal nao encontrado.' });
+      const suppliersExist = await ensureSuppliersExist(payload.fornecedor_ids);
+      if (!suppliersExist) {
+        return res.status(400).json({ message: 'Um ou mais fornecedores nao foram encontrados.' });
       }
 
       const materiaPrima = await MateriaPrimaModel.update(req.params.id, payload);
@@ -340,17 +294,13 @@ const MateriaPrimaController = {
         return res.status(404).json({ message: 'Materia-prima nao encontrada.' });
       }
 
-      try {
-        await applyDefaultSupplierLink(materiaPrima, payload);
-      } catch (linkError) {
-        console.warn('Nao foi possivel sincronizar o fornecedor principal da materia-prima:', linkError.message);
-      }
-
-      return res.status(200).json(materiaPrima);
+      await syncSuppliers(materiaPrima.id, payload.fornecedor_ids);
+      const materiaPrimaAtualizada = await MateriaPrimaModel.findById(materiaPrima.id);
+      return res.status(200).json(materiaPrimaAtualizada);
     } catch (error) {
       console.error('Erro ao atualizar materia-prima:', error);
       if (error.code === 'ER_DUP_ENTRY') {
-        return res.status(400).json({ message: 'Ja existe uma materia-prima com este codigo.' });
+        return res.status(400).json({ message: 'Ja existe uma materia-prima com este ID.' });
       }
       return res.status(500).json({ message: 'Erro ao atualizar materia-prima.' });
     }

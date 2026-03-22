@@ -343,6 +343,7 @@ async function main() {
           nome,
           categoria,
           material,
+          liga,
           geometria,
           bitola,
           bitola_mm,
@@ -357,15 +358,15 @@ async function main() {
         ) VALUES ?
       `,
       [[
-        [1, 'MP-GENERICA', 'MATERIA-PRIMA GENERICA', 'LAMINADO', 'NA', 'NA', 'NA', null, null, null, null, null, 0, 'KG', 9, 'Registro generico legado para pecas produzidas ainda nao mapeadas.'],
-        [2, '250FD', 'CORPO CJ--015', 'FUNDIDO', 'Ferro fundido cinzento ou ferro fundido nodular', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'UN', 6, 'Materia-prima fundida.'],
-        [3, '300FD', 'CORPO MBF-040', 'FUNDIDO', 'Ferro fundido cinzento ou ferro fundido nodular', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'UN', 6, 'Materia-prima fundida.'],
-        [4, '350FD', 'CORPO BR-040', 'FUNDIDO', 'Ferro fundido cinzento ou ferro fundido nodular', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'UN', 6, 'Materia-prima fundida.'],
-        [5, '355FD', 'CORPO PRINCIPAL DO BR-040 C/ FURACAO', 'FUNDIDO', 'Ferro fundido cinzento ou ferro fundido nodular', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'UN', 6, 'Materia-prima fundida.'],
-        [6, '400FD', 'CORPO DO VF', 'FUNDIDO', 'Ferro fundido cinzento ou ferro fundido nodular', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'UN', 6, 'Materia-prima fundida.'],
-        [7, '401FD', 'CORPO MC-040', 'FUNDIDO', 'Ferro fundido cinzento ou ferro fundido nodular', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'UN', 6, 'Materia-prima fundida.'],
-        [8, '450FD', 'CORPO DO MBF-032', 'FUNDIDO', 'Ferro fundido cinzento ou ferro fundido nodular', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'UN', 6, 'Materia-prima fundida.'],
-        [9, '500FD', 'CORPO DO TR - 100', 'FUNDIDO', 'Ferro fundido cinzento ou ferro fundido nodular', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'UN', 6, 'Materia-prima fundida.']
+        [1, 'MP-GENERICA', 'MATERIA-PRIMA GENERICA', 'LAMINADO', 'NA', 'NA', 'NA', 'NA', null, null, null, null, null, 0, 'KG', 9, 'Registro generico legado para pecas produzidas ainda nao mapeadas.'],
+        [2, '250FD', 'CORPO CJ--015', 'FUNDIDO', null, 'FERRO FUNDIDO', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'UN', 6, 'Materia-prima fundida.'],
+        [3, '300FD', 'CORPO MBF-040', 'FUNDIDO', null, 'FERRO FUNDIDO', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'UN', 6, 'Materia-prima fundida.'],
+        [4, '350FD', 'CORPO BR-040', 'FUNDIDO', null, 'FERRO FUNDIDO', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'UN', 6, 'Materia-prima fundida.'],
+        [5, '355FD', 'CORPO PRINCIPAL DO BR-040 C/ FURACAO', 'FUNDIDO', null, 'FERRO FUNDIDO', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'UN', 6, 'Materia-prima fundida.'],
+        [6, '400FD', 'CORPO DO VF', 'FUNDIDO', null, 'FERRO FUNDIDO', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'UN', 6, 'Materia-prima fundida.'],
+        [7, '401FD', 'CORPO MC-040', 'FUNDIDO', null, 'FERRO FUNDIDO', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'UN', 6, 'Materia-prima fundida.'],
+        [8, '450FD', 'CORPO DO MBF-032', 'FUNDIDO', null, 'FERRO FUNDIDO', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'UN', 6, 'Materia-prima fundida.'],
+        [9, '500FD', 'CORPO DO TR - 100', 'FUNDIDO', null, 'FERRO FUNDIDO', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'UN', 6, 'Materia-prima fundida.']
       ]]
     );
 

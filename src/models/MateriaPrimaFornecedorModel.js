@@ -129,6 +129,52 @@ class MateriaPrimaFornecedorModel {
 
     return result.affectedRows > 0;
   }
+
+  // Sincroniza a lista de fornecedores vinculados a uma materia-prima.
+  static async replaceAll(materiaPrimaId, fornecedorIds = []) {
+    const normalizedIds = fornecedorIds
+      .map((value) => Number.parseInt(value, 10))
+      .filter((value) => Number.isInteger(value));
+
+    const [currentRows] = await pool.query(
+      `
+        SELECT
+          id,
+          id_fornecedor
+        FROM materia_prima_fornecedor
+        WHERE id_materia_prima = ?
+      `,
+      [materiaPrimaId]
+    );
+
+    const currentIds = currentRows.map((row) => Number(row.id_fornecedor));
+    const idsToDelete = currentRows
+      .filter((row) => !normalizedIds.includes(Number(row.id_fornecedor)))
+      .map((row) => row.id);
+    const idsToCreate = normalizedIds.filter((fornecedorId) => !currentIds.includes(fornecedorId));
+
+    if (idsToDelete.length > 0) {
+      await pool.query(
+        `DELETE FROM materia_prima_fornecedor WHERE id IN (${idsToDelete.map(() => '?').join(', ')})`,
+        idsToDelete
+      );
+    }
+
+    if (idsToCreate.length > 0) {
+      await pool.query(
+        `
+          INSERT INTO materia_prima_fornecedor (
+            id_materia_prima,
+            id_fornecedor,
+            observacao
+          ) VALUES ?
+        `,
+        [idsToCreate.map((fornecedorId) => [materiaPrimaId, fornecedorId, null])]
+      );
+    }
+
+    return this.findByMateriaPrimaId(materiaPrimaId);
+  }
 }
 
 module.exports = MateriaPrimaFornecedorModel;

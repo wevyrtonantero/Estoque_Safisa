@@ -50,7 +50,7 @@
         <div class="topbar-copy">
           <p class="page-kicker">Area Administrativa SAFISA</p>
           <h1 class="page-title">Materias-primas</h1>
-          <p class="page-subtitle">Cadastro unico com modos diferentes para laminados e fundidos.</p>
+          <p class="page-subtitle">CRUD enxuto para laminados e fundidos com fornecedores multiplos.</p>
         </div>
       </div>
 
@@ -66,13 +66,13 @@
       </article>
 
       <article class="summary-card">
-        <span>Fundidos</span>
-        <strong id="metric-fundidos">0</strong>
+        <span>Laminados</span>
+        <strong id="metric-laminados">0</strong>
       </article>
 
       <article class="summary-card">
-        <span>Laminados</span>
-        <strong id="metric-laminados">0</strong>
+        <span>Fundidos</span>
+        <strong id="metric-fundidos">0</strong>
       </article>
     </section>
 
@@ -89,8 +89,8 @@
 
       <form id="materia-prima-filtro-form" class="toolbar-form">
         <div class="field">
-          <label for="filtro-mp-codigo">Codigo</label>
-          <input id="filtro-mp-codigo" type="text" placeholder="Ex.: MP-001">
+          <label for="filtro-mp-codigo">ID</label>
+          <input id="filtro-mp-codigo" type="text" placeholder="Ex.: 250FD">
         </div>
 
         <div class="field">
@@ -99,8 +99,8 @@
         </div>
 
         <div class="field">
-          <label for="filtro-mp-material">Material tecnico</label>
-          <input id="filtro-mp-material" type="text" placeholder="Ex.: Aco carbono SAE 1020">
+          <label for="filtro-mp-material">Descricao tecnica</label>
+          <input id="filtro-mp-material" type="text" placeholder="Ex.: Barra trefilada">
         </div>
 
         <div class="field">
@@ -128,19 +128,18 @@
         <table>
           <thead>
             <tr>
-              <th>Codigo</th>
+              <th>ID</th>
               <th>Descricao</th>
               <th>Categoria</th>
-              <th>Material</th>
-              <th>Bitola</th>
+              <th>Liga</th>
               <th>Referencia</th>
-              <th>Fornecedor</th>
+              <th>Fornecedores</th>
               <th>Acoes</th>
             </tr>
           </thead>
           <tbody id="materias-primas-tbody">
             <tr>
-              <td colspan="8" class="empty-state">Carregando materias-primas cadastradas...</td>
+              <td colspan="7" class="empty-state">Carregando materias-primas cadastradas...</td>
             </tr>
           </tbody>
         </table>
@@ -156,7 +155,7 @@
         <div>
           <span class="section-pill">Cadastro</span>
           <h2 id="materia-prima-modal-title">Nova Materia-prima</h2>
-          <p>O mesmo cadastro atende fundidos e laminados, mudando apenas o fluxo de preenchimento.</p>
+          <p>Mesmo cadastro, com formularios diferentes para laminado e fundido.</p>
         </div>
 
         <button id="btn-fechar-modal-mp" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
@@ -176,54 +175,44 @@
         </div>
 
         <div class="field span-3">
-          <label for="mp-codigo">Codigo</label>
+          <label for="mp-codigo">ID</label>
           <input id="mp-codigo" type="text" maxlength="100" placeholder="Ex.: MP-001" required>
         </div>
 
-        <div class="field span-4">
-          <label for="mp-fornecedor-principal">Fornecedor principal</label>
-          <select id="mp-fornecedor-principal" required>
-            <option value="">Selecione</option>
-          </select>
+        <div class="field span-5">
+          <label for="mp-liga">Liga</label>
+          <input id="mp-liga" type="text" maxlength="120" list="mp-liga-opcoes" placeholder="Selecione ou digite">
+          <datalist id="mp-liga-opcoes"></datalist>
         </div>
 
-        <div class="field span-5">
-          <label for="mp-unidade-estoque">Unidade de controle</label>
-          <select id="mp-unidade-estoque" required>
-            <option value="KG">KG</option>
-            <option value="BARRAS">BARRAS</option>
-            <option value="M">M</option>
-          </select>
+        <div class="field span-4">
+          <label for="mp-fornecedor-select">Fornecedor</label>
+          <div class="supplier-picker">
+            <select id="mp-fornecedor-select">
+              <option value="">Selecione</option>
+            </select>
+            <button id="btn-adicionar-fornecedor-mp" class="btn btn-secondary" type="button">+ Fornecedor</button>
+          </div>
         </div>
 
         <div class="field span-12">
           <label for="mp-nome">Descricao</label>
-          <textarea id="mp-nome" rows="4" maxlength="150" placeholder="Descreva o material da forma como ele deve aparecer no cadastro." required></textarea>
+          <textarea id="mp-nome" rows="4" maxlength="150" placeholder="Descreva o material da forma que ele deve aparecer no sistema." required></textarea>
         </div>
 
-        <div class="field span-6">
-          <label for="mp-material">Material tecnico</label>
-          <input id="mp-material" type="text" maxlength="180" list="mp-material-opcoes" required>
-          <datalist id="mp-material-opcoes">
-            <option value="Aço carbono SAE 1020"></option>
-            <option value="Aço carbono SAE 1045"></option>
-            <option value="Aço inoxidavel AISI 316 / UNS S31600"></option>
-            <option value="Policloreto de vinila rigido (PVC rigido)"></option>
-            <option value="Polioximetileno (POM) / Poliacetal"></option>
-            <option value="Poliamida (PA), normalmente PA 6 ou PA 66"></option>
-            <option value="Ferro fundido cinzento ou ferro fundido nodular"></option>
-            <option value="Aluminio"></option>
-          </datalist>
-        </div>
-
-        <div class="field span-6">
-          <label id="mp-estoque-minimo-label" for="mp-estoque-minimo">Estoque minimo (KG)</label>
-          <input id="mp-estoque-minimo" type="text" inputmode="decimal" value="0" placeholder="Ex.: 12,5" required>
+        <div id="mp-fornecedores-lista" class="span-12 selected-tags empty">
+          <span>Nenhum fornecedor selecionado.</span>
         </div>
 
         <section id="mp-laminado-section" class="span-12 mode-panel">
           <div class="form-grid">
-            <div class="field span-4">
+            <div class="field span-6">
+              <label for="mp-material">Descricao tecnica</label>
+              <input id="mp-material" type="text" maxlength="180" list="mp-descricao-tecnica-opcoes" placeholder="Selecione ou digite" required>
+              <datalist id="mp-descricao-tecnica-opcoes"></datalist>
+            </div>
+
+            <div class="field span-6">
               <label for="mp-geometria">Geometria</label>
               <select id="mp-geometria" required>
                 <option value="REDONDO">REDONDO</option>
@@ -232,83 +221,63 @@
               </select>
             </div>
 
-            <div class="field span-4">
-              <label for="mp-bitola-polegada">Bitola em polegada</label>
-              <input id="mp-bitola-polegada" type="text" maxlength="100" list="mp-bitola-polegada-opcoes" placeholder='Ex.: 7/8"'>
-              <datalist id="mp-bitola-polegada-opcoes"></datalist>
-            </div>
+            <div class="span-12 compact-grid">
+              <div class="field">
+                <label for="mp-bitola-polegada">Bitola em polegada</label>
+                <input id="mp-bitola-polegada" type="text" maxlength="100" list="mp-bitola-polegada-opcoes" placeholder='Ex.: 7/8"'>
+                <datalist id="mp-bitola-polegada-opcoes"></datalist>
+              </div>
 
-            <div class="field span-4">
-              <label for="mp-bitola-mm">Bitola em mm</label>
-              <input id="mp-bitola-mm" type="text" inputmode="decimal" placeholder="Ex.: 22,225">
-            </div>
+              <div class="field checkbox-field">
+                <label for="mp-bitola-em-mm">Usar mm</label>
+                <input id="mp-bitola-em-mm" type="checkbox">
+              </div>
 
-            <div class="field span-4">
-              <label for="mp-comprimento-padrao-m">Comprimento padrao da barra (m)</label>
-              <input id="mp-comprimento-padrao-m" type="text" inputmode="decimal" value="3">
-            </div>
+              <div id="mp-bitola-mm-wrapper" class="field hidden">
+                <label for="mp-bitola-mm">Bitola em mm</label>
+                <input id="mp-bitola-mm" type="text" inputmode="decimal" placeholder="Ex.: 22">
+              </div>
 
-            <div class="field span-4">
-              <label for="mp-peso-por-metro">Peso por metro (kg/m)</label>
-              <input id="mp-peso-por-metro" type="text" inputmode="decimal" placeholder="Digite ou calcule">
-            </div>
-
-            <div class="field span-4">
-              <label for="mp-densidade">Densidade (g/cm3)</label>
-              <input id="mp-densidade" type="text" inputmode="decimal" placeholder="Opcional para calculo">
-            </div>
-
-            <div class="span-12 compact-actions">
-              <button id="btn-calcular-peso-metro" class="btn btn-ghost" type="button">Calcular kg/m</button>
+              <article class="helper-card conversion-card">
+                <span>Equivalencia</span>
+                <strong id="mp-helper-bitola">Preencha polegada ou mm.</strong>
+              </article>
             </div>
 
             <div class="span-12 helper-grid">
-              <article class="helper-card">
-                <span>Equivalencia atual</span>
-                <strong id="mp-helper-bitola">Preencha polegada ou mm.</strong>
+              <article class="helper-card helper-card-full">
+                <span>Tabela rapida</span>
+                <div id="mp-bitola-tabela" class="reference-table"></div>
               </article>
+            </div>
 
-              <article class="helper-card">
-                <span>Peso de 1 barra padrao</span>
-                <strong id="mp-helper-barra">Aguardando kg/m e comprimento.</strong>
-              </article>
+            <div class="field span-3">
+              <label for="mp-comprimento-padrao-m">Comprimento da barra (m)</label>
+              <input id="mp-comprimento-padrao-m" type="text" inputmode="decimal" value="3" placeholder="Ex.: 3">
+            </div>
 
-              <article class="helper-card">
-                <span>Conversao rapida</span>
-                <div class="reference-table">
-                  <span>1/2" = 12,700 mm</span>
-                  <span>5/8" = 15,875 mm</span>
-                  <span>3/4" = 19,050 mm</span>
-                  <span>7/8" = 22,225 mm</span>
-                  <span>1" = 25,400 mm</span>
-                  <span>1 1/4" = 31,750 mm</span>
-                </div>
-              </article>
+            <div class="field span-3">
+              <label for="mp-peso-por-metro">Peso por metro (kg/m)</label>
+              <input id="mp-peso-por-metro" type="text" inputmode="decimal" placeholder="Ex.: 2,35">
             </div>
           </div>
         </section>
 
         <section id="mp-fundido-section" class="span-12 mode-panel hidden">
           <div class="form-grid">
-            <div class="field span-4">
-              <label for="mp-peso-unitario-kg">Peso unitario (kg)</label>
-              <input id="mp-peso-unitario-kg" type="text" inputmode="decimal" placeholder="Opcional">
+            <div class="field span-6">
+              <label for="mp-peso-unitario-kg">Massa (kg)</label>
+              <input id="mp-peso-unitario-kg" type="text" inputmode="decimal" placeholder="Ex.: 4,25">
             </div>
 
-            <div class="span-8 helper-grid">
-              <article class="helper-card helper-card-full">
+            <div class="span-12">
+              <div class="helper-card helper-card-full">
                 <span>Fluxo do fundido</span>
-                <strong>Fundido trabalha com fornecedor principal, unidade de controle e peso unitario.</strong>
-                <p>Bitola, geometria laminada, comprimento de barra e kg/m nao entram neste modo.</p>
-              </article>
+                <strong>Fundido fica simples: ID, descricao, massa, liga e fornecedores.</strong>
+              </div>
             </div>
           </div>
         </section>
-
-        <div class="field span-12">
-          <label for="mp-observacao">Observacao</label>
-          <input id="mp-observacao" type="text" maxlength="255" placeholder="Opcional">
-        </div>
 
         <div class="span-12 modal-actions">
           <button id="btn-cancelar-modal-mp" class="btn btn-neutral" type="button">Cancelar</button>
@@ -316,78 +285,6 @@
           <button id="btn-atualizar-mp" class="btn btn-secondary" type="button" disabled>Atualizar Materia-prima</button>
         </div>
       </form>
-    </div>
-  </div>
-
-  <div id="mp-fornecedores-modal" class="modal hidden" aria-hidden="true">
-    <div class="modal-backdrop" data-close-modal="mp-fornecedores"></div>
-
-    <div class="modal-dialog modal-wide">
-      <div class="modal-header">
-        <div>
-          <span class="section-pill">Vinculos</span>
-          <h2 id="mp-fornecedores-modal-title">Fornecedores Vinculados</h2>
-          <p>Vincule um ou mais fornecedores para consulta futura.</p>
-        </div>
-
-        <button id="btn-fechar-modal-mp-fornecedores" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
-      </div>
-
-      <div id="mp-fornecedores-mensagem" class="message hidden"></div>
-
-      <div class="structure-highlight">
-        <div>
-          <p class="page-kicker">Materia-prima Selecionada</p>
-          <h3 id="mp-fornecedores-titulo">Nenhuma materia-prima selecionada</h3>
-          <p id="mp-fornecedores-subtitulo">Abra o modal a partir da listagem para gerenciar os fornecedores vinculados.</p>
-        </div>
-      </div>
-
-      <form id="mp-fornecedor-form" class="form-grid">
-        <input type="hidden" id="mp-fornecedor-vinculo-id">
-        <input type="hidden" id="mp-fornecedor-id">
-
-        <div class="field span-8">
-          <label for="mp-fornecedor-busca">Fornecedor</label>
-          <div class="autocomplete">
-            <input id="mp-fornecedor-busca" type="text" placeholder="Digite parte do nome, contato ou cidade do fornecedor">
-            <div id="mp-fornecedor-sugestoes" class="autocomplete-panel hidden"></div>
-          </div>
-          <span class="search-helper">Digite para localizar rapidamente um fornecedor ja cadastrado.</span>
-        </div>
-
-        <div class="field span-4">
-          <label for="mp-fornecedor-observacao">Observacao</label>
-          <input id="mp-fornecedor-observacao" type="text" maxlength="255" placeholder="Opcional">
-        </div>
-
-        <div class="span-12 compact-actions">
-          <button id="btn-salvar-mp-fornecedor" class="btn btn-primary" type="submit">Vincular Fornecedor</button>
-          <button id="btn-atualizar-mp-fornecedor" class="btn btn-secondary" type="button" disabled>Atualizar Vinculo</button>
-          <button id="btn-limpar-mp-fornecedor" class="btn btn-neutral" type="button">Limpar</button>
-        </div>
-      </form>
-
-      <div class="subtle-divider"></div>
-
-      <div class="table-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th>Fornecedor</th>
-              <th>Contato</th>
-              <th>Telefone</th>
-              <th>Observacao</th>
-              <th>Acoes</th>
-            </tr>
-          </thead>
-          <tbody id="mp-fornecedores-tbody">
-            <tr>
-              <td colspan="5" class="empty-state">Abra uma materia-prima para visualizar os fornecedores vinculados.</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
     </div>
   </div>
 
