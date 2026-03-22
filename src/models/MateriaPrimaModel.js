@@ -17,6 +17,11 @@ class MateriaPrimaModel {
       values.push(`%${filters.nome}%`);
     }
 
+    if (filters.material) {
+      conditions.push('COALESCE(material, \'\') LIKE ?');
+      values.push(`%${filters.material}%`);
+    }
+
     if (filters.geometria) {
       conditions.push('geometria LIKE ?');
       values.push(`%${filters.geometria}%`);
@@ -33,10 +38,16 @@ class MateriaPrimaModel {
           id,
           codigo,
           nome,
+          material,
           geometria,
           bitola,
+          bitola_mm,
+          comprimento_padrao_mm,
           peso_por_metro,
+          peso_unitario_kg,
+          densidade_g_cm3,
           estoque_minimo,
+          observacao,
           created_at,
           updated_at
         FROM materias_primas
@@ -57,10 +68,16 @@ class MateriaPrimaModel {
           id,
           codigo,
           nome,
+          material,
           geometria,
           bitola,
+          bitola_mm,
+          comprimento_padrao_mm,
           peso_por_metro,
+          peso_unitario_kg,
+          densidade_g_cm3,
           estoque_minimo,
+          observacao,
           created_at,
           updated_at
         FROM materias_primas
@@ -80,8 +97,10 @@ class MateriaPrimaModel {
           id,
           codigo,
           nome,
+          material,
           geometria,
-          bitola
+          bitola,
+          bitola_mm
         FROM materias_primas
         ORDER BY codigo ASC
       `
@@ -97,19 +116,31 @@ class MateriaPrimaModel {
         INSERT INTO materias_primas (
           codigo,
           nome,
+          material,
           geometria,
           bitola,
+          bitola_mm,
+          comprimento_padrao_mm,
           peso_por_metro,
-          estoque_minimo
-        ) VALUES (?, ?, ?, ?, ?, ?)
+          peso_unitario_kg,
+          densidade_g_cm3,
+          estoque_minimo,
+          observacao
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         data.codigo,
         data.nome,
+        data.material,
         data.geometria,
         data.bitola,
+        data.bitola_mm,
+        data.comprimento_padrao_mm,
         data.peso_por_metro,
-        data.estoque_minimo
+        data.peso_unitario_kg,
+        data.densidade_g_cm3,
+        data.estoque_minimo,
+        data.observacao
       ]
     );
 
@@ -124,19 +155,31 @@ class MateriaPrimaModel {
         SET
           codigo = ?,
           nome = ?,
+          material = ?,
           geometria = ?,
           bitola = ?,
+          bitola_mm = ?,
+          comprimento_padrao_mm = ?,
           peso_por_metro = ?,
-          estoque_minimo = ?
+          peso_unitario_kg = ?,
+          densidade_g_cm3 = ?,
+          estoque_minimo = ?,
+          observacao = ?
         WHERE id = ?
       `,
       [
         data.codigo,
         data.nome,
+        data.material,
         data.geometria,
         data.bitola,
+        data.bitola_mm,
+        data.comprimento_padrao_mm,
         data.peso_por_metro,
+        data.peso_unitario_kg,
+        data.densidade_g_cm3,
         data.estoque_minimo,
+        data.observacao,
         id
       ]
     );

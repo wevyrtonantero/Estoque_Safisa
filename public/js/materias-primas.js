@@ -1,6 +1,16 @@
 // Script principal do modulo de materias-primas e de seus fornecedores vinculados.
 const materiasPrimasApiBaseUrl = '/api/materias-primas';
 const fornecedoresAutocompleteApiUrl = '/api/fornecedores-autocomplete';
+const materiaisTecnicosPadrao = {
+  'Aço carbono SAE 1020': { densidade: 7.85 },
+  'Aço carbono SAE 1045': { densidade: 7.85 },
+  'Aço inoxidável AISI 316 / UNS S31600': { densidade: 8.0 },
+  'Policloreto de vinila rígido (PVC rígido)': { densidade: 1.39 },
+  'Polioximetileno (POM) / Poliacetal': { densidade: 1.41 },
+  'Poliamida (PA), normalmente PA 6 ou PA 66': { densidade: 1.15 },
+  'Ferro fundido cinzento ou ferro fundido nodular': { densidade: 7.2 },
+  'Alumínio': { densidade: 2.7 }
+};
 
 let editingMateriaPrimaId = null;
 let selectedMateriaPrimaId = null;
@@ -43,9 +53,13 @@ const drawerScrim = document.getElementById('drawer-scrim');
 const appDrawer = document.getElementById('app-drawer');
 
 document.addEventListener('DOMContentLoaded', async () => {
-  bindEvents();
-  await carregarFornecedoresAutocomplete();
-  await carregarMateriasPrimas();
+  try {
+    bindEvents();
+    await carregarFornecedoresAutocomplete();
+    await carregarMateriasPrimas();
+  } catch (error) {
+    mostrarMensagemMateriaPrima(error.message || 'Nao foi possivel inicializar a tela de materias-primas.', 'error');
+  }
 });
 
 // Conecta os eventos das tabelas, modais, busca e menu lateral.
@@ -73,6 +87,9 @@ function bindEvents() {
   drawerScrim.addEventListener('click', fecharDrawer);
   document.addEventListener('click', handleClickForaDaBusca);
   document.addEventListener('keydown', handleKeyboardShortcuts);
+  document.getElementById('mp-bitola').addEventListener('blur', sincronizarBitolaEmMm);
+  document.getElementById('mp-material').addEventListener('change', preencherDensidadePorMaterial);
+  document.getElementById('mp-geometria').addEventListener('change', sincronizarCamposPorGeometria);
 
   materiaPrimaFiltroForm.querySelectorAll('input').forEach((field) => {
     field.addEventListener('input', agendarFiltroAutomatico);
@@ -98,11 +115,13 @@ async function carregarMateriasPrimas() {
   const params = new URLSearchParams();
   const codigo = document.getElementById('filtro-mp-codigo').value.trim();
   const nome = document.getElementById('filtro-mp-nome').value.trim();
+  const material = document.getElementById('filtro-mp-material').value.trim();
   const geometria = document.getElementById('filtro-mp-geometria').value.trim();
   const bitola = document.getElementById('filtro-mp-bitola').value.trim();
 
   if (codigo) params.append('codigo', codigo);
   if (nome) params.append('nome', nome);
+  if (material) params.append('material', material);
   if (geometria) params.append('geometria', geometria);
   if (bitola) params.append('bitola', bitola);
 
@@ -226,9 +245,15 @@ function montarPayloadMateriaPrima() {
   return {
     codigo: document.getElementById('mp-codigo').value.trim(),
     nome: document.getElementById('mp-nome').value.trim(),
+    material: document.getElementById('mp-material').value.trim(),
     geometria: document.getElementById('mp-geometria').value.trim(),
     bitola: document.getElementById('mp-bitola').value.trim(),
+    bitola_mm: normalizeOptionalValue(document.getElementById('mp-bitola-mm').value),
+    comprimento_padrao_mm: normalizeOptionalValue(document.getElementById('mp-comprimento-padrao-mm').value),
     peso_por_metro: document.getElementById('mp-peso-por-metro').value,
+    peso_unitario_kg: normalizeOptionalValue(document.getElementById('mp-peso-unitario-kg').value),
+    densidade_g_cm3: normalizeOptionalValue(document.getElementById('mp-densidade').value),
+    observacao: document.getElementById('mp-observacao').value.trim(),
     estoque_minimo: document.getElementById('mp-estoque-minimo').value
   };
 }
@@ -246,13 +271,20 @@ async function carregarMateriaPrimaParaEdicao(id) {
     document.getElementById('materia-prima-id').value = materiaPrima.id;
     document.getElementById('mp-codigo').value = materiaPrima.codigo;
     document.getElementById('mp-nome').value = materiaPrima.nome;
+    document.getElementById('mp-material').value = materiaPrima.material || '';
     document.getElementById('mp-geometria').value = materiaPrima.geometria;
-    document.getElementById('mp-bitola').value = materiaPrima.bitola;
-    document.getElementById('mp-peso-por-metro').value = Number(materiaPrima.peso_por_metro);
+    document.getElementById('mp-bitola').value = materiaPrima.bitola || '';
+    document.getElementById('mp-bitola-mm').value = formatOptionalNumber(materiaPrima.bitola_mm);
+    document.getElementById('mp-comprimento-padrao-mm').value = formatOptionalNumber(materiaPrima.comprimento_padrao_mm);
+    document.getElementById('mp-peso-por-metro').value = formatOptionalNumber(materiaPrima.peso_por_metro);
+    document.getElementById('mp-peso-unitario-kg').value = formatOptionalNumber(materiaPrima.peso_unitario_kg);
+    document.getElementById('mp-densidade').value = formatOptionalNumber(materiaPrima.densidade_g_cm3);
+    document.getElementById('mp-observacao').value = materiaPrima.observacao || '';
     document.getElementById('mp-estoque-minimo').value = Number(materiaPrima.estoque_minimo);
     atualizarMateriaPrimaButton.disabled = false;
     salvarMateriaPrimaButton.disabled = true;
     materiaPrimaModalTitle.textContent = `Editar ${materiaPrima.nome}`;
+    sincronizarCamposPorGeometria();
     abrirModal(materiaPrimaModal);
   } catch (error) {
     mostrarMensagemMateriaPrima(error.message, 'error');
@@ -300,7 +332,11 @@ async function abrirModalFornecedores(id, mensagemInicial = '') {
   await carregarFornecedoresAutocomplete();
   document.getElementById('mp-fornecedores-modal-title').textContent = `Fornecedores de ${materiaPrima.codigo}`;
   document.getElementById('mp-fornecedores-titulo').textContent = `${materiaPrima.codigo} - ${materiaPrima.nome}`;
-  document.getElementById('mp-fornecedores-subtitulo').textContent = `${materiaPrima.geometria} | ${materiaPrima.bitola}`;
+  document.getElementById('mp-fornecedores-subtitulo').textContent = [
+    materiaPrima.material || 'Material nao informado',
+    materiaPrima.geometria || '-',
+    formatarBitolaMateriaPrima(materiaPrima)
+  ].filter(Boolean).join(' | ');
   resetVinculoForm();
   esconderMensagemMpFornecedores();
   await carregarVinculosFornecedor(id);
@@ -491,8 +527,26 @@ function handleFornecedorSugestaoClick(event) {
 }
 
 function handleClickForaDaBusca(event) {
+  const trigger = event.target.closest('.row-menu-trigger');
+  if (trigger) {
+    const currentMenu = trigger.closest('.row-menu');
+    window.requestAnimationFrame(() => {
+      const shouldKeepOpen = currentMenu && currentMenu.hasAttribute('open');
+      closeAllRowMenus(shouldKeepOpen ? currentMenu : null);
+    });
+    return;
+  }
+
+  if (event.target.closest('.row-menu-item')) {
+    closeAllRowMenus();
+  }
+
   if (!event.target.closest('.autocomplete')) {
     esconderSugestoesFornecedor();
+  }
+
+  if (!event.target.closest('.row-menu')) {
+    closeAllRowMenus();
   }
 }
 
@@ -530,12 +584,24 @@ function esconderSugestoesFornecedor() {
   mpFornecedorSugestoes.innerHTML = '';
 }
 
+function closeAllRowMenus(exceptMenu = null) {
+  document.querySelectorAll('.row-menu[open]').forEach((menu) => {
+    if (exceptMenu && menu === exceptMenu) {
+      return;
+    }
+
+    menu.removeAttribute('open');
+  });
+}
+
 function resetMateriaPrimaForm() {
   materiaPrimaForm.reset();
   editingMateriaPrimaId = null;
   document.getElementById('materia-prima-id').value = '';
   atualizarMateriaPrimaButton.disabled = true;
   salvarMateriaPrimaButton.disabled = false;
+  document.getElementById('mp-estoque-minimo').value = '0';
+  sincronizarCamposPorGeometria();
   esconderMensagemModalMateriaPrima();
 }
 
@@ -598,6 +664,7 @@ function fecharDrawer() {
 function handleKeyboardShortcuts(event) {
   if (event.key === 'Escape') {
     esconderSugestoesFornecedor();
+    closeAllRowMenus();
 
     if (!materiaPrimaModal.classList.contains('hidden')) {
       fecharModalMateriaPrima();
@@ -617,7 +684,7 @@ function renderizarTabelaMateriasPrimas(materiasPrimas) {
   totalMateriasPrimas.textContent = `${materiasPrimas.length} registro(s) encontrado(s)`;
 
   if (materiasPrimas.length === 0) {
-    materiasPrimasTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhuma materia-prima encontrada para os filtros informados.</td></tr>';
+    materiasPrimasTbody.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhuma materia-prima encontrada para os filtros informados.</td></tr>';
     return;
   }
 
@@ -625,8 +692,10 @@ function renderizarTabelaMateriasPrimas(materiasPrimas) {
     <tr>
       <td class="table-code">${escapeHtml(materiaPrima.codigo)}</td>
       <td class="table-description">${escapeHtml(materiaPrima.nome)}</td>
+      <td>${escapeHtml(materiaPrima.material || '-')}</td>
       <td>${escapeHtml(materiaPrima.geometria)}</td>
-      <td>${escapeHtml(materiaPrima.bitola)}</td>
+      <td>${escapeHtml(formatarBitolaMateriaPrima(materiaPrima))}</td>
+      <td>${escapeHtml(formatarPesoReferencia(materiaPrima))}</td>
       <td class="table-actions-cell">
         <details class="row-menu">
           <summary class="row-menu-trigger" aria-label="Abrir acoes">...</summary>
@@ -667,14 +736,16 @@ function renderizarTabelaVinculos(vinculos) {
 }
 
 function atualizarIndicadores(materiasPrimas) {
-  const geometrias = new Set(materiasPrimas.map((item) => item.geometria)).size;
-  const pesoMedio = materiasPrimas.length > 0
-    ? materiasPrimas.reduce((acc, item) => acc + Number(item.peso_por_metro), 0) / materiasPrimas.length
-    : 0;
+  const fundidos = materiasPrimas.filter((item) => String(item.geometria || '').toUpperCase() === 'FUNDIDO').length;
+  const materiais = new Set(
+    materiasPrimas
+      .map((item) => String(item.material || '').trim())
+      .filter(Boolean)
+  ).size;
 
   document.getElementById('metric-total-materias-primas').textContent = String(materiasPrimas.length);
-  document.getElementById('metric-geometrias').textContent = String(geometrias);
-  document.getElementById('metric-peso-medio').textContent = formatarNumero(pesoMedio, 4);
+  document.getElementById('metric-fundidos').textContent = String(fundidos);
+  document.getElementById('metric-materiais').textContent = String(materiais);
 }
 
 function mostrarMensagemMateriaPrima(texto, tipo) {
@@ -713,11 +784,153 @@ function extractErrorMessage(result) {
   return result.message || 'Operacao nao concluida.';
 }
 
+function preencherDensidadePorMaterial() {
+  const material = document.getElementById('mp-material').value.trim();
+  const densidadeInput = document.getElementById('mp-densidade');
+
+  if (!material || densidadeInput.value) {
+    return;
+  }
+
+  const padrao = findMaterialTecnicoPadrao(material);
+  if (padrao?.densidade) {
+    densidadeInput.value = String(padrao.densidade).replace('.', ',').replace(',', '.');
+  }
+}
+
+function findMaterialTecnicoPadrao(material) {
+  const normalizedMaterial = normalizeText(material);
+  const entry = Object.entries(materiaisTecnicosPadrao).find(([key]) => normalizeText(key) === normalizedMaterial);
+  return entry ? entry[1] : null;
+}
+
+function sincronizarCamposPorGeometria() {
+  const geometria = String(document.getElementById('mp-geometria').value || '').trim().toUpperCase();
+  const isFundido = geometria === 'FUNDIDO';
+  const bitolaInput = document.getElementById('mp-bitola');
+  const comprimentoInput = document.getElementById('mp-comprimento-padrao-mm');
+  const pesoPorMetroInput = document.getElementById('mp-peso-por-metro');
+  const pesoUnitarioInput = document.getElementById('mp-peso-unitario-kg');
+
+  bitolaInput.required = !isFundido;
+  comprimentoInput.disabled = isFundido;
+  pesoPorMetroInput.disabled = isFundido;
+  pesoUnitarioInput.disabled = !isFundido;
+
+  if (isFundido) {
+    comprimentoInput.value = '';
+    pesoPorMetroInput.value = '';
+  } else if (!comprimentoInput.value) {
+    comprimentoInput.value = '3000';
+  }
+}
+
+function sincronizarBitolaEmMm() {
+  const bitolaTexto = document.getElementById('mp-bitola').value.trim();
+  const bitolaMmInput = document.getElementById('mp-bitola-mm');
+
+  if (!bitolaTexto || bitolaMmInput.value) {
+    return;
+  }
+
+  const convertido = converterBitolaParaMm(bitolaTexto);
+  if (convertido !== null) {
+    bitolaMmInput.value = convertido.toFixed(3);
+  }
+}
+
+function converterBitolaParaMm(bitolaTexto) {
+  const texto = String(bitolaTexto || '').trim().replace(',', '.');
+  if (!texto) {
+    return null;
+  }
+
+  const contemPolegada = texto.includes('"');
+  const textoLimpo = texto.replaceAll('"', '').trim();
+
+  if (!contemPolegada && !textoLimpo.includes('/')) {
+    return null;
+  }
+
+  let polegadas = 0;
+
+  if (textoLimpo.includes(' ')) {
+    const [inteiroTexto, fracaoTexto] = textoLimpo.split(/\s+/, 2);
+    const inteiro = Number.parseFloat(inteiroTexto);
+    const fracao = parseFracao(fracaoTexto);
+    if (Number.isFinite(inteiro) && fracao !== null) {
+      polegadas = inteiro + fracao;
+    }
+  } else {
+    const fracao = parseFracao(textoLimpo);
+    if (fracao !== null) {
+      polegadas = fracao;
+    } else if (contemPolegada) {
+      const numero = Number.parseFloat(textoLimpo);
+      polegadas = Number.isFinite(numero) ? numero : 0;
+    }
+  }
+
+  return polegadas > 0 ? polegadas * 25.4 : null;
+}
+
+function parseFracao(valor) {
+  if (!valor || !String(valor).includes('/')) {
+    return null;
+  }
+
+  const [numeradorTexto, denominadorTexto] = String(valor).split('/');
+  const numerador = Number.parseFloat(numeradorTexto);
+  const denominador = Number.parseFloat(denominadorTexto);
+
+  if (!Number.isFinite(numerador) || !Number.isFinite(denominador) || denominador === 0) {
+    return null;
+  }
+
+  return numerador / denominador;
+}
+
+function normalizeText(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase();
+}
+
 function formatarNumero(valor, casasDecimais) {
   return Number(valor).toLocaleString('pt-BR', {
     minimumFractionDigits: casasDecimais,
     maximumFractionDigits: casasDecimais
   });
+}
+
+function formatOptionalNumber(value) {
+  return value === null || value === undefined ? '' : Number(value);
+}
+
+function formatarBitolaMateriaPrima(materiaPrima) {
+  const bitolaOriginal = String(materiaPrima.bitola || '').trim();
+  const bitolaMm = materiaPrima.bitola_mm !== null && materiaPrima.bitola_mm !== undefined
+    ? `${formatarNumero(materiaPrima.bitola_mm, 3)} mm`
+    : '';
+
+  if (bitolaOriginal && bitolaMm) {
+    return `${bitolaOriginal} | ${bitolaMm}`;
+  }
+
+  return bitolaOriginal || bitolaMm || '-';
+}
+
+function formatarPesoReferencia(materiaPrima) {
+  if (materiaPrima.peso_unitario_kg !== null && materiaPrima.peso_unitario_kg !== undefined) {
+    return `${formatarNumero(materiaPrima.peso_unitario_kg, 4)} kg/un`;
+  }
+
+  if (materiaPrima.peso_por_metro !== null && materiaPrima.peso_por_metro !== undefined) {
+    return `${formatarNumero(materiaPrima.peso_por_metro, 4)} kg/m`;
+  }
+
+  return '-';
 }
 
 function escapeHtml(value) {

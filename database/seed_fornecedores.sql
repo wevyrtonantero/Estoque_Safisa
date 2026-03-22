@@ -114,6 +114,17 @@ INSERT INTO fornecedores (
     NULL,
     NULL,
     'Fornecedor fallback para pecas sem fornecedor identificado pelas regras iniciais.'
+  ),
+  (
+    10,
+    'Açovisa',
+    NULL,
+    NULL,
+    NULL,
+    '07220-030',
+    'Rua Angatuba, 350, Cumbica',
+    'Guarulhos - SP',
+    'Razao social: Acovisa Industria e Comercio de Acos Especiais Ltda | CNPJ 00.987.098/0001-12'
   );
 
-ALTER TABLE fornecedores AUTO_INCREMENT = 10;
+ALTER TABLE fornecedores AUTO_INCREMENT = 11;

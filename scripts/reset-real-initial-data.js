@@ -14,6 +14,7 @@ const schemaFiles = [
   'schema_estoques.sql',
   'schema_estoque_saldos.sql',
   'schema_estoque_movimentacoes.sql',
+  'schema_producao_ordens.sql',
   'schema_estrutura_submontagem.sql',
   'schema_peca_fornecedor.sql',
   'schema_materia_prima_fornecedor.sql'
@@ -91,6 +92,14 @@ const suppliers = [
     endereco: null,
     cidade: null,
     observacao: 'Fornecedor fallback para pecas sem fornecedor identificado pelas regras iniciais.'
+  },
+  {
+    id: 10,
+    nome: 'Açovisa',
+    cep: '07220-030',
+    endereco: 'Rua Angatuba, 350, Cumbica',
+    cidade: 'Guarulhos - SP',
+    observacao: 'Razao social: Acovisa Industria e Comercio de Acos Especiais Ltda | CNPJ 00.987.098/0001-12'
   }
 ];
 
@@ -254,6 +263,7 @@ async function main() {
         SET FOREIGN_KEY_CHECKS = 0;
         DROP TABLE IF EXISTS estoque_movimentacoes;
         DROP TABLE IF EXISTS estoque_saldos;
+        DROP TABLE IF EXISTS producao_ordens;
         DROP TABLE IF EXISTS estrutura_submontagem;
         DROP TABLE IF EXISTS peca_fornecedor;
         DROP TABLE IF EXISTS materia_prima_fornecedor;
@@ -313,9 +323,16 @@ async function main() {
           id,
           nome,
           tipo
-        ) VALUES (?, ?, ?)
+        ) VALUES ?
       `,
-      [1, 'CNC', 'USINAGEM']
+      [[
+        [1, 'CNC', 'USINAGEM'],
+        [2, 'FRESA FERRAMENTEIRA', 'FRESA'],
+        [3, 'TORNO CNC 01', 'TORNO CNC'],
+        [4, 'TORNO CNC 02', 'TORNO CNC'],
+        [5, 'TORNO CNC 03', 'TORNO CNC'],
+        [6, 'TORNO CONVENCIONAL', 'TORNO']
+      ]]
     );
 
     await connection.query(
@@ -324,13 +341,49 @@ async function main() {
           id,
           codigo,
           nome,
+          material,
           geometria,
           bitola,
+          bitola_mm,
+          comprimento_padrao_mm,
           peso_por_metro,
-          estoque_minimo
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+          peso_unitario_kg,
+          densidade_g_cm3,
+          estoque_minimo,
+          observacao
+        ) VALUES ?
       `,
-      [1, 'MP-GENERICA', 'MATERIA-PRIMA GENERICA', 'NA', 'NA', 0, 0]
+      [[
+        [1, 'MP-GENERICA', 'MATERIA-PRIMA GENERICA', 'NA', 'NA', 'NA', null, null, null, null, null, 0, 'Registro generico legado para pecas produzidas ainda nao mapeadas.'],
+        [2, '250FD', 'CORPO CJ--015', 'Ferro fundido cinzento ou ferro fundido nodular', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'Materia-prima fundida.'],
+        [3, '300FD', 'CORPO MBF-040', 'Ferro fundido cinzento ou ferro fundido nodular', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'Materia-prima fundida.'],
+        [4, '350FD', 'CORPO BR-040', 'Ferro fundido cinzento ou ferro fundido nodular', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'Materia-prima fundida.'],
+        [5, '355FD', 'CORPO PRINCIPAL DO BR-040 C/ FURAÇÃO', 'Ferro fundido cinzento ou ferro fundido nodular', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'Materia-prima fundida.'],
+        [6, '400FD', 'CORPO DO VF', 'Ferro fundido cinzento ou ferro fundido nodular', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'Materia-prima fundida.'],
+        [7, '401FD', 'CORPO MC-040', 'Ferro fundido cinzento ou ferro fundido nodular', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'Materia-prima fundida.'],
+        [8, '450FD', 'CORPO DO MBF-032', 'Ferro fundido cinzento ou ferro fundido nodular', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'Materia-prima fundida.'],
+        [9, '500FD', 'CORPO DO TR - 100', 'Ferro fundido cinzento ou ferro fundido nodular', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'Materia-prima fundida.']
+      ]]
+    );
+
+    await connection.query(
+      `
+        INSERT INTO materia_prima_fornecedor (
+          id_materia_prima,
+          id_fornecedor,
+          observacao
+        ) VALUES ?
+      `,
+      [[
+        [2, 6, 'Fornecedor padrao para fundidos'],
+        [3, 6, 'Fornecedor padrao para fundidos'],
+        [4, 6, 'Fornecedor padrao para fundidos'],
+        [5, 6, 'Fornecedor padrao para fundidos'],
+        [6, 6, 'Fornecedor padrao para fundidos'],
+        [7, 6, 'Fornecedor padrao para fundidos'],
+        [8, 6, 'Fornecedor padrao para fundidos'],
+        [9, 6, 'Fornecedor padrao para fundidos']
+      ]]
     );
 
     await connection.query(

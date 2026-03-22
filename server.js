@@ -9,6 +9,7 @@ const fornecedorRoutes = require('./src/routes/fornecedorRoutes');
 const maquinaRoutes = require('./src/routes/maquinaRoutes');
 const materiaPrimaRoutes = require('./src/routes/materiaPrimaRoutes');
 const estoqueRoutes = require('./src/routes/estoqueRoutes');
+const producaoRoutes = require('./src/routes/producaoRoutes');
 const { testConnection } = require('./database/connection');
 
 const app = express();
@@ -48,6 +49,10 @@ app.get('/pagina-estoque', (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'estoque.html'));
 });
 
+app.get('/pagina-producao', (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'producao.html'));
+});
+
 // Rotas REST dos modulos administrativos.
 app.use('/api', pecaRoutes);
 app.use('/api', submontagemRoutes);
@@ -56,6 +61,7 @@ app.use('/api', fornecedorRoutes);
 app.use('/api', maquinaRoutes);
 app.use('/api', materiaPrimaRoutes);
 app.use('/api', estoqueRoutes);
+app.use('/api', producaoRoutes);
 
 // Resposta padrao para qualquer rota nao mapeada.
 app.use((req, res) => {

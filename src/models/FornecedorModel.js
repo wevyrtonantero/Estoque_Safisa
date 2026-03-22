@@ -89,6 +89,35 @@ class FornecedorModel {
     return rows;
   }
 
+  // Busca o primeiro fornecedor que combine com um ou mais termos de nome.
+  static async findFirstByNameTerms(terms = []) {
+    const normalizedTerms = terms
+      .map((term) => String(term || '').trim())
+      .filter(Boolean);
+
+    if (normalizedTerms.length === 0) {
+      return null;
+    }
+
+    const conditions = normalizedTerms.map(() => 'nome LIKE ?').join(' OR ');
+    const values = normalizedTerms.map((term) => `%${term}%`);
+
+    const [rows] = await pool.query(
+      `
+        SELECT
+          id,
+          nome
+        FROM fornecedores
+        WHERE ${conditions}
+        ORDER BY nome ASC
+        LIMIT 1
+      `,
+      values
+    );
+
+    return rows[0] || null;
+  }
+
   // Insere um novo fornecedor.
   static async create(data) {
     const [result] = await pool.query(

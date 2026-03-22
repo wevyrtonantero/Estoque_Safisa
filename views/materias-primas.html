@@ -34,7 +34,7 @@
       <a class="nav-link" href="/pagina-fornecedores"><span class="nav-icon">FR</span><span>Fornecedores</span></a>
       <a class="nav-link" href="/pagina-maquinas"><span class="nav-icon">MQ</span><span>Maquinas</span></a>
       <a class="nav-link" href="/pagina-estoque"><span class="nav-icon">ES</span><span>Estoque</span></a>
-      <a class="nav-link" href="#"><span class="nav-icon">PR</span><span>Producao</span></a>
+      <a class="nav-link" href="/pagina-producao"><span class="nav-icon">PR</span><span>Producao</span></a>
       <a class="nav-link" href="#"><span class="nav-icon">RL</span><span>Relatorios</span></a>
     </nav>
   </aside>
@@ -67,13 +67,13 @@
       </article>
 
       <article class="summary-card">
-        <span>Geometrias Distintas</span>
-        <strong id="metric-geometrias">0</strong>
+        <span>Fundidos Cadastrados</span>
+        <strong id="metric-fundidos">0</strong>
       </article>
 
       <article class="summary-card">
-        <span>Peso Medio kg/m</span>
-        <strong id="metric-peso-medio">0,0000</strong>
+        <span>Materiais Tecnicos</span>
+        <strong id="metric-materiais">0</strong>
       </article>
     </section>
 
@@ -100,6 +100,11 @@
         </div>
 
         <div class="field">
+          <label for="filtro-mp-material">Buscar por material</label>
+          <input id="filtro-mp-material" type="text" placeholder="Ex.: Aco carbono SAE 1020">
+        </div>
+
+        <div class="field">
           <label for="filtro-mp-geometria">Buscar por geometria</label>
           <input id="filtro-mp-geometria" type="text" placeholder="Digite parte da geometria">
         </div>
@@ -120,15 +125,17 @@
           <thead>
             <tr>
               <th>Codigo</th>
-              <th>Nome</th>
+              <th>Descricao</th>
+              <th>Material</th>
               <th>Geometria</th>
               <th>Bitola</th>
+              <th>Peso Ref.</th>
               <th>Acoes</th>
             </tr>
           </thead>
           <tbody id="materias-primas-tbody">
             <tr>
-              <td colspan="5" class="empty-state">Carregando materias-primas cadastradas...</td>
+              <td colspan="7" class="empty-state">Carregando materias-primas cadastradas...</td>
             </tr>
           </tbody>
         </table>
@@ -145,7 +152,7 @@
         <div>
           <span class="section-pill">Cadastro</span>
           <h2 id="materia-prima-modal-title">Nova Materia-prima</h2>
-          <p>Codigo, dados tecnicos e peso por metro em kg/m.</p>
+          <p>Cadastre barras e fundidos com material tecnico, bitola e peso de referencia.</p>
         </div>
 
         <button id="btn-fechar-modal-mp" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
@@ -162,28 +169,74 @@
         </div>
 
         <div class="field span-9">
-          <label for="mp-nome">Nome</label>
+          <label for="mp-nome">Descricao</label>
           <input id="mp-nome" type="text" maxlength="150" required>
+        </div>
+
+        <div class="field span-6">
+          <label for="mp-material">Material tecnico</label>
+          <input id="mp-material" type="text" maxlength="180" list="mp-material-opcoes" required>
+          <datalist id="mp-material-opcoes">
+            <option value="Aço carbono SAE 1020"></option>
+            <option value="Aço carbono SAE 1045"></option>
+            <option value="Aço inoxidável AISI 316 / UNS S31600"></option>
+            <option value="Policloreto de vinila rígido (PVC rígido)"></option>
+            <option value="Polioximetileno (POM) / Poliacetal"></option>
+            <option value="Poliamida (PA), normalmente PA 6 ou PA 66"></option>
+            <option value="Ferro fundido cinzento ou ferro fundido nodular"></option>
+            <option value="Alumínio"></option>
+          </datalist>
         </div>
 
         <div class="field span-3">
           <label for="mp-geometria">Geometria</label>
-          <input id="mp-geometria" type="text" maxlength="100" required>
+          <input id="mp-geometria" type="text" maxlength="100" list="mp-geometria-opcoes" required>
+          <datalist id="mp-geometria-opcoes">
+            <option value="REDONDO"></option>
+            <option value="QUADRADO"></option>
+            <option value="SEXTAVADO"></option>
+            <option value="FUNDIDO"></option>
+          </datalist>
         </div>
 
         <div class="field span-3">
-          <label for="mp-bitola">Bitola</label>
-          <input id="mp-bitola" type="text" maxlength="100" required>
+          <label for="mp-bitola">Bitola original</label>
+          <input id="mp-bitola" type="text" maxlength="100" placeholder='Ex.: 1/2" ou 12,70'>
         </div>
 
-        <div class="field span-6">
+        <div class="field span-3">
+          <label for="mp-bitola-mm">Bitola em mm</label>
+          <input id="mp-bitola-mm" type="number" min="0.001" step="0.001" placeholder="Opcional">
+        </div>
+
+        <div class="field span-3">
+          <label for="mp-comprimento-padrao-mm">Comprimento padrao (mm)</label>
+          <input id="mp-comprimento-padrao-mm" type="number" min="0.01" step="0.01" placeholder="Ex.: 3000">
+        </div>
+
+        <div class="field span-3">
           <label for="mp-peso-por-metro">Peso por metro (kg/m)</label>
-          <input id="mp-peso-por-metro" type="number" min="0.0001" step="0.0001" required>
+          <input id="mp-peso-por-metro" type="number" min="0.0001" step="0.0001" placeholder="Barras">
+        </div>
+
+        <div class="field span-3">
+          <label for="mp-peso-unitario-kg">Peso unitario (kg)</label>
+          <input id="mp-peso-unitario-kg" type="number" min="0.0001" step="0.0001" placeholder="Fundidos">
+        </div>
+
+        <div class="field span-3">
+          <label for="mp-densidade">Densidade (g/cm3)</label>
+          <input id="mp-densidade" type="number" min="0.0001" step="0.0001" placeholder="Opcional">
         </div>
 
         <div class="field span-6">
           <label for="mp-estoque-minimo">Estoque minimo</label>
           <input id="mp-estoque-minimo" type="number" min="0" step="0.001" value="0" required>
+        </div>
+
+        <div class="field span-6">
+          <label for="mp-observacao">Observacao</label>
+          <input id="mp-observacao" type="text" maxlength="255" placeholder="Opcional">
         </div>
 
         <div class="span-12 modal-actions">
