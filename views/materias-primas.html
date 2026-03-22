@@ -99,24 +99,18 @@
         </div>
 
         <div class="field">
-          <label for="filtro-mp-material">Descricao tecnica</label>
-          <input id="filtro-mp-material" type="text" placeholder="Ex.: Barra trefilada">
-        </div>
-
-        <div class="field">
-          <label for="filtro-mp-categoria">Categoria</label>
-          <select id="filtro-mp-categoria">
+          <label for="filtro-mp-geometria">Geometria</label>
+          <select id="filtro-mp-geometria">
             <option value="">Todas</option>
-            <option value="LAMINADO">LAMINADO</option>
-            <option value="FUNDIDO">FUNDIDO</option>
+            <option value="REDONDO">REDONDO</option>
+            <option value="QUADRADO">QUADRADO</option>
+            <option value="SEXTAVADO">SEXTAVADO</option>
           </select>
         </div>
 
         <div class="field">
-          <label for="filtro-mp-fornecedor">Fornecedor</label>
-          <select id="filtro-mp-fornecedor">
-            <option value="">Todos</option>
-          </select>
+          <label for="filtro-mp-bitola">Bitola</label>
+          <input id="filtro-mp-bitola" type="text" placeholder='Ex.: 7/8" ou 22'>
         </div>
 
         <button id="btn-limpar-filtros-mp" class="btn btn-neutral" type="button">Limpar</button>
@@ -197,7 +191,7 @@
 
         <div class="field span-12">
           <label for="mp-nome">Descricao</label>
-          <textarea id="mp-nome" rows="4" maxlength="150" placeholder="Descreva o material da forma que ele deve aparecer no sistema." required></textarea>
+          <textarea id="mp-nome" class="textarea-compact" rows="2" maxlength="150" placeholder="Descreva o material da forma que ele deve aparecer no sistema." required></textarea>
         </div>
 
         <div id="mp-fornecedores-lista" class="span-12 selected-tags empty">
@@ -244,13 +238,6 @@
               </article>
             </div>
 
-            <div class="span-12 helper-grid">
-              <article class="helper-card helper-card-full">
-                <span>Tabela rapida</span>
-                <div id="mp-bitola-tabela" class="reference-table"></div>
-              </article>
-            </div>
-
             <div class="field span-3">
               <label for="mp-comprimento-padrao-m">Comprimento da barra (m)</label>
               <input id="mp-comprimento-padrao-m" type="text" inputmode="decimal" value="3" placeholder="Ex.: 3">
@@ -285,6 +272,27 @@
           <button id="btn-atualizar-mp" class="btn btn-secondary" type="button" disabled>Atualizar Materia-prima</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <div id="materia-prima-visualizar-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="materia-prima-visualizar"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Visualizacao</span>
+          <h2 id="materia-prima-visualizar-title">Materia-prima</h2>
+          <p>Consulta completa sem edicao.</p>
+        </div>
+
+        <div class="compact-actions">
+          <button id="btn-imprimir-mp" class="btn btn-secondary" type="button">Imprimir</button>
+          <button id="btn-fechar-visualizar-mp" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+        </div>
+      </div>
+
+      <div id="materia-prima-visualizar-corpo" class="view-grid"></div>
     </div>
   </div>
 

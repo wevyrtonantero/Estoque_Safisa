@@ -394,6 +394,10 @@ textarea {
   resize: vertical;
 }
 
+.field textarea.textarea-compact {
+  min-height: 88px;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
@@ -556,6 +560,35 @@ textarea {
 
 .conversion-card {
   min-height: 100%;
+}
+
+.view-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.view-card {
+  padding: 16px;
+  border: 1px solid rgba(190, 208, 225, 0.7);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.view-card span {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.view-card strong {
+  display: block;
+  color: var(--primary-900);
+  line-height: 1.45;
 }
 
 .actions-row,
@@ -1045,7 +1078,8 @@ tbody tr:hover {
 
   .compact-grid,
   .supplier-picker,
-  .helper-grid {
+  .helper-grid,
+  .view-grid {
     grid-template-columns: 1fr;
   }
 
