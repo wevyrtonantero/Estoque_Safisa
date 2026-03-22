@@ -3,7 +3,6 @@ const itensSimplesApiUrl = '/api/itens-simples';
 
 let submontagensCache = [];
 let itensCache = [];
-let estoquesCache = [];
 let componentesEstruturaCache = [];
 let componentesDraft = [];
 let submontagemAtual = null;
@@ -21,7 +20,6 @@ const refs = {
   tabelaEstrutura: document.getElementById('componentes-tbody'),
   tabelaDraft: document.getElementById('submontagem-componentes-tbody'),
   filtroForm: document.getElementById('submontagem-filtro-form'),
-  filtroEstoqueReferencia: document.getElementById('filtro-sub-estoque-referencia'),
   submontagemForm: document.getElementById('submontagem-form'),
   componenteForm: document.getElementById('componente-form'),
   estruturaModal: document.getElementById('estrutura-modal'),
@@ -49,7 +47,6 @@ const campos = {
 
 document.addEventListener('DOMContentLoaded', async () => {
   bindEvents();
-  await carregarEstoquesReferencia();
   await Promise.all([carregarItensSimples(), carregarSubmontagens()]);
 });
 
@@ -187,70 +184,10 @@ async function carregarItensSimples() {
   }
 }
 
-async function carregarEstoquesReferencia() {
-  try {
-    const response = await fetch('/api/estoques');
-    const estoques = await response.json();
-
-    if (!response.ok) {
-      throw new Error(estoques.message || 'Erro ao carregar estoques.');
-    }
-
-    estoquesCache = estoques;
-    preencherSelectEstoqueReferencia();
-  } catch (error) {
-    refs.filtroEstoqueReferencia.innerHTML = '<option value="">Sem estoque</option>';
-    refs.filtroEstoqueReferencia.disabled = true;
-    showMessage(refs.mensagem, error.message, 'error');
-  }
-}
-
-function preencherSelectEstoqueReferencia() {
-  const estoquePadrao = estoquesCache.find((estoque) => estoque.nome === 'Montagem') || estoquesCache[0] || null;
-
-  if (!estoquePadrao) {
-    refs.filtroEstoqueReferencia.innerHTML = '<option value="">Sem estoque</option>';
-    refs.filtroEstoqueReferencia.disabled = true;
-    atualizarRotulosEstoqueReferencia();
-    return;
-  }
-
-  refs.filtroEstoqueReferencia.disabled = false;
-  refs.filtroEstoqueReferencia.innerHTML = estoquesCache.map((estoque) => {
-    const isSelected = Number(estoque.id) === Number(estoquePadrao.id);
-    return `<option value="${estoque.id}"${isSelected ? ' selected' : ''}>${escapeHtml(estoque.nome)}</option>`;
-  }).join('');
-
-  refs.filtroEstoqueReferencia.value = String(estoquePadrao.id);
-  atualizarRotulosEstoqueReferencia();
-}
-
-function obterEstoqueReferenciaId() {
-  const parsedValue = Number.parseInt(refs.filtroEstoqueReferencia.value, 10);
-  return Number.isInteger(parsedValue) ? parsedValue : null;
-}
-
-function obterEstoqueReferenciaAtual() {
-  const estoqueId = obterEstoqueReferenciaId();
-  return estoquesCache.find((estoque) => Number(estoque.id) === Number(estoqueId)) || null;
-}
-
-function obterNomeEstoqueReferencia() {
-  const estoque = obterEstoqueReferenciaAtual();
-  return estoque ? estoque.nome : 'Estoque';
-}
-
-function atualizarRotulosEstoqueReferencia() {
-  const nomeEstoque = obterNomeEstoqueReferencia();
-  document.getElementById('metric-saldo-pronto-label').textContent = `Saldo Pronto em ${nomeEstoque}`;
-  document.getElementById('metric-capacidade-label').textContent = `Capacidade em ${nomeEstoque}`;
-}
-
 async function carregarSubmontagens() {
   const params = new URLSearchParams();
   const codigo = document.getElementById('filtro-sub-codigo').value.trim();
   const descricao = document.getElementById('filtro-sub-descricao').value.trim();
-  const estoqueReferenciaId = obterEstoqueReferenciaId();
 
   if (codigo) {
     params.append('codigo', codigo);
@@ -258,10 +195,6 @@ async function carregarSubmontagens() {
 
   if (descricao) {
     params.append('descricao', descricao);
-  }
-
-  if (estoqueReferenciaId) {
-    params.append('estoque_referencia', estoqueReferenciaId);
   }
 
   try {
@@ -276,7 +209,6 @@ async function carregarSubmontagens() {
     }
 
     submontagensCache = submontagens;
-    atualizarRotulosEstoqueReferencia();
     renderizarTabelaSubmontagens();
     atualizarMetricasSubmontagens();
 
@@ -294,10 +226,10 @@ async function carregarSubmontagens() {
 }
 
 function renderizarTabelaSubmontagens() {
-  document.getElementById('total-submontagens').textContent = `${submontagensCache.length} registro(s) encontrado(s) | referencia: ${obterNomeEstoqueReferencia()}`;
+  document.getElementById('total-submontagens').textContent = `${submontagensCache.length} registro(s) encontrado(s)`;
 
   if (submontagensCache.length === 0) {
-    refs.tabelaSubmontagens.innerHTML = '<tr><td colspan="8" class="empty-state">Nenhuma submontagem encontrada para os filtros informados.</td></tr>';
+    refs.tabelaSubmontagens.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhuma submontagem encontrada para os filtros informados.</td></tr>';
     return;
   }
 
@@ -307,9 +239,6 @@ function renderizarTabelaSubmontagens() {
       <td class="table-description">${escapeHtml(submontagem.descricao)}</td>
       <td>${formatInteger(submontagem.total_componentes || 0)}</td>
       <td>${formatDecimal(submontagem.massa_kg || 0, 3)} kg</td>
-      <td>${formatInteger(submontagem.saldo_pronto_estoque || 0)}</td>
-      <td>${formatInteger(submontagem.capacidade_estoque || 0)}</td>
-      <td>${formatLimitante(submontagem)}</td>
       <td class="table-actions-cell">
         <details class="row-menu">
           <summary class="row-menu-trigger" aria-label="Abrir acoes">...</summary>
@@ -325,16 +254,18 @@ function renderizarTabelaSubmontagens() {
 }
 
 function atualizarMetricasSubmontagens() {
-  const nomeEstoque = obterNomeEstoqueReferencia();
+  const totalComponentes = submontagensCache.reduce(
+    (total, submontagem) => total + Number(submontagem.total_componentes || 0),
+    0
+  );
+  const massaTotal = submontagensCache.reduce(
+    (total, submontagem) => total + Number(submontagem.massa_kg || 0),
+    0
+  );
+
   document.getElementById('metric-total-submontagens').textContent = String(submontagensCache.length);
-  document.getElementById('metric-saldo-pronto-label').textContent = `Saldo Pronto em ${nomeEstoque}`;
-  document.getElementById('metric-capacidade-label').textContent = `Capacidade em ${nomeEstoque}`;
-  document.getElementById('metric-saldo-pronto').textContent = formatInteger(
-    submontagensCache.reduce((total, submontagem) => total + Number(submontagem.saldo_pronto_estoque || 0), 0)
-  );
-  document.getElementById('metric-capacidade-total').textContent = formatInteger(
-    submontagensCache.reduce((total, submontagem) => total + Number(submontagem.capacidade_estoque || 0), 0)
-  );
+  document.getElementById('metric-total-componentes').textContent = formatInteger(totalComponentes);
+  document.getElementById('metric-massa-total').textContent = `${formatDecimal(massaTotal, 3)} kg`;
 }
 
 async function handleTabelaSubmontagens(event) {
@@ -387,16 +318,12 @@ async function selecionarSubmontagem(submontagem, carregarEstrutura = true, abri
   try {
     const submontagemDetalhada = await carregarDetalhesSubmontagem(submontagem.id);
     submontagemAtual = submontagemDetalhada;
-    const nomeEstoque = obterNomeEstoqueReferencia();
     document.getElementById('estrutura-titulo').textContent = `Estrutura de ${submontagemDetalhada.codigo}`;
     document.getElementById('estrutura-subtitulo').textContent = submontagemDetalhada.descricao;
     document.getElementById('estrutura-codigo').textContent = `${submontagemDetalhada.codigo} - ${submontagemDetalhada.descricao}`;
-    document.getElementById('estrutura-detalhe').textContent = `Submontagem produzida | Componentes cadastrados: ${submontagemDetalhada.total_componentes || 0} | Estoque de referencia: ${nomeEstoque}`;
+    document.getElementById('estrutura-detalhe').textContent = `Submontagem produzida | Componentes cadastrados: ${submontagemDetalhada.total_componentes || 0}`;
     document.getElementById('estrutura-total-componentes').textContent = `Componentes: ${submontagemDetalhada.total_componentes || 0}`;
     document.getElementById('estrutura-massa-total').textContent = `Massa: ${formatDecimal(submontagemDetalhada.massa_kg || 0, 3)} kg`;
-    document.getElementById('estrutura-saldo-pronto').textContent = `Saldo pronto: ${formatInteger(submontagemDetalhada.saldo_pronto_estoque || 0)}`;
-    document.getElementById('estrutura-capacidade').textContent = `Capacidade: ${formatInteger(submontagemDetalhada.capacidade_estoque || 0)}`;
-    document.getElementById('estrutura-limitante').textContent = `Limitante: ${formatLimitante(submontagemDetalhada)}`;
 
     if (carregarEstrutura) {
       const componentes = await carregarComponentesSubmontagem(submontagemDetalhada.id);
@@ -418,18 +345,7 @@ async function selecionarSubmontagem(submontagem, carregarEstrutura = true, abri
 }
 
 async function carregarDetalhesSubmontagem(id) {
-  const params = new URLSearchParams();
-  const estoqueReferenciaId = obterEstoqueReferenciaId();
-
-  if (estoqueReferenciaId) {
-    params.append('estoque_referencia', estoqueReferenciaId);
-  }
-
-  const response = await fetch(
-    params.toString()
-      ? `${submontagensApiUrl}/${id}?${params.toString()}`
-      : `${submontagensApiUrl}/${id}`
-  );
+  const response = await fetch(`${submontagensApiUrl}/${id}`);
   const submontagem = await response.json();
 
   if (!response.ok) {
@@ -440,18 +356,7 @@ async function carregarDetalhesSubmontagem(id) {
 }
 
 async function carregarComponentesSubmontagem(id) {
-  const params = new URLSearchParams();
-  const estoqueReferenciaId = obterEstoqueReferenciaId();
-
-  if (estoqueReferenciaId) {
-    params.append('estoque_referencia', estoqueReferenciaId);
-  }
-
-  const response = await fetch(
-    params.toString()
-      ? `${submontagensApiUrl}/${id}/componentes?${params.toString()}`
-      : `${submontagensApiUrl}/${id}/componentes`
-  );
+  const response = await fetch(`${submontagensApiUrl}/${id}/componentes`);
   const componentes = await response.json();
 
   if (!response.ok) {
@@ -463,7 +368,7 @@ async function carregarComponentesSubmontagem(id) {
 
 function renderizarEstruturaAtual() {
   if (componentesEstruturaCache.length === 0) {
-    refs.tabelaEstrutura.innerHTML = '<tr><td colspan="8" class="empty-state">Nenhum componente cadastrado para a submontagem selecionada.</td></tr>';
+    refs.tabelaEstrutura.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhum componente cadastrado para a submontagem selecionada.</td></tr>';
     return;
   }
 
@@ -472,8 +377,6 @@ function renderizarEstruturaAtual() {
       <td class="table-code">${escapeHtml(component.codigo_componente)}</td>
       <td class="table-description">${escapeHtml(component.descricao_componente)}</td>
       <td>${formatInteger(component.quantidade)}</td>
-      <td>${formatInteger(component.saldo_estoque_referencia || 0)}</td>
-      <td>${formatInteger(component.capacidade_estoque_referencia || 0)}</td>
       <td>${escapeHtml(component.tipo_componente || '-')}</td>
       <td>${formatDecimal(component.massa_kg || 0, 3)} kg</td>
       <td>${formatDecimal(Number(component.quantidade) * Number(component.massa_kg || 0), 3)} kg</td>
@@ -919,9 +822,6 @@ function limparEstruturaAtual() {
   document.getElementById('estrutura-detalhe').textContent = 'Escolha um registro para visualizar a composicao.';
   document.getElementById('estrutura-total-componentes').textContent = 'Componentes: 0';
   document.getElementById('estrutura-massa-total').textContent = 'Massa: 0,000 kg';
-  document.getElementById('estrutura-saldo-pronto').textContent = 'Saldo pronto: 0';
-  document.getElementById('estrutura-capacidade').textContent = 'Capacidade: 0';
-  document.getElementById('estrutura-limitante').textContent = 'Limitante: -';
   renderizarEstruturaAtual();
   hideMessage(refs.mensagemEstrutura);
 }
@@ -933,14 +833,12 @@ function imprimirEstruturaAtual() {
   }
 
   const tabelaLinhas = componentesEstruturaCache.length === 0
-    ? '<tr><td colspan="8">Nenhum componente cadastrado.</td></tr>'
+    ? '<tr><td colspan="6">Nenhum componente cadastrado.</td></tr>'
     : componentesEstruturaCache.map((component) => `
       <tr>
         <td>${escapeHtml(component.codigo_componente)}</td>
         <td>${escapeHtml(component.descricao_componente)}</td>
         <td>${formatInteger(component.quantidade)}</td>
-        <td>${formatInteger(component.saldo_estoque_referencia || 0)}</td>
-        <td>${formatInteger(component.capacidade_estoque_referencia || 0)}</td>
         <td>${escapeHtml(component.tipo_componente || '-')}</td>
         <td>${formatDecimal(component.massa_kg || 0, 3)} kg</td>
         <td>${formatDecimal(Number(component.quantidade) * Number(component.massa_kg || 0), 3)} kg</td>
@@ -977,9 +875,6 @@ function imprimirEstruturaAtual() {
       <div class="chips">
         <span>${escapeHtml(document.getElementById('estrutura-total-componentes').textContent)}</span>
         <span>${escapeHtml(document.getElementById('estrutura-massa-total').textContent)}</span>
-        <span>${escapeHtml(document.getElementById('estrutura-saldo-pronto').textContent)}</span>
-        <span>${escapeHtml(document.getElementById('estrutura-capacidade').textContent)}</span>
-        <span>${escapeHtml(document.getElementById('estrutura-limitante').textContent)}</span>
       </div>
       <table>
         <thead>
@@ -987,8 +882,6 @@ function imprimirEstruturaAtual() {
             <th>Codigo</th>
             <th>Descricao</th>
             <th>Quantidade</th>
-            <th>Disponivel</th>
-            <th>Capacidade</th>
             <th>Tipo</th>
             <th>Massa Unit.</th>
             <th>Massa Total</th>
@@ -1126,20 +1019,6 @@ function formatInteger(value) {
   return Number(value).toLocaleString('pt-BR', {
     maximumFractionDigits: 0
   });
-}
-
-function formatLimitante(submontagem) {
-  if (!submontagem || !submontagem.componente_limitante_codigo) {
-    return '-';
-  }
-
-  const codigo = escapeHtml(submontagem.componente_limitante_codigo);
-  const descricao = escapeHtml(submontagem.componente_limitante_descricao || '');
-  const saldo = formatInteger(submontagem.componente_limitante_saldo || 0);
-  const necessidade = formatInteger(submontagem.componente_limitante_quantidade_estrutura || 0);
-  const capacidade = formatInteger(submontagem.componente_limitante_capacidade || 0);
-
-  return `${codigo} | Disp.: ${saldo} | Estr.: ${necessidade} | Cap.: ${capacidade}${descricao ? ` | ${descricao}` : ''}`;
 }
 
 function escapeHtml(value) {

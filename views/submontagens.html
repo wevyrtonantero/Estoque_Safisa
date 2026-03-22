@@ -71,13 +71,13 @@
       </article>
 
       <article class="summary-card">
-        <span id="metric-saldo-pronto-label">Saldo Pronto no Estoque</span>
-        <strong id="metric-saldo-pronto">0</strong>
+        <span>Total de Componentes</span>
+        <strong id="metric-total-componentes">0</strong>
       </article>
 
       <article class="summary-card">
-        <span id="metric-capacidade-label">Capacidade no Estoque</span>
-        <strong id="metric-capacidade-total">0</strong>
+        <span>Massa Total Cadastrada</span>
+        <strong id="metric-massa-total">0,000 kg</strong>
       </article>
     </section>
 
@@ -103,13 +103,6 @@
           <input id="filtro-sub-descricao" type="text" placeholder="Digite parte da descricao">
         </div>
 
-        <div class="field">
-          <label for="filtro-sub-estoque-referencia">Estoque de referencia</label>
-          <select id="filtro-sub-estoque-referencia">
-            <option value="">Carregando estoques...</option>
-          </select>
-        </div>
-
         <button id="btn-limpar-filtros-submontagem" class="btn btn-neutral" type="button">Limpar</button>
       </form>
 
@@ -123,15 +116,12 @@
               <th>Descricao</th>
               <th>Componentes</th>
               <th>Massa</th>
-              <th>Saldo Pronto</th>
-              <th>Capacidade</th>
-              <th>Limitante</th>
               <th>Acoes</th>
             </tr>
           </thead>
           <tbody id="submontagens-tbody">
             <tr>
-              <td colspan="8" class="empty-state">Carregando submontagens cadastradas...</td>
+              <td colspan="5" class="empty-state">Carregando submontagens cadastradas...</td>
             </tr>
           </tbody>
         </table>
@@ -167,9 +157,6 @@
         <div class="structure-kpis">
           <span id="estrutura-total-componentes" class="mini-chip">Componentes: 0</span>
           <span id="estrutura-massa-total" class="mini-chip">Massa: 0,000 kg</span>
-          <span id="estrutura-saldo-pronto" class="mini-chip">Saldo pronto: 0</span>
-          <span id="estrutura-capacidade" class="mini-chip">Capacidade: 0</span>
-          <span id="estrutura-limitante" class="mini-chip">Limitante: -</span>
         </div>
       </div>
 
@@ -182,8 +169,6 @@
               <th>Codigo</th>
               <th>Descricao</th>
               <th>Quantidade</th>
-              <th>Disponivel</th>
-              <th>Capacidade</th>
               <th>Tipo</th>
               <th>Massa Unit.</th>
               <th>Massa Total</th>
@@ -191,7 +176,7 @@
           </thead>
           <tbody id="componentes-tbody">
             <tr>
-              <td colspan="8" class="empty-state">Nenhuma estrutura carregada.</td>
+              <td colspan="6" class="empty-state">Nenhuma estrutura carregada.</td>
             </tr>
           </tbody>
         </table>
