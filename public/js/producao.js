@@ -21,7 +21,10 @@ const refs = {
   pecaBusca: document.getElementById('producao-peca-busca'),
   pecaId: document.getElementById('producao-peca-id'),
   pecaSugestoes: document.getElementById('producao-peca-sugestoes'),
-  maquinaSelect: document.getElementById('producao-maquina')
+  maquinaSelect: document.getElementById('producao-maquina'),
+  finalizacaoComprimentoWrapper: document.getElementById('finalizacao-comprimento-wrapper'),
+  finalizacaoComprimentoInput: document.getElementById('finalizacao-comprimento-corte'),
+  finalizacaoComprimentoHint: document.getElementById('finalizacao-comprimento-hint')
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -127,7 +130,7 @@ function renderizarTabela() {
 
   refs.tabela.innerHTML = producoesCache.map((producao) => `
     <tr>
-      <td>${escapeHtml(producao.status)}</td>
+      <td>${renderStatusBadge(producao.status)}</td>
       <td>${escapeHtml(producao.maquina_nome)}</td>
       <td class="table-description">${escapeHtml(`${producao.peca_codigo} - ${producao.peca_descricao}`)}</td>
       <td class="table-quantity">${formatInteger(producao.quantidade_planejada)}</td>
@@ -180,6 +183,7 @@ function renderizarSugestoesPeca(termo) {
     <button type="button" class="autocomplete-option" data-peca-id="${peca.id}" data-peca-label="${escapeHtml(`${peca.codigo} - ${peca.descricao}`)}">
       <strong>${escapeHtml(`${peca.codigo} - ${peca.descricao}`)}</strong>
       <span>${escapeHtml(peca.materia_prima_nome ? `Materia-prima: ${peca.materia_prima_codigo} - ${peca.materia_prima_nome}` : 'Sem materia-prima vinculada')}</span>
+      <span>${escapeHtml(peca.comprimento_mm ? `Corte atual: ${formatDecimal(peca.comprimento_mm)} mm` : 'Corte atual: nao definido')}</span>
     </button>
   `).join('');
   refs.pecaSugestoes.classList.remove('hidden');
@@ -235,6 +239,7 @@ async function handleFinalizarProducao(event) {
       body: JSON.stringify({
         quantidade_produzida: document.getElementById('finalizacao-quantidade-produzida').value,
         quantidade_refugo: document.getElementById('finalizacao-quantidade-refugo').value,
+        comprimento_corte_mm: refs.finalizacaoComprimentoInput.value.trim(),
         observacao_fim: document.getElementById('finalizacao-observacao').value.trim()
       })
     });
@@ -287,6 +292,11 @@ function abrirModalFinalizacao(producao) {
   document.getElementById('finalizacao-regra-chip').textContent = `Regra: ${producao.materia_prima_geometria === 'FUNDIDO' ? 'consumo unitario' : 'consumo por comprimento'}`;
   document.getElementById('finalizacao-quantidade-produzida').value = '0';
   document.getElementById('finalizacao-quantidade-refugo').value = '0';
+  refs.finalizacaoComprimentoInput.value = producao.comprimento_corte_mm ? formatInputDecimal(producao.comprimento_corte_mm) : '';
+  refs.finalizacaoComprimentoWrapper.classList.toggle(
+    'hidden',
+    String(producao.materia_prima_geometria || '').toUpperCase() === 'FUNDIDO'
+  );
   document.getElementById('finalizacao-observacao').value = '';
   esconderMensagemFinalizacao();
   openModal(refs.finalizacaoModal);
@@ -300,6 +310,8 @@ function fecharModalFinalizacao() {
   document.getElementById('finalizacao-planejada-chip').textContent = 'Planejada: 0';
   document.getElementById('finalizacao-mp-chip').textContent = 'Materia-prima: -';
   document.getElementById('finalizacao-regra-chip').textContent = 'Regra: aguardando';
+  refs.finalizacaoComprimentoInput.value = '';
+  refs.finalizacaoComprimentoWrapper.classList.remove('hidden');
   esconderMensagemFinalizacao();
   closeModal(refs.finalizacaoModal);
 }
@@ -450,8 +462,39 @@ function extractErrorMessage(result) {
   return result.message || 'Operacao nao concluida.';
 }
 
+function renderStatusBadge(status) {
+  const normalized = String(status || '').toUpperCase();
+  let cssClass = 'status-chip';
+
+  if (normalized === 'FINALIZADA') {
+    cssClass += ' is-success';
+  } else if (normalized === 'EM_ANDAMENTO') {
+    cssClass += ' is-warning';
+  } else if (normalized === 'CANCELADA') {
+    cssClass += ' is-danger';
+  }
+
+  return `<span class="${cssClass}">${escapeHtml(status || '-')}</span>`;
+}
+
 function formatInteger(value) {
   return Number(value).toLocaleString('pt-BR', { maximumFractionDigits: 0 });
+}
+
+function formatDecimal(value) {
+  return Number(value).toLocaleString('pt-BR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2
+  });
+}
+
+function formatInputDecimal(value) {
+  const numeric = Number(value || 0);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return '';
+  }
+
+  return String(Number(numeric.toFixed(2)));
 }
 
 function formatarConsumo(producao) {

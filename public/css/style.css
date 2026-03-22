@@ -591,6 +591,12 @@ textarea {
   line-height: 1.45;
 }
 
+.form-hint {
+  color: var(--text-soft);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
 .actions-row,
 .compact-actions {
   display: flex;
@@ -783,6 +789,34 @@ tbody tr:hover {
 .table-quantity {
   font-weight: 800;
   color: var(--primary-900);
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 11px;
+  border-radius: 999px;
+  color: var(--primary-900);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  background: rgba(18, 66, 118, 0.08);
+}
+
+.status-chip.is-success {
+  color: #166e53;
+  background: rgba(30, 139, 104, 0.13);
+}
+
+.status-chip.is-warning {
+  color: #8c6700;
+  background: rgba(239, 189, 29, 0.16);
+}
+
+.status-chip.is-danger {
+  color: #a13030;
+  background: rgba(214, 69, 69, 0.13);
 }
 
 .history-table td,

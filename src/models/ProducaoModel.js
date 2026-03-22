@@ -1,4 +1,6 @@
 const { pool } = require('../../database/connection');
+const EstoqueMateriaPrimaModel = require('./EstoqueMateriaPrimaModel');
+const TratamentoExternoModel = require('./TratamentoExternoModel');
 
 class ProducaoModel {
   static createBusinessError(message) {
@@ -59,7 +61,8 @@ class ProducaoModel {
           mp.codigo AS materia_prima_codigo,
           mp.nome AS materia_prima_nome,
           mp.material AS materia_prima_material,
-          mp.geometria AS materia_prima_geometria
+          mp.geometria AS materia_prima_geometria,
+          mp.unidade_estoque AS materia_prima_unidade_estoque
         FROM producao_ordens po
         INNER JOIN maquinas m ON m.id = po.id_maquina
         INNER JOIN pecas p ON p.id = po.id_peca
@@ -112,6 +115,7 @@ class ProducaoModel {
           mp.nome AS materia_prima_nome,
           mp.material AS materia_prima_material,
           mp.geometria AS materia_prima_geometria,
+          mp.unidade_estoque AS materia_prima_unidade_estoque,
           mp.peso_por_metro,
           mp.peso_unitario_kg
         FROM producao_ordens po
@@ -154,6 +158,7 @@ class ProducaoModel {
           mp.nome AS materia_prima_nome,
           mp.material AS materia_prima_material,
           mp.geometria AS materia_prima_geometria,
+          mp.unidade_estoque AS materia_prima_unidade_estoque,
           mp.peso_por_metro,
           mp.peso_unitario_kg
         FROM pecas p
@@ -244,6 +249,9 @@ class ProducaoModel {
       let quantidadeConsumida = null;
       let unidadeConsumo = null;
       let pesoConsumido = null;
+      let comprimentoCorteUsado = null;
+      let quantidadeBaixadaEstoque = null;
+      let unidadeBaixaEstoque = null;
 
       if (String(ordem.materia_prima_geometria || '').toUpperCase() === 'FUNDIDO') {
         quantidadeConsumida = totalFinal;
@@ -251,8 +259,14 @@ class ProducaoModel {
         pesoConsumido = ordem.peso_unitario_kg
           ? Number((totalFinal * Number(ordem.peso_unitario_kg)).toFixed(4))
           : null;
+        quantidadeBaixadaEstoque = quantidadeConsumida;
+        unidadeBaixaEstoque = 'UN';
       } else {
-        if (!ordem.peca_comprimento_mm || Number(ordem.peca_comprimento_mm) <= 0) {
+        comprimentoCorteUsado = data.comprimento_corte_mm && Number(data.comprimento_corte_mm) > 0
+          ? Number(data.comprimento_corte_mm)
+          : Number(ordem.comprimento_corte_mm || ordem.peca_comprimento_mm || 0);
+
+        if (!comprimentoCorteUsado || comprimentoCorteUsado <= 0) {
           throw this.createBusinessError('A peca nao possui comprimento de corte em mm. Preencha isso na peca antes de finalizar a producao.');
         }
 
@@ -261,11 +275,21 @@ class ProducaoModel {
         }
 
         quantidadeConsumida = Number(
-          (((totalFinal * Number(ordem.peca_comprimento_mm)) / 1000)).toFixed(4)
+          (((totalFinal * comprimentoCorteUsado) / 1000)).toFixed(4)
         );
         unidadeConsumo = 'M';
         pesoConsumido = Number((quantidadeConsumida * Number(ordem.peso_por_metro)).toFixed(4));
+        quantidadeBaixadaEstoque = pesoConsumido;
+        unidadeBaixaEstoque = 'KG';
       }
+
+      await EstoqueMateriaPrimaModel.registerConsumption(connection, {
+        id_materia_prima: ordem.id_materia_prima,
+        id_producao_ordem: id,
+        quantidade: quantidadeBaixadaEstoque,
+        unidade: unidadeBaixaEstoque,
+        observacao: `Consumo da producao ${ordem.peca_codigo} - ${ordem.peca_descricao}.`.slice(0, 255)
+      });
 
       await connection.query(
         `
@@ -276,6 +300,7 @@ class ProducaoModel {
             quantidade_consumida_materia_prima = ?,
             unidade_consumo = ?,
             peso_consumido_kg = ?,
+            comprimento_corte_mm = ?,
             status = 'FINALIZADA',
             observacao_fim = ?,
             data_fim = NOW()
@@ -287,10 +312,29 @@ class ProducaoModel {
           quantidadeConsumida,
           unidadeConsumo,
           pesoConsumido,
+          comprimentoCorteUsado,
           data.observacao_fim || null,
           id
         ]
       );
+
+      if (comprimentoCorteUsado && Number(comprimentoCorteUsado) > 0) {
+        await connection.query(
+          `
+            UPDATE pecas
+            SET comprimento_mm = ?
+            WHERE id = ?
+          `,
+          [comprimentoCorteUsado, ordem.id_peca]
+        );
+      }
+
+      await TratamentoExternoModel.registerEntradaProducao(connection, {
+        id_peca: ordem.id_peca,
+        id_producao_ordem: id,
+        quantidade: data.quantidade_produzida,
+        observacao: `Entrada vinda da producao ${ordem.peca_codigo} - ${ordem.peca_descricao}.`.slice(0, 255)
+      });
 
       await connection.commit();
       return this.findById(id, connection);

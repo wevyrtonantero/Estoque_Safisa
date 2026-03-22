@@ -9,6 +9,14 @@ function normalizeOptionalInteger(value) {
   return Number.isInteger(parsed) ? parsed : Number.NaN;
 }
 
+function normalizeOptionalDecimal(value) {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+
+  return Number.parseFloat(String(value).replace(',', '.'));
+}
+
 function buildCreatePayload(body) {
   return {
     id_maquina: normalizeOptionalInteger(body.id_maquina),
@@ -22,6 +30,7 @@ function buildFinishPayload(body) {
   return {
     quantidade_produzida: normalizeOptionalInteger(body.quantidade_produzida),
     quantidade_refugo: normalizeOptionalInteger(body.quantidade_refugo ?? 0),
+    comprimento_corte_mm: normalizeOptionalDecimal(body.comprimento_corte_mm),
     observacao_fim: body.observacao_fim ? String(body.observacao_fim).trim() : null
   };
 }
@@ -53,6 +62,13 @@ function validateFinishPayload(payload) {
 
   if (!Number.isInteger(payload.quantidade_refugo) || payload.quantidade_refugo < 0) {
     errors.push('A quantidade de refugo deve ser um numero inteiro maior ou igual a zero.');
+  }
+
+  if (
+    payload.comprimento_corte_mm !== null
+    && (!Number.isFinite(payload.comprimento_corte_mm) || payload.comprimento_corte_mm <= 0)
+  ) {
+    errors.push('O comprimento de corte em mm deve ser maior que zero.');
   }
 
   return errors;

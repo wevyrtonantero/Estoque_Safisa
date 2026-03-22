@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "seed:real": "node scripts/reset-real-initial-data.js"
+    "seed:real": "node scripts/reset-real-initial-data.js",
+    "db:processos": "node scripts/apply-process-infra.js"
   },
   "dependencies": {
     "express": "^4.21.2",
