@@ -83,6 +83,8 @@ textarea {
   top: 0;
   left: 0;
   z-index: 70;
+  display: flex;
+  flex-direction: column;
   width: min(300px, calc(100vw - 24px));
   height: 100vh;
   padding: 24px 18px;
@@ -101,6 +103,7 @@ textarea {
 
 .drawer-header {
   display: flex;
+  flex-shrink: 0;
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
@@ -150,8 +153,13 @@ textarea {
 
 .drawer-nav {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 6px;
+  margin-right: -6px;
 }
 
 .nav-link {
@@ -183,6 +191,7 @@ textarea {
 }
 
 .drawer-footer {
+  flex-shrink: 0;
   margin-top: 24px;
   padding: 16px;
   border-radius: var(--radius-md);
@@ -817,6 +826,14 @@ tbody tr:hover {
 .status-chip.is-danger {
   color: #a13030;
   background: rgba(214, 69, 69, 0.13);
+}
+
+.table-row-attention {
+  background: rgba(239, 189, 29, 0.12) !important;
+}
+
+.table-row-attention:hover {
+  background: rgba(239, 189, 29, 0.2) !important;
 }
 
 .history-table td,

@@ -6,6 +6,14 @@ class TerceirizacaoRemessaModel {
     {
       key: 'MULTIELOS',
       nome: 'Multielos Zincagem',
+      aliases: [
+        'Multielos Zincagem',
+        'Multielos Banhos Quimicos'
+      ],
+      lookupTokens: [
+        '51.284.727/0001-89',
+        'Multielos'
+      ],
       cidade: 'Campinas',
       endereco: 'Rua Lauro Vannucci, 515',
       cep: '13087-548',
@@ -14,7 +22,15 @@ class TerceirizacaoRemessaModel {
     },
     {
       key: 'TEMPERA',
-      nome: 'Temperaco (Tratamento Termico)',
+      nome: 'GCTerm',
+      aliases: [
+        'GCTerm',
+        'Temperaco (Tratamento Termico)'
+      ],
+      lookupTokens: [
+        '31.716.626/0001-22',
+        'GCTerm'
+      ],
       cidade: 'Sumare',
       endereco: 'Rua Serra Negra, 51',
       cep: '13178-420',
@@ -31,44 +47,68 @@ class TerceirizacaoRemessaModel {
     return error;
   }
 
-  static buildProviderSnapshot(provider) {
+  static buildProviderSnapshot(provider, supplierRow = null) {
     return {
       key: provider.key,
-      nome: provider.nome,
-      cidade: provider.cidade,
-      endereco: provider.endereco,
-      cep: provider.cep,
-      observacao: provider.observacao,
+      nome: supplierRow?.nome || provider.nome,
+      cidade: supplierRow?.cidade || provider.cidade,
+      endereco: supplierRow?.endereco || provider.endereco,
+      cep: supplierRow?.cep || provider.cep,
+      observacao: supplierRow?.observacao || provider.observacao,
       servicos: provider.servicos,
       dureza_padrao: provider.dureza_padrao || '',
       profundidade_padrao: provider.profundidade_padrao || ''
     };
   }
 
+  static async findProviderSupplier(connection, provider) {
+    const clauses = [];
+    const values = [];
+
+    if (Array.isArray(provider.aliases) && provider.aliases.length > 0) {
+      clauses.push(`nome IN (${provider.aliases.map(() => '?').join(', ')})`);
+      values.push(...provider.aliases);
+    }
+
+    if (Array.isArray(provider.lookupTokens) && provider.lookupTokens.length > 0) {
+      clauses.push(provider.lookupTokens.map(() => 'observacao LIKE ?').join(' OR '));
+      values.push(...provider.lookupTokens.map((token) => `%${token}%`));
+    }
+
+    if (clauses.length === 0) {
+      return null;
+    }
+
+    const [rows] = await connection.query(
+      `
+        SELECT
+          id,
+          nome,
+          endereco,
+          cidade,
+          cep,
+          observacao
+        FROM fornecedores
+        WHERE ${clauses.map((clause) => `(${clause})`).join(' OR ')}
+        ORDER BY id ASC
+        LIMIT 1
+      `,
+      values
+    );
+
+    return rows[0] || null;
+  }
+
   static async ensureDefaultProviders(connection = pool) {
     const providers = [];
 
     for (const provider of this.PROVIDERS) {
-      const [rows] = await connection.query(
-        `
-          SELECT
-            id,
-            nome,
-            endereco,
-            cidade,
-            cep,
-            observacao
-          FROM fornecedores
-          WHERE nome = ?
-          LIMIT 1
-        `,
-        [provider.nome]
-      );
+      const supplierRow = await this.findProviderSupplier(connection, provider);
 
-      if (rows.length > 0) {
+      if (supplierRow) {
         providers.push({
-          ...this.buildProviderSnapshot(provider),
-          id: rows[0].id
+          ...this.buildProviderSnapshot(provider, supplierRow),
+          id: supplierRow.id
         });
         continue;
       }
@@ -162,7 +202,7 @@ class TerceirizacaoRemessaModel {
     const values = [];
 
     if (filters.empresa) {
-      conditions.push('r.nome_empresa LIKE ?');
+      conditions.push('COALESCE(NULLIF(f.nome, \'\'), r.nome_empresa) LIKE ?');
       values.push(`%${filters.empresa}%`);
     }
 
@@ -181,7 +221,7 @@ class TerceirizacaoRemessaModel {
         SELECT
           r.id,
           r.id_fornecedor,
-          r.nome_empresa,
+          COALESCE(NULLIF(f.nome, ''), r.nome_empresa) AS nome_empresa,
           r.status,
           r.numero_nf,
           r.data_nf,
@@ -202,6 +242,7 @@ class TerceirizacaoRemessaModel {
         GROUP BY
           r.id,
           r.id_fornecedor,
+          f.nome,
           r.nome_empresa,
           r.status,
           r.numero_nf,
@@ -226,7 +267,7 @@ class TerceirizacaoRemessaModel {
         SELECT
           r.id,
           r.id_fornecedor,
-          r.nome_empresa,
+          COALESCE(NULLIF(f.nome, ''), r.nome_empresa) AS nome_empresa,
           r.status,
           r.numero_nf,
           r.data_nf,

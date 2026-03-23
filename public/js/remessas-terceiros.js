@@ -129,10 +129,10 @@ function renderizarRemessas() {
   }
 
   refs.tabela.innerHTML = remessasCache.map((remessa) => `
-    <tr>
+    <tr class="${remessa.numero_nf ? '' : 'table-row-attention'}">
       <td class="table-description">${escapeHtml(remessa.nome_empresa)}</td>
       <td>${renderStatusBadge(remessa.status)}</td>
-      <td>${escapeHtml(remessa.numero_nf || 'Sem NF')}</td>
+      <td>${renderNfCell(remessa)}</td>
       <td>${formatarData(remessa.data_envio)}</td>
       <td class="table-quantity">${formatInteger(remessa.total_itens)}</td>
       <td class="table-quantity">${formatInteger(remessa.quantidade_enviada_total)}</td>
@@ -149,6 +149,14 @@ function renderizarRemessas() {
       </td>
     </tr>
   `).join('');
+}
+
+function renderNfCell(remessa) {
+  if (!remessa.numero_nf) {
+    return '<span class="status-chip is-warning">Sem NF</span>';
+  }
+
+  return escapeHtml(remessa.numero_nf);
 }
 
 function atualizarIndicadores() {
