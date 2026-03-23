@@ -260,6 +260,151 @@ class SubmontagemModel {
     return rows[0] || null;
   }
 
+  static async simulateAcrossStocks(id, quantidadeDesejada = 1) {
+    const submontagem = await this.findById(id);
+    if (!submontagem) {
+      return null;
+    }
+
+    const componentes = await EstruturaSubmontagemModel.findBySubmontagemId(id);
+    const quantidadePlanejada = Math.max(1, Number.parseInt(quantidadeDesejada, 10) || 1);
+
+    const [stocks] = await pool.query(
+      `
+        SELECT
+          id,
+          nome
+        FROM estoques
+        WHERE ativo = 1
+        ORDER BY
+          CASE
+            WHEN nome = 'Almoxarifado' THEN 1
+            WHEN nome = 'Montagem' THEN 2
+            WHEN nome = 'ExpediÃ§Ã£o' THEN 3
+            ELSE 99
+          END,
+          nome ASC
+      `
+    );
+
+    const [submontagemReadyRows] = await pool.query(
+      `
+        SELECT
+          s.id_estoque,
+          e.nome AS estoque_nome,
+          s.quantidade
+        FROM estoque_saldos s
+        INNER JOIN estoques e ON e.id = s.id_estoque
+        WHERE s.id_peca = ? AND s.quantidade > 0
+        ORDER BY e.nome ASC
+      `,
+      [id]
+    );
+
+    if (componentes.length === 0) {
+      return {
+        submontagem,
+        quantidade_desejada: quantidadePlanejada,
+        capacidade_total: 0,
+        pode_montar_quantidade_desejada: false,
+        saldo_pronto_total: submontagemReadyRows.reduce((sum, row) => sum + Number(row.quantidade || 0), 0),
+        saldos_prontos: submontagemReadyRows,
+        componente_limitante: null,
+        componentes: [],
+        estoques: stocks
+      };
+    }
+
+    const itemIds = componentes.map((item) => item.id_item_componente);
+    const [saldoRows] = await pool.query(
+      `
+        SELECT
+          s.id_peca,
+          s.id_estoque,
+          s.quantidade,
+          e.nome AS estoque_nome
+        FROM estoque_saldos s
+        INNER JOIN estoques e ON e.id = s.id_estoque
+        WHERE s.id_peca IN (?) AND e.ativo = 1
+      `,
+      [itemIds]
+    );
+
+    const saldosPorItem = new Map();
+
+    saldoRows.forEach((saldo) => {
+      const itemMap = saldosPorItem.get(saldo.id_peca) || new Map();
+      itemMap.set(Number(saldo.id_estoque), {
+        id_estoque: Number(saldo.id_estoque),
+        estoque_nome: saldo.estoque_nome,
+        quantidade: Number(saldo.quantidade || 0)
+      });
+      saldosPorItem.set(saldo.id_peca, itemMap);
+    });
+
+    const componentesSimulados = componentes.map((componente) => {
+      const saldosItem = saldosPorItem.get(componente.id_item_componente) || new Map();
+      const saldosPorEstoque = stocks.map((stock) => {
+        const saldo = saldosItem.get(Number(stock.id));
+        return {
+          id_estoque: Number(stock.id),
+          estoque_nome: stock.nome,
+          quantidade: Number(saldo ? saldo.quantidade : 0)
+        };
+      });
+
+      const totalDisponivel = saldosPorEstoque.reduce((sum, stock) => sum + Number(stock.quantidade || 0), 0);
+      const capacidadeTotal = Number(componente.quantidade) > 0
+        ? Math.floor(totalDisponivel / Number(componente.quantidade))
+        : 0;
+      const quantidadeNecessaria = Number(componente.quantidade) * quantidadePlanejada;
+      const quantidadeFaltante = Math.max(0, quantidadeNecessaria - totalDisponivel);
+
+      return {
+        id_item_componente: componente.id_item_componente,
+        codigo: componente.codigo_componente,
+        descricao: componente.descricao_componente,
+        tipo: componente.tipo_componente,
+        massa_kg: Number(componente.massa_kg || 0),
+        quantidade_estrutura: Number(componente.quantidade || 0),
+        quantidade_necessaria: quantidadeNecessaria,
+        total_disponivel: totalDisponivel,
+        quantidade_faltante: quantidadeFaltante,
+        capacidade_total: capacidadeTotal,
+        pode_atender_quantidade_desejada: quantidadeFaltante <= 0,
+        saldos_por_estoque: saldosPorEstoque
+      };
+    });
+
+    const componenteLimitante = [...componentesSimulados].sort((a, b) => {
+      if (a.capacidade_total !== b.capacidade_total) {
+        return a.capacidade_total - b.capacidade_total;
+      }
+
+      return String(a.codigo).localeCompare(String(b.codigo));
+    })[0] || null;
+
+    return {
+      submontagem,
+      quantidade_desejada: quantidadePlanejada,
+      capacidade_total: componenteLimitante ? componenteLimitante.capacidade_total : 0,
+      pode_montar_quantidade_desejada: componentesSimulados.every((item) => item.pode_atender_quantidade_desejada),
+      saldo_pronto_total: submontagemReadyRows.reduce((sum, row) => sum + Number(row.quantidade || 0), 0),
+      saldos_prontos: submontagemReadyRows,
+      componente_limitante: componenteLimitante
+        ? {
+            codigo: componenteLimitante.codigo,
+            descricao: componenteLimitante.descricao,
+            capacidade_total: componenteLimitante.capacidade_total,
+            total_disponivel: componenteLimitante.total_disponivel,
+            quantidade_estrutura: componenteLimitante.quantidade_estrutura
+          }
+        : null,
+      componentes: componentesSimulados,
+      estoques: stocks
+    };
+  }
+
   // Insere uma nova submontagem na mesma tabela de pecas.
   static async create(submontagemData, componentes = []) {
     const connection = await pool.getConnection();

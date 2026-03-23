@@ -13,6 +13,8 @@ const estoqueMateriaPrimaRoutes = require('./src/routes/estoqueMateriaPrimaRoute
 const producaoRoutes = require('./src/routes/producaoRoutes');
 const terceirizacaoRemessaRoutes = require('./src/routes/terceirizacaoRemessaRoutes');
 const tratamentoExternoRoutes = require('./src/routes/tratamentoExternoRoutes');
+const solicitacaoEstoqueRoutes = require('./src/routes/solicitacaoEstoqueRoutes');
+const painelRoutes = require('./src/routes/painelRoutes');
 const { testConnection } = require('./database/connection');
 
 const app = express();
@@ -30,6 +32,18 @@ app.get('/', (req, res) => {
 
 app.get('/pagina-pecas', (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'pecas.html'));
+});
+
+app.get('/pagina-dashboard', (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'dashboard.html'));
+});
+
+app.get('/pagina-relatorios', (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'relatorios.html'));
+});
+
+app.get('/pagina-simulacao-montagem', (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'simulacao-montagem.html'));
 });
 
 app.get('/pagina-submontagens', (req, res) => {
@@ -80,6 +94,8 @@ app.use('/api', estoqueMateriaPrimaRoutes);
 app.use('/api', producaoRoutes);
 app.use('/api', terceirizacaoRemessaRoutes);
 app.use('/api', tratamentoExternoRoutes);
+app.use('/api', solicitacaoEstoqueRoutes);
+app.use('/api', painelRoutes);
 
 // Resposta padrao para qualquer rota nao mapeada.
 app.use((req, res) => {

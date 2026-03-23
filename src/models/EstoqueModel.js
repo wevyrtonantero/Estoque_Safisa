@@ -48,10 +48,18 @@ class EstoqueModel {
           p.descricao,
           COALESCE(p.tipo, '-') AS tipo,
           p.classificacao,
+          p.estoque_minimo,
+          p.estoque_seguranca,
+          p.consumo_mensal,
           p.id_maquina,
-          COALESCE(m.nome, '-') AS maquina_nome
+          COALESCE(m.nome, '-') AS maquina_nome,
+          COALESCE(sa.quantidade, 0) AS saldo_almoxarifado
         FROM pecas p
         LEFT JOIN maquinas m ON m.id = p.id_maquina
+        LEFT JOIN estoque_saldos sa ON sa.id_peca = p.id
+          AND sa.id_estoque = (
+            SELECT id FROM estoques WHERE nome = 'Almoxarifado' LIMIT 1
+          )
         WHERE p.classificacao IN ('ITEM', 'SUBMONTAGEM')
         ORDER BY p.codigo ASC
       `
@@ -133,6 +141,9 @@ class EstoqueModel {
           p.descricao,
           COALESCE(p.tipo, '-') AS tipo,
           p.classificacao,
+          p.estoque_minimo,
+          p.estoque_seguranca,
+          p.consumo_mensal,
           p.id_maquina,
           COALESCE(m.nome, '-') AS maquina_nome
         FROM estoque_saldos s
@@ -164,6 +175,9 @@ class EstoqueModel {
           p.descricao,
           COALESCE(p.tipo, '-') AS tipo,
           p.classificacao,
+          p.estoque_minimo,
+          p.estoque_seguranca,
+          p.consumo_mensal,
           p.id_maquina,
           COALESCE(m.nome, '-') AS maquina_nome
         FROM estoque_saldos s

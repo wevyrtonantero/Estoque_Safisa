@@ -12,6 +12,9 @@ router.get('/submontagens', SubmontagemController.getAll);
 // Rota para buscar uma submontagem por ID.
 router.get('/submontagens/:id', SubmontagemController.getById);
 
+// Rota para simular montagem da submontagem em todos os estoques.
+router.get('/submontagens/:id/simulacao', SubmontagemController.simulate);
+
 // Rota para cadastrar submontagens.
 router.post('/submontagens', SubmontagemController.create);
 

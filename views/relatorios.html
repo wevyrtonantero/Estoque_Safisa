@@ -1,0 +1,141 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SAFISA | Solicitacoes de Pecas</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <main class="workspace">
+    <header class="topbar">
+      <div class="topbar-copy">
+        <p class="page-kicker">Solicitacoes SAFISA</p>
+        <h1 class="page-title">Solicitacoes de Pecas</h1>
+        <p class="page-subtitle">Escolha o estoque de destino, digite a peca e solicite ao Almoxarifado.</p>
+      </div>
+
+      <div class="topbar-actions">
+        <a class="btn btn-neutral" href="/pagina-dashboard">Almoxarifado</a>
+      </div>
+    </header>
+
+    <div id="relatorios-mensagem" class="message hidden"></div>
+
+    <section class="content-card">
+      <div class="card-top">
+        <div>
+          <span class="section-pill">Solicitacao</span>
+          <h2>Pedido ao Almoxarifado</h2>
+          <p>Selecione seu estoque, confira pacote e saldo do Almoxarifado e envie a solicitacao.</p>
+        </div>
+      </div>
+
+      <div id="solicitacao-mensagem" class="message hidden"></div>
+
+      <form id="solicitacao-form" class="form-grid">
+        <input type="hidden" id="solicitacao-item-id">
+
+        <div class="field span-4">
+          <label for="solicitacao-area">Meu estoque</label>
+          <select id="solicitacao-area" required>
+            <option value="">Selecione</option>
+          </select>
+        </div>
+
+        <div class="field span-8">
+          <label for="solicitacao-item-busca">Peca ou submontagem</label>
+          <div class="autocomplete">
+            <input id="solicitacao-item-busca" type="text" placeholder="Digite codigo ou descricao">
+            <div id="solicitacao-item-sugestoes" class="autocomplete-panel hidden"></div>
+          </div>
+        </div>
+
+        <div id="solicitacao-item-resumo" class="span-12 selected-tags empty">
+          Digite para ver a quantidade por pacote e o saldo atual no Almoxarifado.
+        </div>
+
+        <div class="field span-3">
+          <label for="solicitacao-quantidade">Quantidade</label>
+          <input id="solicitacao-quantidade" type="number" min="1" step="1" value="1" required>
+        </div>
+
+        <div class="field span-9">
+          <label for="solicitacao-observacao">Observacao</label>
+          <input id="solicitacao-observacao" type="text" maxlength="255" placeholder="Opcional">
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button class="btn btn-primary" type="submit">Enviar solicitacao</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="content-card">
+      <div class="card-top">
+        <div>
+          <span class="section-pill">Historico</span>
+          <h2>Solicitacoes registradas</h2>
+          <p id="relatorios-total">0 registro(s) encontrado(s)</p>
+        </div>
+      </div>
+
+      <form id="relatorios-filtro-form" class="toolbar-form">
+        <div class="field">
+          <label for="filtro-relatorios-area">Estoque</label>
+          <select id="filtro-relatorios-area">
+            <option value="">Todos</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="filtro-relatorios-q">Busca</label>
+          <input id="filtro-relatorios-q" type="text" placeholder="Codigo, descricao ou observacao">
+        </div>
+
+        <div class="field">
+          <label for="filtro-relatorios-status">Status</label>
+          <select id="filtro-relatorios-status">
+            <option value="">Todos</option>
+            <option value="PENDENTE">PENDENTE</option>
+            <option value="EM_SEPARACAO">EM_SEPARACAO</option>
+            <option value="ATENDIDA_PARCIAL">ATENDIDA_PARCIAL</option>
+            <option value="ATENDIDA">ATENDIDA</option>
+            <option value="CANCELADA">CANCELADA</option>
+          </select>
+        </div>
+
+        <button id="btn-relatorios-limpar" class="btn btn-neutral" type="button">Limpar</button>
+      </form>
+
+      <div class="subtle-divider"></div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Estoque</th>
+              <th>Codigo</th>
+              <th>Descricao</th>
+              <th>Qtd pacote</th>
+              <th>Solicitada</th>
+              <th>Pendente</th>
+              <th>Saldo Almox</th>
+              <th>Status</th>
+              <th>Data</th>
+            </tr>
+          </thead>
+          <tbody id="relatorios-tbody">
+            <tr>
+              <td colspan="9" class="empty-state">Carregando solicitacoes...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="/js/relatorios.js"></script>
+</body>
+</html>
+

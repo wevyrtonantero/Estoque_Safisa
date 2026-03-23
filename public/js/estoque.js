@@ -32,6 +32,16 @@ function isRegistroExpedicao(registro) {
   return String(registro.estoque_nome || '') === expedicaoNomeCorreto;
 }
 
+function isRegistroAlmoxarifado(registro) {
+  return String(registro.estoque_nome || '').toLowerCase().includes('almox');
+}
+
+function obterLimiteAlerta(registro) {
+  const estoqueSeguranca = Number(registro.estoque_seguranca || 0);
+  const estoqueMinimo = Number(registro.estoque_minimo || 0);
+  return estoqueSeguranca > 0 ? estoqueSeguranca : estoqueMinimo;
+}
+
 const filtroForm = document.getElementById('estoque-filtro-form');
 const estoqueMensagemBox = document.getElementById('estoque-mensagem');
 const totalSaldosBox = document.getElementById('total-saldos');
@@ -1063,7 +1073,7 @@ function renderizarTabelaSaldos(saldos) {
   totalSaldosBox.textContent = `${saldos.length} registro(s) encontrado(s)`;
 
   if (saldos.length === 0) {
-    saldosTbody.innerHTML = '<tr><td colspan="8" class="empty-state">Nenhum saldo encontrado para os filtros informados.</td></tr>';
+    saldosTbody.innerHTML = '<tr><td colspan="10" class="empty-state">Nenhum saldo encontrado para os filtros informados.</td></tr>';
     return;
   }
 
@@ -1075,7 +1085,9 @@ function renderizarTabelaSaldos(saldos) {
       <td>${escapeHtml(saldo.tipo)}</td>
       <td>${escapeHtml(saldo.classificacao)}</td>
       <td>${escapeHtml(saldo.maquina_nome || '-')}</td>
-      <td class="table-quantity">${formatarQuantidade(saldo.quantidade)}</td>
+      <td class="table-quantity">${renderizarQuantidadeEstoque(saldo)}</td>
+      <td>${renderizarAlertaEstoque(saldo)}</td>
+      <td>${escapeHtml(renderizarCoberturaConsumo(saldo))}</td>
       <td class="table-actions-cell">
         <details class="row-menu">
           <summary class="row-menu-trigger" aria-label="Abrir acoes">...</summary>
@@ -1089,6 +1101,66 @@ function renderizarTabelaSaldos(saldos) {
       </td>
     </tr>
   `).join('');
+}
+
+function renderizarAlertaEstoque(saldo) {
+  if (!isRegistroAlmoxarifado(saldo)) {
+    return '-';
+  }
+
+  const limite = obterLimiteAlerta(saldo);
+  const quantidadeAtual = Number(saldo.quantidade || 0);
+
+  if (limite <= 0) {
+    return '-';
+  }
+
+  if (quantidadeAtual < limite) {
+    return '<span class="status-chip is-danger">Abaixo do limite</span>';
+  }
+
+  if (quantidadeAtual === limite) {
+    return '<span class="status-chip is-warning">No limite</span>';
+  }
+
+  return '-';
+}
+
+function renderizarQuantidadeEstoque(saldo) {
+  const quantidade = formatarQuantidade(saldo.quantidade);
+  if (!isRegistroAlmoxarifado(saldo)) {
+    return quantidade;
+  }
+
+  const limite = obterLimiteAlerta(saldo);
+  const quantidadeAtual = Number(saldo.quantidade || 0);
+
+  if (limite > 0 && quantidadeAtual < limite) {
+    return `<span class="status-chip is-danger">${escapeHtml(quantidade)}</span>`;
+  }
+
+  if (limite > 0 && quantidadeAtual === limite) {
+    return `<span class="status-chip is-warning">${escapeHtml(quantidade)}</span>`;
+  }
+
+  return quantidade;
+}
+
+function renderizarCoberturaConsumo(saldo) {
+  if (!isRegistroAlmoxarifado(saldo)) {
+    return '-';
+  }
+
+  const consumoMensal = Number(saldo.consumo_mensal || 0);
+  if (!Number.isFinite(consumoMensal) || consumoMensal <= 0) {
+    return '-';
+  }
+
+  const dias = Math.floor((Number(saldo.quantidade || 0) / consumoMensal) * 30);
+  const dataFinal = new Date();
+  dataFinal.setDate(dataFinal.getDate() + dias);
+
+  return `${dias} dia(s) | ate ${dataFinal.toLocaleDateString('pt-BR')}`;
 }
 
 function renderizarHistorico(movimentacoes) {

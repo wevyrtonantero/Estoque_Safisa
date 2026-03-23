@@ -1,0 +1,114 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SAFISA | Simulacao de Montagem</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <main class="workspace">
+    <header class="topbar">
+      <div class="topbar-copy">
+        <p class="page-kicker">Simulacao SAFISA</p>
+        <h1 class="page-title">Simulacao de Montagem</h1>
+        <p class="page-subtitle">Veja se da para montar uma submontagem, quantas e onde estao as pecas.</p>
+      </div>
+
+      <div class="topbar-actions">
+        <a class="btn btn-neutral" href="/pagina-dashboard">Almoxarifado</a>
+      </div>
+    </header>
+
+    <section class="content-card">
+      <div class="card-top">
+        <div>
+          <span class="section-pill">Consulta</span>
+          <h2>Escolha a submontagem</h2>
+          <p>Considere Almoxarifado, Montagem e Expedicao ao mesmo tempo.</p>
+        </div>
+      </div>
+
+      <div id="simulacao-mensagem" class="message hidden"></div>
+
+      <form id="simulacao-form" class="form-grid">
+        <input type="hidden" id="simulacao-submontagem-id">
+
+        <div class="field span-8">
+          <label for="simulacao-submontagem-busca">Submontagem</label>
+          <div class="autocomplete">
+            <input id="simulacao-submontagem-busca" type="text" placeholder="Digite codigo ou descricao da submontagem">
+            <div id="simulacao-submontagem-sugestoes" class="autocomplete-panel hidden"></div>
+          </div>
+        </div>
+
+        <div class="field span-4">
+          <label for="simulacao-quantidade">Quantidade desejada</label>
+          <input id="simulacao-quantidade" type="number" min="1" step="1" value="1">
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button class="btn btn-primary" type="submit">Simular</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="summary-row">
+      <article class="summary-card">
+        <span>Saldo pronto</span>
+        <strong id="simulacao-card-pronto">0</strong>
+      </article>
+
+      <article class="summary-card">
+        <span>Capacidade total</span>
+        <strong id="simulacao-card-capacidade">0</strong>
+      </article>
+
+      <article class="summary-card">
+        <span>Consegue montar</span>
+        <strong id="simulacao-card-status">Nao</strong>
+      </article>
+    </section>
+
+    <section class="content-card">
+      <div class="card-top">
+        <div>
+          <span class="section-pill">Resultado</span>
+          <h2 id="simulacao-titulo">Nenhuma submontagem simulada</h2>
+          <p id="simulacao-subtitulo">Selecione a submontagem para ver a capacidade consolidada.</p>
+        </div>
+      </div>
+
+      <div id="simulacao-resumo" class="selected-tags empty">A simulacao vai mostrar o limitante e onde cada componente esta.</div>
+
+      <div class="subtle-divider"></div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Codigo</th>
+              <th>Descricao</th>
+              <th>Estrutura</th>
+              <th>Necessaria</th>
+              <th>Almox</th>
+              <th>Montagem</th>
+              <th>Expedicao</th>
+              <th>Total</th>
+              <th>Capacidade</th>
+            </tr>
+          </thead>
+          <tbody id="simulacao-tbody">
+            <tr>
+              <td colspan="9" class="empty-state">Nenhum resultado para exibir.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="/js/simulacao-montagem.js"></script>
+</body>
+</html>
+

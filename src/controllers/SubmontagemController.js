@@ -183,6 +183,28 @@ const SubmontagemController = {
     }
   },
 
+  async simulate(req, res) {
+    try {
+      const quantidade = req.query.quantidade
+        ? Number.parseInt(req.query.quantidade, 10)
+        : 1;
+
+      const result = await SubmontagemModel.simulateAcrossStocks(
+        req.params.id,
+        Number.isInteger(quantidade) && quantidade > 0 ? quantidade : 1
+      );
+
+      if (!result) {
+        return res.status(404).json({ message: 'Submontagem nao encontrada.' });
+      }
+
+      return res.status(200).json(result);
+    } catch (error) {
+      console.error('Erro ao simular montagem da submontagem:', error);
+      return res.status(500).json({ message: 'Erro ao simular a montagem da submontagem.' });
+    }
+  },
+
   // Rota para cadastrar submontagens.
   async create(req, res) {
     try {
