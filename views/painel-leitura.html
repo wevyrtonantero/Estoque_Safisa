@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SAFISA | Painel de Leitura</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <main class="workspace">
+    <header class="topbar">
+      <div class="topbar-copy">
+        <p class="page-kicker" id="painel-kicker">Leitura</p>
+        <h1 class="page-title" id="painel-titulo">Painel</h1>
+        <p class="page-subtitle" id="painel-subtitulo">Resumo executivo e operacional em modo somente leitura.</p>
+      </div>
+
+      <div class="topbar-actions">
+        <a class="btn btn-neutral" href="/pagina-acesso">Portal de Areas</a>
+        <a class="btn btn-secondary" href="/pagina-administracao">Administracao</a>
+      </div>
+    </header>
+
+    <section class="summary-row">
+      <article class="summary-card">
+        <span>Registros em Estoque</span>
+        <strong id="painel-card-estoque">0</strong>
+      </article>
+
+      <article class="summary-card">
+        <span>Remessas sem NF</span>
+        <strong id="painel-card-sem-nf">0</strong>
+      </article>
+
+      <article class="summary-card">
+        <span>Refugo Total</span>
+        <strong id="painel-card-refugo">0</strong>
+      </article>
+    </section>
+
+    <div id="painel-mensagem" class="message hidden"></div>
+
+    <section class="content-card">
+      <div class="card-top">
+        <div>
+          <span class="section-pill" id="painel-section-pill">Resumo</span>
+          <h2>Indicadores Gerais</h2>
+          <p>Visao consolidada do estoque, producao, terceirizacao e solicitacoes internas.</p>
+        </div>
+      </div>
+
+      <div class="helper-grid" id="painel-indicadores-grid"></div>
+    </section>
+
+    <section class="content-card">
+      <div class="card-top">
+        <div>
+          <span class="section-pill">Estoque</span>
+          <h2>Distribuicao por Deposito</h2>
+          <p>Quanto existe hoje em Almoxarifado, Montagem e Expedicao.</p>
+        </div>
+      </div>
+
+      <div id="painel-estoque-deposito" class="bar-list"></div>
+    </section>
+
+    <section class="content-card">
+      <div class="card-top">
+        <div>
+          <span class="section-pill">Estoque</span>
+          <h2 id="painel-ranking-titulo">Ranking de Estoque</h2>
+          <p id="painel-ranking-subtitulo">Itens com mais e menos quantidade cadastrada.</p>
+        </div>
+      </div>
+
+      <div class="dual-panel-grid">
+        <div>
+          <h3 class="panel-title">Maiores Saldos</h3>
+          <div id="painel-maiores" class="bar-list"></div>
+        </div>
+
+        <div>
+          <h3 class="panel-title">Menores Saldos</h3>
+          <div id="painel-menores" class="bar-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="content-card">
+      <div class="card-top">
+        <div>
+          <span class="section-pill">Operacao</span>
+          <h2>Relatorios Consolidados</h2>
+          <p>Saidas, producao por maquina e status do tratamento externo.</p>
+        </div>
+      </div>
+
+      <div class="dual-panel-grid">
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Peca</th>
+                <th>Saida</th>
+              </tr>
+            </thead>
+            <tbody id="painel-saidas-body">
+              <tr><td colspan="2" class="empty-state">Carregando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Maquina</th>
+                <th>Produzido</th>
+                <th>Refugo</th>
+              </tr>
+            </thead>
+            <tbody id="painel-maquinas-body">
+              <tr><td colspan="3" class="empty-state">Carregando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="subtle-divider"></div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Status Terceirizacao</th>
+              <th>Itens</th>
+              <th>Qtd Pendente</th>
+            </tr>
+          </thead>
+          <tbody id="painel-tratamento-body">
+            <tr><td colspan="3" class="empty-state">Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="/js/painel-leitura.js"></script>
+</body>
+</html>

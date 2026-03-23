@@ -13,6 +13,8 @@ const estoqueMateriaPrimaRoutes = require('./src/routes/estoqueMateriaPrimaRoute
 const producaoRoutes = require('./src/routes/producaoRoutes');
 const terceirizacaoRemessaRoutes = require('./src/routes/terceirizacaoRemessaRoutes');
 const tratamentoExternoRoutes = require('./src/routes/tratamentoExternoRoutes');
+const solicitacaoEstoqueRoutes = require('./src/routes/solicitacaoEstoqueRoutes');
+const painelRoutes = require('./src/routes/painelRoutes');
 const { testConnection } = require('./database/connection');
 
 const app = express();
@@ -25,7 +27,15 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Rotas HTML das paginas administrativas.
 app.get('/', (req, res) => {
-  res.redirect('/pagina-submontagens');
+  res.redirect('/pagina-acesso');
+});
+
+app.get('/pagina-acesso', (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'acesso.html'));
+});
+
+app.get('/pagina-administracao', (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'administracao.html'));
 });
 
 app.get('/pagina-pecas', (req, res) => {
@@ -68,6 +78,26 @@ app.get('/pagina-remessas-terceiros', (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'remessas-terceiros.html'));
 });
 
+app.get('/pagina-expedicao', (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'operacao-area.html'));
+});
+
+app.get('/pagina-montagem', (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'operacao-area.html'));
+});
+
+app.get('/pagina-almoxarifado', (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'operacao-area.html'));
+});
+
+app.get('/pagina-diretoria', (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'painel-leitura.html'));
+});
+
+app.get('/pagina-relatorios', (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'painel-leitura.html'));
+});
+
 // Rotas REST dos modulos administrativos.
 app.use('/api', pecaRoutes);
 app.use('/api', submontagemRoutes);
@@ -80,6 +110,8 @@ app.use('/api', estoqueMateriaPrimaRoutes);
 app.use('/api', producaoRoutes);
 app.use('/api', terceirizacaoRemessaRoutes);
 app.use('/api', tratamentoExternoRoutes);
+app.use('/api', solicitacaoEstoqueRoutes);
+app.use('/api', painelRoutes);
 
 // Resposta padrao para qualquer rota nao mapeada.
 app.use((req, res) => {
