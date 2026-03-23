@@ -237,7 +237,8 @@ function abrirModalEncaminhamento(item) {
   resetEncaminhamentoModal();
   refs.encaminhamentoIdPeca.value = String(item.id_peca);
   refs.encaminhamentoQuantidade.value = '1';
-  refs.encaminhamentoResumo.className = 'selected-tags';
+  refs.encaminhamentoResumo.classList.remove('empty');
+  refs.encaminhamentoResumo.classList.add('selected-tags');
   refs.encaminhamentoResumo.innerHTML = `
     <span class="selected-tag">${escapeHtml(`${item.codigo} - ${item.descricao}`)}</span>
     <span class="selected-tag">${escapeHtml(`Saldo: ${formatInteger(item.quantidade)}`)}</span>
@@ -255,7 +256,7 @@ function resetEncaminhamentoModal() {
   document.getElementById('encaminhamento-form').reset();
   refs.encaminhamentoIdPeca.value = '';
   refs.encaminhamentoTipoTratamento.value = '';
-  refs.encaminhamentoResumo.className = 'selected-tags empty';
+  refs.encaminhamentoResumo.classList.add('selected-tags', 'empty');
   refs.encaminhamentoResumo.textContent = 'Selecione uma peca na tabela para continuar.';
   refs.encaminhamentoMensagem.className = 'message hidden';
   refs.encaminhamentoMensagem.textContent = '';
@@ -337,7 +338,8 @@ function abrirModalEstoqueDireto(item) {
   refs.estoqueDiretoIdPeca.value = String(item.id_peca);
   refs.estoqueDiretoQuantidade.value = '1';
   refs.estoqueDiretoQuantidade.max = String(item.quantidade);
-  refs.estoqueDiretoResumo.className = 'selected-tags';
+  refs.estoqueDiretoResumo.classList.remove('empty');
+  refs.estoqueDiretoResumo.classList.add('selected-tags');
   refs.estoqueDiretoResumo.innerHTML = `
     <span class="selected-tag">${escapeHtml(`${item.codigo} - ${item.descricao}`)}</span>
     <span class="selected-tag">${escapeHtml(`Saldo: ${formatInteger(item.quantidade)}`)}</span>
@@ -353,7 +355,7 @@ function fecharModalEstoqueDireto() {
 function resetEstoqueDiretoModal() {
   document.getElementById('estoque-direto-form').reset();
   refs.estoqueDiretoIdPeca.value = '';
-  refs.estoqueDiretoResumo.className = 'selected-tags empty';
+  refs.estoqueDiretoResumo.classList.add('selected-tags', 'empty');
   refs.estoqueDiretoResumo.textContent = 'Selecione uma peca na tabela para continuar.';
   refs.estoqueDiretoMensagem.className = 'message hidden';
   refs.estoqueDiretoMensagem.textContent = '';

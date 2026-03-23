@@ -618,12 +618,13 @@ function handleFornecedorChipClick(event) {
 
 function renderizarFornecedoresSelecionados() {
   if (selectedFornecedorIds.length === 0) {
-    refs.fornecedoresLista.className = 'selected-tags empty';
+    refs.fornecedoresLista.classList.add('selected-tags', 'empty');
     refs.fornecedoresLista.innerHTML = '<span>Nenhum fornecedor selecionado.</span>';
     return;
   }
 
-  refs.fornecedoresLista.className = 'selected-tags';
+  refs.fornecedoresLista.classList.remove('empty');
+  refs.fornecedoresLista.classList.add('selected-tags');
   refs.fornecedoresLista.innerHTML = selectedFornecedorIds
     .map((fornecedorId) => fornecedoresCache.find((item) => Number(item.id) === fornecedorId))
     .filter(Boolean)

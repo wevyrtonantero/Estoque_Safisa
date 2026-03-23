@@ -143,7 +143,8 @@ function renderizarResultado(result) {
   refs.titulo.textContent = `${result.submontagem.codigo} - ${result.submontagem.descricao}`;
   refs.subtitulo.textContent = `Quantidade desejada: ${formatInteger(result.quantidade_desejada)} | Massa: ${formatDecimal(result.submontagem.massa_kg)} kg`;
 
-  refs.resumo.className = 'selected-tags';
+  refs.resumo.classList.remove('empty');
+  refs.resumo.classList.add('selected-tags');
   refs.resumo.innerHTML = `
     <span class="selected-tag">${escapeHtml(`Saldo pronto: ${formatInteger(result.saldo_pronto_total)}`)}</span>
     <span class="selected-tag">${escapeHtml(`Capacidade total: ${formatInteger(result.capacidade_total)}`)}</span>

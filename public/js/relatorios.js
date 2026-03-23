@@ -170,12 +170,13 @@ function handleSugestaoClick(event) {
 
 function renderizarResumoItem(item) {
   if (!item) {
-    refs.solicitacaoResumo.className = 'selected-tags empty';
+    refs.solicitacaoResumo.classList.add('selected-tags', 'empty');
     refs.solicitacaoResumo.textContent = 'Digite para ver a quantidade por pacote e o saldo atual no Almoxarifado.';
     return;
   }
 
-  refs.solicitacaoResumo.className = 'selected-tags';
+  refs.solicitacaoResumo.classList.remove('empty');
+  refs.solicitacaoResumo.classList.add('selected-tags');
   refs.solicitacaoResumo.innerHTML = `
     <span class="selected-tag">${escapeHtml(item.codigo)}</span>
     <span class="selected-tag">${escapeHtml(item.descricao)}</span>

@@ -212,12 +212,13 @@ function handleSugestaoClick(event) {
 
 function renderizarResumoItem(item) {
   if (!item) {
-    refs.itemResumo.className = 'selected-tags empty';
+    refs.itemResumo.classList.add('selected-tags', 'empty');
     refs.itemResumo.textContent = 'Selecione um item para ver a disponibilidade atual na Expedicao.';
     return;
   }
 
-  refs.itemResumo.className = 'selected-tags';
+  refs.itemResumo.classList.remove('empty');
+  refs.itemResumo.classList.add('selected-tags');
   refs.itemResumo.innerHTML = `
     <span class="selected-tag">${escapeHtml(item.codigo)}</span>
     <span class="selected-tag">${escapeHtml(item.descricao)}</span>

@@ -165,7 +165,8 @@ function abrirModalAtendimento(item) {
   refs.atendimentoQuantidade.value = '1';
   refs.atendimentoQuantidade.max = String(Math.max(1, Number(item.quantidade_pendente || 0)));
   refs.atendimentoObservacao.value = item.observacao || '';
-  refs.atendimentoResumo.className = 'selected-tags';
+  refs.atendimentoResumo.classList.remove('empty');
+  refs.atendimentoResumo.classList.add('selected-tags');
   refs.atendimentoResumo.innerHTML = `
     <span class="selected-tag">${escapeHtml(item.destino_nome)}</span>
     <span class="selected-tag">${escapeHtml(`${item.codigo} - ${item.descricao}`)}</span>
@@ -178,7 +179,7 @@ function abrirModalAtendimento(item) {
 
 function fecharModalAtendimento() {
   refs.atendimentoId.value = '';
-  refs.atendimentoResumo.className = 'selected-tags empty';
+  refs.atendimentoResumo.classList.add('selected-tags', 'empty');
   refs.atendimentoResumo.textContent = 'Selecione uma solicitacao para atender.';
   closeModal(refs.atendimentoModal);
 }

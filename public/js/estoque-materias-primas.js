@@ -216,7 +216,7 @@ function resetModalMovimentacao() {
   refs.modalTipo.value = 'ENTRADA';
   refs.modalMateriaPrimaId.value = '';
   refs.modalBusca.value = '';
-  refs.modalResumo.className = 'selected-tags empty';
+  refs.modalResumo.classList.add('selected-tags', 'empty');
   refs.modalResumo.textContent = 'Selecione uma materia-prima para continuar.';
   refs.modalMensagem.className = 'message hidden';
   refs.modalMensagem.textContent = '';
@@ -267,7 +267,8 @@ function selecionarMateriaPrimaPorId(id) {
   const saldoAtual = saldosCache.find((item) => Number(item.id_materia_prima) === Number(materiaPrima.id));
   refs.modalMateriaPrimaId.value = String(materiaPrima.id);
   refs.modalBusca.value = `${materiaPrima.codigo} - ${materiaPrima.nome}`;
-  refs.modalResumo.className = 'selected-tags';
+  refs.modalResumo.classList.remove('empty');
+  refs.modalResumo.classList.add('selected-tags');
   refs.modalResumo.innerHTML = `
     <span class="selected-tag">${escapeHtml(`Categoria: ${materiaPrima.categoria}`)}</span>
     <span class="selected-tag">${escapeHtml(`Referencia: ${formatarBitolaAutocomplete(materiaPrima)}`)}</span>

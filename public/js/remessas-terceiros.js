@@ -321,7 +321,8 @@ function handleItemActions(event) {
   refs.retornoQuantidade.value = '1';
   const pendente = Number(item.quantidade_enviada) - Number(item.quantidade_retorno);
   refs.retornoQuantidade.max = String(pendente);
-  refs.retornoResumo.className = 'selected-tags';
+  refs.retornoResumo.classList.remove('empty');
+  refs.retornoResumo.classList.add('selected-tags');
   refs.retornoResumo.innerHTML = `
     <span class="selected-tag">${escapeHtml(`${item.codigo} - ${item.descricao}`)}</span>
     <span class="selected-tag">${escapeHtml(`Pendente: ${formatInteger(pendente)}`)}</span>
@@ -332,7 +333,7 @@ function handleItemActions(event) {
 function fecharModalRetorno() {
   itemRetornoSelecionado = null;
   document.getElementById('remessa-retorno-form').reset();
-  refs.retornoResumo.className = 'selected-tags empty';
+  refs.retornoResumo.classList.add('selected-tags', 'empty');
   refs.retornoResumo.textContent = 'Selecione um item para registrar o retorno.';
   refs.retornoMensagem.className = 'message hidden';
   refs.retornoMensagem.textContent = '';
