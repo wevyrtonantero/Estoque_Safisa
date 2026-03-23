@@ -46,6 +46,14 @@ app.get('/pagina-simulacao-montagem', (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'simulacao-montagem.html'));
 });
 
+app.get('/pagina-montagem', (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'montagem.html'));
+});
+
+app.get('/pagina-expedicao', (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'expedicao.html'));
+});
+
 app.get('/pagina-submontagens', (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'submontagens.html'));
 });

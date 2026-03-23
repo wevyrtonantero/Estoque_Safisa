@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SAFISA | Montagem</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <main class="workspace">
+    <header class="topbar">
+      <div class="topbar-copy">
+        <p class="page-kicker">Setor SAFISA</p>
+        <h1 class="page-title">Montagem</h1>
+        <p class="page-subtitle">Acompanhe seu estoque, veja o status dos pedidos ao Almoxarifado e transfira pecas para a Expedicao.</p>
+      </div>
+
+      <div class="topbar-actions">
+        <a class="btn btn-neutral" href="/pagina-relatorios?area=montagem">Solicitar Pecas</a>
+        <a class="btn btn-secondary" href="/pagina-simulacao-montagem?origem=montagem">Simulacao de Montagem</a>
+        <a class="btn btn-secondary" href="/pagina-submontagens">Submontagens</a>
+      </div>
+    </header>
+
+    <section class="summary-row">
+      <article class="summary-card">
+        <span>Itens no estoque</span>
+        <strong id="montagem-card-itens">0</strong>
+      </article>
+
+      <article class="summary-card">
+        <span>Quantidade total</span>
+        <strong id="montagem-card-quantidade">0</strong>
+      </article>
+
+      <article class="summary-card">
+        <span>Pedidos em aberto</span>
+        <strong id="montagem-card-pedidos">0</strong>
+      </article>
+    </section>
+
+    <div id="montagem-mensagem" class="message hidden"></div>
+
+    <section class="content-card">
+      <div class="card-top">
+        <div>
+          <span class="section-pill">Transferencia</span>
+          <h2>Enviar para Expedicao</h2>
+          <p>Use apenas itens e submontagens que ja estao prontos no estoque da Montagem.</p>
+        </div>
+      </div>
+
+      <div id="montagem-transferencia-mensagem" class="message hidden"></div>
+
+      <form id="montagem-transferencia-form" class="form-grid">
+        <input type="hidden" id="montagem-item-id">
+
+        <div class="field span-8">
+          <label for="montagem-item-busca">Item da Montagem</label>
+          <div class="autocomplete">
+            <input id="montagem-item-busca" type="text" placeholder="Digite codigo ou descricao da peca">
+            <div id="montagem-item-sugestoes" class="autocomplete-panel hidden"></div>
+          </div>
+        </div>
+
+        <div class="field span-4">
+          <label for="montagem-quantidade">Quantidade</label>
+          <input id="montagem-quantidade" type="number" min="1" step="1" value="1" required>
+        </div>
+
+        <div id="montagem-item-resumo" class="span-12 selected-tags empty">
+          Selecione um item para ver o saldo disponivel na Montagem.
+        </div>
+
+        <div class="field span-12">
+          <label for="montagem-observacao">Observacao</label>
+          <input id="montagem-observacao" type="text" maxlength="255" placeholder="Opcional">
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button class="btn btn-primary" type="submit">Transferir para Expedicao</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="content-card">
+      <div class="card-top">
+        <div>
+          <span class="section-pill">Pedidos</span>
+          <h2>Status dos pedidos ao Almoxarifado</h2>
+          <p id="montagem-pedidos-total">0 registro(s) encontrado(s)</p>
+        </div>
+
+        <a class="btn btn-neutral" href="/pagina-relatorios?area=montagem">Novo pedido</a>
+      </div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Codigo</th>
+              <th>Descricao</th>
+              <th>Qtd pacote</th>
+              <th>Solicitada</th>
+              <th>Pendente</th>
+              <th>Status</th>
+              <th>Data</th>
+            </tr>
+          </thead>
+          <tbody id="montagem-pedidos-tbody">
+            <tr>
+              <td colspan="7" class="empty-state">Carregando pedidos...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="content-card">
+      <div class="card-top">
+        <div>
+          <span class="section-pill">Estoque</span>
+          <h2>Saldo atual da Montagem</h2>
+          <p id="montagem-estoque-total">0 registro(s) encontrado(s)</p>
+        </div>
+      </div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Codigo</th>
+              <th>Descricao</th>
+              <th>Tipo</th>
+              <th>Classificacao</th>
+              <th>Quantidade</th>
+            </tr>
+          </thead>
+          <tbody id="montagem-estoque-tbody">
+            <tr>
+              <td colspan="5" class="empty-state">Carregando estoque...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="/js/montagem.js"></script>
+</body>
+</html>

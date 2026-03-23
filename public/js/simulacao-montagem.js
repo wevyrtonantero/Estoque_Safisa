@@ -15,8 +15,11 @@ const refs = {
   tbody: document.getElementById('simulacao-tbody')
 };
 
+const origemInicial = normalizarBusca(new URLSearchParams(window.location.search).get('origem'));
+
 document.addEventListener('DOMContentLoaded', async () => {
   bindEvents();
+  configurarNavegacao();
   try {
     await carregarSubmontagens();
   } catch (error) {
@@ -37,6 +40,24 @@ function bindEvents() {
       esconderSugestoes();
     }
   });
+}
+
+function configurarNavegacao() {
+  const botaoVoltar = document.getElementById('simulacao-btn-voltar');
+  if (!botaoVoltar || !origemInicial) {
+    return;
+  }
+
+  if (origemInicial.includes('mont')) {
+    botaoVoltar.href = '/pagina-montagem';
+    botaoVoltar.textContent = 'Montagem';
+    return;
+  }
+
+  if (origemInicial.includes('exped')) {
+    botaoVoltar.href = '/pagina-expedicao';
+    botaoVoltar.textContent = 'Expedicao';
+  }
 }
 
 async function carregarSubmontagens() {

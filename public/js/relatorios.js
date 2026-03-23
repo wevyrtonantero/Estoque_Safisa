@@ -23,10 +23,13 @@ const refs = {
   solicitacaoObservacao: document.getElementById('solicitacao-observacao')
 };
 
+const areaInicial = normalizarBusca(new URLSearchParams(window.location.search).get('area'));
+
 document.addEventListener('DOMContentLoaded', async () => {
   bindEvents();
   try {
     await Promise.all([carregarEstoques(), carregarItens(), carregarSolicitacoes()]);
+    aplicarAreaInicial();
   } catch (error) {
     mostrarMensagem(error.message, 'error');
   }
@@ -240,6 +243,33 @@ function renderizarTabela() {
       <td>${formatDate(item.data_solicitacao)}</td>
     </tr>
   `).join('');
+}
+
+function aplicarAreaInicial() {
+  if (!areaInicial) {
+    return;
+  }
+
+  const stock = estoquesCache.find((entry) => {
+    const normalized = normalizarBusca(entry.nome);
+    return areaInicial.includes('mont') ? normalized.includes('mont') : normalized.includes('exped');
+  });
+
+  if (!stock) {
+    return;
+  }
+
+  refs.solicitacaoArea.value = String(stock.id);
+  document.getElementById('filtro-relatorios-area').value = String(stock.id);
+
+  const botaoVoltar = document.getElementById('relatorios-btn-voltar');
+  if (botaoVoltar) {
+    const isMontagem = areaInicial.includes('mont');
+    botaoVoltar.href = isMontagem ? '/pagina-montagem' : '/pagina-expedicao';
+    botaoVoltar.textContent = isMontagem ? 'Montagem' : 'Expedicao';
+  }
+
+  carregarSolicitacoes();
 }
 
 function buildAreaFromStockId(stockId) {

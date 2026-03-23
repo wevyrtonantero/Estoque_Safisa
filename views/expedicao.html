@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SAFISA | Expedicao</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <main class="workspace">
+    <header class="topbar">
+      <div class="topbar-copy">
+        <p class="page-kicker">Setor SAFISA</p>
+        <h1 class="page-title">Expedicao</h1>
+        <p class="page-subtitle">Acompanhe seu estoque, veja o status dos pedidos ao Almoxarifado e registre a saida de venda.</p>
+      </div>
+
+      <div class="topbar-actions">
+        <a class="btn btn-neutral" href="/pagina-relatorios?area=expedicao">Solicitar Pecas</a>
+        <a class="btn btn-secondary" href="/pagina-simulacao-montagem?origem=expedicao">Simulacao de Montagem</a>
+        <a class="btn btn-secondary" href="/pagina-estoque">Controle de Estoque</a>
+      </div>
+    </header>
+
+    <section class="summary-row">
+      <article class="summary-card">
+        <span>Itens no estoque</span>
+        <strong id="expedicao-card-itens">0</strong>
+      </article>
+
+      <article class="summary-card">
+        <span>Quantidade total</span>
+        <strong id="expedicao-card-quantidade">0</strong>
+      </article>
+
+      <article class="summary-card">
+        <span>Pedidos em aberto</span>
+        <strong id="expedicao-card-pedidos">0</strong>
+      </article>
+    </section>
+
+    <div id="expedicao-mensagem" class="message hidden"></div>
+
+    <section class="content-card">
+      <div class="card-top">
+        <div>
+          <span class="section-pill">Saida</span>
+          <h2>Baixa de venda</h2>
+          <p>Monte a lista de venda e baixe os itens direto da Expedicao.</p>
+        </div>
+      </div>
+
+      <div id="expedicao-saida-mensagem" class="message hidden"></div>
+
+      <form id="expedicao-saida-form" class="form-grid">
+        <input type="hidden" id="expedicao-item-id">
+
+        <div class="field span-8">
+          <label for="expedicao-item-busca">Item para venda</label>
+          <div class="autocomplete">
+            <input id="expedicao-item-busca" type="text" placeholder="Digite codigo ou descricao">
+            <div id="expedicao-item-sugestoes" class="autocomplete-panel hidden"></div>
+          </div>
+        </div>
+
+        <div class="field span-4">
+          <label for="expedicao-quantidade">Quantidade</label>
+          <input id="expedicao-quantidade" type="number" min="1" step="1" value="1" required>
+        </div>
+
+        <div id="expedicao-item-resumo" class="span-12 selected-tags empty">
+          Selecione um item para ver a disponibilidade atual na Expedicao.
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button id="expedicao-btn-adicionar" class="btn btn-primary" type="button">Adicionar a lista</button>
+          <button id="expedicao-btn-limpar-item" class="btn btn-neutral" type="button">Limpar item</button>
+        </div>
+
+        <div class="field span-12">
+          <label for="expedicao-observacao">Observacao geral da venda</label>
+          <input id="expedicao-observacao" type="text" maxlength="255" placeholder="Opcional">
+        </div>
+      </form>
+
+      <div class="subtle-divider"></div>
+
+      <div class="card-top">
+        <div>
+          <span class="section-pill">Lista</span>
+          <h2>Itens separados para baixa</h2>
+          <p id="expedicao-lista-total">0 item(ns) na lista</p>
+        </div>
+
+        <button id="expedicao-btn-baixar" class="btn btn-success" type="button">Baixar saida</button>
+      </div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Codigo</th>
+              <th>Descricao</th>
+              <th>Quantidade</th>
+              <th>Acoes</th>
+            </tr>
+          </thead>
+          <tbody id="expedicao-lista-tbody">
+            <tr>
+              <td colspan="4" class="empty-state">Nenhum item na lista.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="content-card">
+      <div class="card-top">
+        <div>
+          <span class="section-pill">Pedidos</span>
+          <h2>Status dos pedidos ao Almoxarifado</h2>
+          <p id="expedicao-pedidos-total">0 registro(s) encontrado(s)</p>
+        </div>
+
+        <a class="btn btn-neutral" href="/pagina-relatorios?area=expedicao">Novo pedido</a>
+      </div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Codigo</th>
+              <th>Descricao</th>
+              <th>Qtd pacote</th>
+              <th>Solicitada</th>
+              <th>Pendente</th>
+              <th>Status</th>
+              <th>Data</th>
+            </tr>
+          </thead>
+          <tbody id="expedicao-pedidos-tbody">
+            <tr>
+              <td colspan="7" class="empty-state">Carregando pedidos...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="content-card">
+      <div class="card-top">
+        <div>
+          <span class="section-pill">Historico</span>
+          <h2>Saidas registradas</h2>
+          <p id="expedicao-historico-total">0 registro(s) encontrado(s)</p>
+        </div>
+      </div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Codigo</th>
+              <th>Descricao</th>
+              <th>Quantidade</th>
+              <th>Observacao</th>
+            </tr>
+          </thead>
+          <tbody id="expedicao-historico-tbody">
+            <tr>
+              <td colspan="5" class="empty-state">Carregando historico...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="content-card">
+      <div class="card-top">
+        <div>
+          <span class="section-pill">Estoque</span>
+          <h2>Saldo atual da Expedicao</h2>
+          <p id="expedicao-estoque-total">0 registro(s) encontrado(s)</p>
+        </div>
+      </div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Codigo</th>
+              <th>Descricao</th>
+              <th>Tipo</th>
+              <th>Classificacao</th>
+              <th>Quantidade</th>
+            </tr>
+          </thead>
+          <tbody id="expedicao-estoque-tbody">
+            <tr>
+              <td colspan="5" class="empty-state">Carregando estoque...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="/js/expedicao.js"></script>
+</body>
+</html>
