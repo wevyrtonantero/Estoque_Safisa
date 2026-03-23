@@ -214,10 +214,6 @@ textarea {
   padding: 18px 0 28px;
 }
 
-.workspace-portal {
-  padding-top: 28px;
-}
-
 .topbar {
   display: flex;
   justify-content: space-between;
@@ -231,30 +227,6 @@ textarea {
     linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(245, 249, 253, 0.9)),
     linear-gradient(135deg, rgba(29, 92, 151, 0.1), rgba(239, 139, 29, 0.06));
   box-shadow: var(--shadow-md);
-}
-
-.topbar-hero {
-  align-items: stretch;
-}
-
-.hero-signature {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 8px;
-  min-width: 240px;
-  padding: 18px;
-  border-radius: 22px;
-  background: linear-gradient(135deg, rgba(18, 66, 118, 0.12), rgba(239, 139, 29, 0.1));
-}
-
-.hero-signature strong {
-  font-size: 1.1rem;
-  color: var(--primary-900);
-}
-
-.hero-signature span:last-child {
-  color: var(--text-soft);
 }
 
 .topbar-main {
@@ -329,69 +301,6 @@ textarea {
 
 .content-card.compact {
   padding: 18px;
-}
-
-.portal-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.portal-grid-admin {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.portal-card,
-.portal-link-card {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  min-height: 220px;
-  padding: 22px;
-  border: 1px solid rgba(217, 228, 239, 0.94);
-  border-radius: var(--radius-lg);
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: var(--shadow-md);
-}
-
-.portal-card h2 {
-  margin: 0;
-  font-size: 1.45rem;
-}
-
-.portal-card p,
-.portal-link-card span {
-  margin: 0;
-  color: var(--text-soft);
-  line-height: 1.55;
-}
-
-.portal-card .btn {
-  margin-top: auto;
-}
-
-.portal-card-admin {
-  background: linear-gradient(135deg, rgba(239, 139, 29, 0.12), rgba(255, 255, 255, 0.96));
-}
-
-.portal-card-readonly {
-  background: linear-gradient(135deg, rgba(18, 66, 118, 0.08), rgba(255, 255, 255, 0.96));
-}
-
-.portal-link-card {
-  min-height: 0;
-  transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition);
-}
-
-.portal-link-card:hover {
-  transform: translateY(-2px);
-  border-color: rgba(46, 116, 181, 0.38);
-  box-shadow: var(--shadow-lg);
-}
-
-.portal-link-card strong {
-  font-size: 1.02rem;
-  color: var(--primary-900);
 }
 
 .card-top {
@@ -555,67 +464,6 @@ textarea {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
-}
-
-.dual-panel-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.panel-title {
-  margin: 0 0 12px;
-  color: var(--primary-900);
-  font-size: 1rem;
-}
-
-.bar-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.bar-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(120px, 1fr) 88px;
-  gap: 12px;
-  align-items: center;
-  padding: 14px 16px;
-  border: 1px solid rgba(190, 208, 225, 0.72);
-  border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.9);
-}
-
-.bar-copy strong {
-  display: block;
-  color: var(--primary-900);
-}
-
-.bar-copy span {
-  display: block;
-  margin-top: 6px;
-  color: var(--text-soft);
-  font-size: 0.86rem;
-}
-
-.bar-track {
-  position: relative;
-  height: 12px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: rgba(18, 66, 118, 0.09);
-}
-
-.bar-fill {
-  height: 100%;
-  border-radius: 999px;
-  background: linear-gradient(135deg, var(--primary-700), var(--accent));
-}
-
-.bar-value {
-  text-align: right;
-  color: var(--primary-900);
-  font-weight: 800;
 }
 
 .helper-card {
@@ -1267,12 +1115,6 @@ tbody tr:hover {
     width: min(100%, calc(100% - 24px));
   }
 
-  .portal-grid,
-  .portal-grid-admin,
-  .dual-panel-grid {
-    grid-template-columns: 1fr;
-  }
-
   .toolbar-form {
     grid-template-columns: 1fr;
   }
@@ -1319,8 +1161,7 @@ tbody tr:hover {
   .topbar,
   .card-top,
   .modal-header,
-  .structure-highlight,
-  .topbar-hero {
+  .structure-highlight {
     flex-direction: column;
     align-items: flex-start;
   }
@@ -1339,10 +1180,6 @@ tbody tr:hover {
   }
 
   .inline-field {
-    grid-template-columns: 1fr;
-  }
-
-  .bar-row {
     grid-template-columns: 1fr;
   }
 
