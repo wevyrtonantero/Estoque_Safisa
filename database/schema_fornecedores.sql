@@ -13,9 +13,9 @@ DROP TABLE IF EXISTS fornecedores;
 CREATE TABLE fornecedores (
   id INT AUTO_INCREMENT PRIMARY KEY,
   nome VARCHAR(150) NOT NULL,
-  telefone VARCHAR(30) NULL,
+  telefone VARCHAR(120) NULL,
   contato VARCHAR(100) NULL,
-  email VARCHAR(150) NULL,
+  email VARCHAR(255) NULL,
   cep VARCHAR(20) NULL,
   endereco VARCHAR(200) NULL,
   cidade VARCHAR(100) NULL,
