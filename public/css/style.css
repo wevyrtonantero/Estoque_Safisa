@@ -358,6 +358,14 @@ textarea {
   text-transform: uppercase;
 }
 
+.summary-card small {
+  display: block;
+  margin-top: 6px;
+  color: var(--text-soft);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
 .content-card {
   margin-bottom: 18px;
   padding: 20px;

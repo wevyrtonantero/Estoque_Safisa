@@ -2,6 +2,8 @@ const producaoApiBaseUrl = '/api/producao';
 const solicitacoesProducaoApiBaseUrl = '/api/solicitacoes-producao';
 const maquinasApiBaseUrl = '/api/maquinas';
 const pecasApiBaseUrl = '/api/pecas?tipo=PRODUZIDA';
+const estoquesApiBaseUrl = '/api/estoques';
+const estoqueSaldosApiBaseUrl = '/api/estoque/saldos';
 const AUTO_REFRESH_MS = 15000;
 const ACTIVE_PRODUCTION_REQUEST_STATUSES = ['PENDENTE', 'EM_ANALISE', 'EM_PRODUCAO'];
 const CLOSED_PRODUCTION_REQUEST_STATUSES = ['CONCLUIDA', 'CANCELADA'];
@@ -10,6 +12,9 @@ let producoesCache = [];
 let solicitacoesProducaoCache = [];
 let maquinasCache = [];
 let pecasCache = [];
+let estoquesSetorCache = [];
+let almoxStockId = null;
+let estoqueConsultaDebounceTimer = null;
 let filtroDebounceTimer = null;
 let autoRefreshHandle = null;
 
@@ -22,11 +27,22 @@ const refs = {
   solicitacoesTotal: document.getElementById('total-solicitacoes-producao'),
   solicitacoesTbody: document.getElementById('solicitacoes-producao-tbody'),
   metricSolicitacoesPendentes: document.getElementById('metric-solicitacoes-pendentes'),
+  badgeSolicitacoes: document.getElementById('producao-badge-solicitacoes'),
+  metricRuptura: document.getElementById('metric-producao-ruptura'),
+  metricRupturaInfo: document.getElementById('metric-producao-ruptura-info'),
   filtroForm: document.getElementById('producao-filtro-form'),
+  estoquesModal: document.getElementById('producao-estoques-modal'),
+  estoquesTotal: document.getElementById('producao-estoques-total'),
+  estoquesTbody: document.getElementById('producao-estoques-tbody'),
+  estoquesFiltroForm: document.getElementById('producao-estoques-filtro-form'),
+  estoquesSetor: document.getElementById('producao-estoques-setor'),
+  estoquesCodigo: document.getElementById('producao-estoques-codigo'),
+  estoquesDescricao: document.getElementById('producao-estoques-descricao'),
+  estoquesClassificacao: document.getElementById('producao-estoques-classificacao'),
+  estoquesOrdem: document.getElementById('producao-estoques-ordem'),
+  solicitacoesModal: document.getElementById('producao-solicitacoes-modal'),
   modal: document.getElementById('producao-modal'),
   finalizacaoModal: document.getElementById('finalizacao-modal'),
-  drawer: document.getElementById('app-drawer'),
-  drawerScrim: document.getElementById('drawer-scrim'),
   pecaBusca: document.getElementById('producao-peca-busca'),
   pecaId: document.getElementById('producao-peca-id'),
   pecaSugestoes: document.getElementById('producao-peca-sugestoes'),
@@ -38,26 +54,38 @@ const refs = {
 
 document.addEventListener('DOMContentLoaded', async () => {
   bindEvents();
-  await Promise.all([carregarMaquinas(), carregarPecas()]);
-  await Promise.all([carregarProducoes(), carregarSolicitacoesProducao()]);
+  await Promise.all([carregarMaquinas(), carregarPecas(), carregarEstoquesSetor()]);
+  await Promise.all([carregarProducoes(), carregarSolicitacoesProducao(), carregarProximaRuptura()]);
   iniciarAtualizacaoAutomatica();
 });
 
 function bindEvents() {
   document.getElementById('btn-nova-producao').addEventListener('click', abrirModalProducao);
+  document.getElementById('btn-estoques-producao-menu').addEventListener('click', abrirModalConsultaEstoques);
+  document.getElementById('btn-fechar-modal-producao-estoques').addEventListener('click', fecharModalConsultaEstoques);
+  document.getElementById('btn-limpar-filtros-producao-estoques').addEventListener('click', limparFiltrosConsultaEstoques);
+  document.getElementById('btn-solicitacoes-producao-menu').addEventListener('click', abrirModalSolicitacoesProducao);
+  document.getElementById('btn-fechar-modal-producao-solicitacoes').addEventListener('click', fecharModalSolicitacoesProducao);
   document.getElementById('btn-cancelar-modal-producao').addEventListener('click', fecharModalProducao);
   document.getElementById('btn-fechar-modal-producao').addEventListener('click', fecharModalProducao);
   document.getElementById('btn-cancelar-modal-finalizacao').addEventListener('click', fecharModalFinalizacao);
   document.getElementById('btn-fechar-modal-finalizacao').addEventListener('click', fecharModalFinalizacao);
   document.getElementById('btn-limpar-filtros-producao').addEventListener('click', limparFiltros);
-  document.getElementById('menu-toggle').addEventListener('click', () => toggleDrawer(true));
-  document.getElementById('drawer-close').addEventListener('click', () => toggleDrawer(false));
-  refs.drawerScrim.addEventListener('click', () => toggleDrawer(false));
+  refs.estoquesModal.addEventListener('click', handleBackdrop);
+  refs.solicitacoesModal.addEventListener('click', handleBackdrop);
   refs.modal.addEventListener('click', handleBackdrop);
   refs.finalizacaoModal.addEventListener('click', handleBackdrop);
   refs.filtroForm.addEventListener('submit', (event) => {
     event.preventDefault();
     carregarProducoes();
+  });
+  refs.estoquesFiltroForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    carregarConsultaEstoques();
+  });
+  [refs.estoquesSetor, refs.estoquesCodigo, refs.estoquesDescricao, refs.estoquesClassificacao, refs.estoquesOrdem].forEach((field) => {
+    field.addEventListener('input', agendarConsultaEstoques);
+    field.addEventListener('change', agendarConsultaEstoques);
   });
   refs.filtroForm.querySelectorAll('input, select').forEach((field) => {
     field.addEventListener('input', agendarFiltroAutomatico);
@@ -76,6 +104,31 @@ function bindEvents() {
   refs.pecaSugestoes.addEventListener('click', handleSugestaoPecaClick);
   document.addEventListener('click', handleGlobalClick);
   document.addEventListener('keydown', handleKeyboardShortcuts);
+}
+
+async function carregarEstoquesSetor() {
+  const response = await fetch(estoquesApiBaseUrl);
+  const estoques = await response.json();
+
+  if (!response.ok) {
+    throw new Error(estoques.message || 'Nao foi possivel carregar os estoques.');
+  }
+
+  estoquesSetorCache = estoques.filter((item) => {
+    const nome = normalizarBusca(item.nome);
+    return nome.includes('almox') || nome.includes('mont') || nome.includes('exped');
+  });
+
+  const almox = estoquesSetorCache.find((item) => normalizarBusca(item.nome).includes('almox'));
+  almoxStockId = almox ? Number(almox.id) : null;
+
+  refs.estoquesSetor.innerHTML = estoquesSetorCache
+    .map((item) => `<option value="${item.id}">${escapeHtml(item.nome)}</option>`)
+    .join('');
+
+  if (almoxStockId) {
+    refs.estoquesSetor.value = String(almoxStockId);
+  }
 }
 
 async function carregarSolicitacoesProducao() {
@@ -251,13 +304,14 @@ function renderizarAcoesSolicitacaoProducao(item) {
 function atualizarIndicadores() {
   const emAndamento = producoesCache.filter((item) => item.status === 'EM_ANDAMENTO').length;
   const finalizadas = producoesCache.filter((item) => item.status === 'FINALIZADA').length;
-  const planejada = producoesCache.reduce((total, item) => total + Number(item.quantidade_planejada || 0), 0);
+  const quantidadeProduzida = producoesCache.reduce((total, item) => total + Number(item.quantidade_produzida || 0), 0);
   const solicitacoesPendentes = solicitacoesProducaoCache.filter((item) => ACTIVE_PRODUCTION_REQUEST_STATUSES.includes(String(item.status || '').toUpperCase())).length;
 
   document.getElementById('metric-producao-andamento').textContent = String(emAndamento);
   document.getElementById('metric-producao-finalizada').textContent = String(finalizadas);
-  document.getElementById('metric-producao-planejada').textContent = formatInteger(planejada);
+  document.getElementById('metric-producao-produzida').textContent = formatInteger(quantidadeProduzida);
   refs.metricSolicitacoesPendentes.textContent = String(solicitacoesPendentes);
+  setBadge(refs.badgeSolicitacoes, solicitacoesPendentes);
 }
 
 function iniciarAtualizacaoAutomatica() {
@@ -306,10 +360,84 @@ function obterMensagemTimelineSolicitacao(filtro) {
 
 async function atualizarPainelAutomaticamente() {
   try {
-    await Promise.all([carregarProducoes(), carregarSolicitacoesProducao()]);
+    await Promise.all([carregarProducoes(), carregarSolicitacoesProducao(), carregarProximaRuptura()]);
   } catch (error) {
     console.error('Falha ao atualizar a tela de Producao:', error);
   }
+}
+
+async function carregarProximaRuptura() {
+  try {
+    const stockId = await obterIdAlmoxarifado();
+    if (!stockId) {
+      atualizarCardRuptura(null);
+      return;
+    }
+
+    const response = await fetch(`${estoqueSaldosApiBaseUrl}?estoque=${stockId}&ordem_quantidade=ASC`);
+    const saldos = await response.json();
+
+    if (!response.ok) {
+      throw new Error(saldos.message || 'Nao foi possivel carregar o estoque do Almoxarifado.');
+    }
+
+    const itemCritico = obterItemRupturaMaisProxima(saldos);
+    atualizarCardRuptura(itemCritico);
+  } catch (error) {
+    console.error('Falha ao calcular a proxima ruptura do Almoxarifado:', error);
+    atualizarCardRuptura(null);
+  }
+}
+
+async function obterIdAlmoxarifado() {
+  if (almoxStockId) {
+    return almoxStockId;
+  }
+
+  await carregarEstoquesSetor();
+  return almoxStockId;
+}
+
+function obterItemRupturaMaisProxima(saldos) {
+  const candidatos = (Array.isArray(saldos) ? saldos : [])
+    .map((item) => {
+      const quantidade = Number(item.quantidade || 0);
+      const consumoMensal = Number(item.consumo_mensal || 0);
+
+      if (!Number.isFinite(quantidade) || quantidade <= 0) {
+        return null;
+      }
+
+      if (!Number.isFinite(consumoMensal) || consumoMensal <= 0) {
+        return null;
+      }
+
+      const dias = Math.floor((quantidade / consumoMensal) * 30);
+      const data = new Date();
+      data.setDate(data.getDate() + dias);
+
+      return {
+        codigo: item.codigo,
+        descricao: item.descricao,
+        dias,
+        dataPrevista: data
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.dias - b.dias || String(a.codigo).localeCompare(String(b.codigo)));
+
+  return candidatos[0] || null;
+}
+
+function atualizarCardRuptura(item) {
+  if (!item) {
+    refs.metricRuptura.textContent = '-';
+    refs.metricRupturaInfo.textContent = 'Sem dados de consumo no Almoxarifado.';
+    return;
+  }
+
+  refs.metricRuptura.textContent = item.codigo;
+  refs.metricRupturaInfo.textContent = `${item.descricao} | ${item.dias} dia(s) | ate ${formatarDataCurta(item.dataPrevista)}`;
 }
 
 function renderizarSugestoesPeca(termo) {
@@ -446,6 +574,23 @@ function abrirModalProducao() {
   openModal(refs.modal);
 }
 
+async function abrirModalConsultaEstoques() {
+  openModal(refs.estoquesModal);
+  await carregarConsultaEstoques();
+}
+
+function fecharModalConsultaEstoques() {
+  closeModal(refs.estoquesModal);
+}
+
+function abrirModalSolicitacoesProducao() {
+  openModal(refs.solicitacoesModal);
+}
+
+function fecharModalSolicitacoesProducao() {
+  closeModal(refs.solicitacoesModal);
+}
+
 function fecharModalProducao() {
   resetFormProducao();
   closeModal(refs.modal);
@@ -498,9 +643,80 @@ function limparFiltros() {
   carregarProducoes();
 }
 
+function limparFiltrosConsultaEstoques() {
+  refs.estoquesCodigo.value = '';
+  refs.estoquesDescricao.value = '';
+  refs.estoquesClassificacao.value = '';
+  refs.estoquesOrdem.value = '';
+  if (almoxStockId) {
+    refs.estoquesSetor.value = String(almoxStockId);
+  }
+  carregarConsultaEstoques();
+}
+
 function agendarFiltroAutomatico() {
   window.clearTimeout(filtroDebounceTimer);
   filtroDebounceTimer = window.setTimeout(() => carregarProducoes(), 220);
+}
+
+function agendarConsultaEstoques() {
+  window.clearTimeout(estoqueConsultaDebounceTimer);
+  estoqueConsultaDebounceTimer = window.setTimeout(() => carregarConsultaEstoques(), 220);
+}
+
+async function carregarConsultaEstoques() {
+  if (!refs.estoquesSetor.value) {
+    refs.estoquesTotal.textContent = '0 registro(s) encontrado(s)';
+    refs.estoquesTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Selecione um estoque para consultar.</td></tr>';
+    return;
+  }
+
+  const params = new URLSearchParams({ estoque: refs.estoquesSetor.value });
+
+  if (refs.estoquesCodigo.value.trim()) {
+    params.append('codigo', refs.estoquesCodigo.value.trim());
+  }
+
+  if (refs.estoquesDescricao.value.trim()) {
+    params.append('descricao', refs.estoquesDescricao.value.trim());
+  }
+
+  if (refs.estoquesClassificacao.value) {
+    params.append('classificacao', refs.estoquesClassificacao.value);
+  }
+
+  if (refs.estoquesOrdem.value) {
+    params.append('ordem_quantidade', refs.estoquesOrdem.value);
+  }
+
+  try {
+    const response = await fetch(`${estoqueSaldosApiBaseUrl}?${params.toString()}`);
+    const saldos = await response.json();
+
+    if (!response.ok) {
+      throw new Error(saldos.message || 'Nao foi possivel carregar o estoque selecionado.');
+    }
+
+    refs.estoquesTotal.textContent = `${saldos.length} registro(s) encontrado(s)`;
+
+    if (!saldos.length) {
+      refs.estoquesTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhum saldo encontrado para os filtros informados.</td></tr>';
+      return;
+    }
+
+    refs.estoquesTbody.innerHTML = saldos.map((item) => `
+      <tr>
+        <td class="table-code">${escapeHtml(item.codigo)}</td>
+        <td class="table-description">${escapeHtml(item.descricao)}</td>
+        <td>${escapeHtml(item.tipo)}</td>
+        <td>${escapeHtml(item.classificacao)}</td>
+        <td class="table-quantity">${formatInteger(item.quantidade)}</td>
+      </tr>
+    `).join('');
+  } catch (error) {
+    refs.estoquesTotal.textContent = '0 registro(s) encontrado(s)';
+    refs.estoquesTbody.innerHTML = `<tr><td colspan="5" class="empty-state">${escapeHtml(error.message)}</td></tr>`;
+  }
 }
 
 function handleGlobalClick(event) {
@@ -543,6 +759,14 @@ function esconderSugestoes() {
 }
 
 function handleBackdrop(event) {
+  if (event.target.dataset.closeModal === 'producao-estoques') {
+    fecharModalConsultaEstoques();
+  }
+
+  if (event.target.dataset.closeModal === 'producao-solicitacoes') {
+    fecharModalSolicitacoesProducao();
+  }
+
   if (event.target.dataset.closeModal === 'producao') {
     fecharModalProducao();
   }
@@ -560,6 +784,16 @@ function handleKeyboardShortcuts(event) {
   esconderSugestoes();
   closeAllRowMenus();
 
+  if (!refs.estoquesModal.classList.contains('hidden')) {
+    fecharModalConsultaEstoques();
+    return;
+  }
+
+  if (!refs.solicitacoesModal.classList.contains('hidden')) {
+    fecharModalSolicitacoesProducao();
+    return;
+  }
+
   if (!refs.finalizacaoModal.classList.contains('hidden')) {
     fecharModalFinalizacao();
     return;
@@ -568,10 +802,6 @@ function handleKeyboardShortcuts(event) {
   if (!refs.modal.classList.contains('hidden')) {
     fecharModalProducao();
     return;
-  }
-
-  if (refs.drawer.classList.contains('is-open')) {
-    toggleDrawer(false);
   }
 }
 
@@ -633,14 +863,25 @@ function openModal(modal) {
 function closeModal(modal) {
   modal.classList.add('hidden');
   modal.setAttribute('aria-hidden', 'true');
-  const hasModal = [refs.modal, refs.finalizacaoModal].some((item) => !item.classList.contains('hidden'));
+  const hasModal = [refs.estoquesModal, refs.solicitacoesModal, refs.modal, refs.finalizacaoModal].some((item) => !item.classList.contains('hidden'));
   document.body.classList.toggle('has-modal', hasModal);
 }
 
-function toggleDrawer(shouldOpen) {
-  refs.drawer.classList.toggle('is-open', shouldOpen);
-  refs.drawerScrim.classList.toggle('hidden', !shouldOpen);
-  document.body.classList.toggle('has-drawer', shouldOpen);
+function setBadge(element, count) {
+  if (!element) {
+    return;
+  }
+
+  const safeCount = Math.max(0, Number(count || 0));
+  element.textContent = String(safeCount);
+  element.classList.toggle('hidden', safeCount <= 0);
+}
+
+function normalizarBusca(texto) {
+  return String(texto || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
 }
 
 function mostrarMensagem(texto, tipo) {
@@ -731,6 +972,14 @@ function formatInputDecimal(value) {
   }
 
   return String(Number(numeric.toFixed(2)));
+}
+
+function formatarDataCurta(data) {
+  if (!(data instanceof Date) || Number.isNaN(data.getTime())) {
+    return '-';
+  }
+
+  return data.toLocaleDateString('pt-BR');
 }
 
 function formatarConsumo(producao) {
