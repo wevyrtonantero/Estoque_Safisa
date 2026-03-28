@@ -12,8 +12,7 @@ const refs = {
   tabela: document.getElementById('remessas-tbody'),
   total: document.getElementById('total-remessas'),
   filtroForm: document.getElementById('remessas-filtro-form'),
-  drawer: document.getElementById('app-drawer'),
-  drawerScrim: document.getElementById('drawer-scrim'),
+  filtroStatus: document.getElementById('filtro-remessa-status'),
   detalheModal: document.getElementById('remessa-detalhe-modal'),
   detalheTitulo: document.getElementById('remessa-detalhe-titulo'),
   detalheSubtitulo: document.getElementById('remessa-detalhe-subtitulo'),
@@ -48,10 +47,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 function bindEvents() {
-  document.getElementById('menu-toggle').addEventListener('click', () => toggleDrawer(true));
-  document.getElementById('drawer-close').addEventListener('click', () => toggleDrawer(false));
-  refs.drawerScrim.addEventListener('click', () => toggleDrawer(false));
   document.getElementById('btn-limpar-filtros-remessas').addEventListener('click', limparFiltros);
+  document.getElementById('remessas-btn-ativas').addEventListener('click', () => aplicarFiltroRapido('ATIVAS'));
+  document.getElementById('remessas-btn-pendentes-nf').addEventListener('click', () => aplicarFiltroRapido('PENDENTES_NF'));
+  document.getElementById('remessas-btn-retorno-parcial').addEventListener('click', () => aplicarFiltroRapido('RETORNO_PARCIAL'));
+  document.getElementById('remessas-btn-encerradas').addEventListener('click', () => aplicarFiltroRapido('ENCERRADAS'));
   refs.filtroForm.addEventListener('submit', (event) => {
     event.preventDefault();
     carregarRemessas();
@@ -594,9 +594,6 @@ function handleKeyboardShortcuts(event) {
     fecharModalDetalhe();
     return;
   }
-  if (refs.drawer.classList.contains('is-open')) {
-    toggleDrawer(false);
-  }
 }
 
 function closeAllRowMenus(exceptMenu = null) {
@@ -622,16 +619,15 @@ function closeModal(modal) {
   document.body.classList.toggle('has-modal', hasModal);
 }
 
-function toggleDrawer(shouldOpen) {
-  refs.drawer.classList.toggle('is-open', shouldOpen);
-  refs.drawerScrim.classList.toggle('hidden', !shouldOpen);
-  document.body.classList.toggle('has-drawer', shouldOpen);
-}
-
 function mostrarMensagem(texto, tipo) {
   refs.mensagem.textContent = texto;
   refs.mensagem.className = `message ${tipo}`;
   refs.mensagem.classList.remove('hidden');
+}
+
+function aplicarFiltroRapido(status) {
+  refs.filtroStatus.value = status;
+  carregarRemessas();
 }
 
 function renderStatusBadge(status) {

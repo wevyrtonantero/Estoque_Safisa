@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SAFISA | Dashboard</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <main class="workspace">
+    <header class="topbar">
+      <div class="topbar-copy">
+        <p class="page-kicker">Visao Executiva SAFISA</p>
+        <h1 class="page-title">Dashboard</h1>
+        <p class="page-subtitle">Producao em andamento, estoques e alertas do dia em uma visao curta e objetiva.</p>
+      </div>
+    </header>
+
+    <section class="summary-row">
+      <article class="summary-card">
+        <span>Ordens em andamento</span>
+        <strong id="dashboard-card-andamento">0</strong>
+      </article>
+
+      <article class="summary-card">
+        <span>Finalizadas hoje</span>
+        <strong id="dashboard-card-finalizadas-hoje">0</strong>
+      </article>
+
+      <article class="summary-card">
+        <span>Itens criticos no Almox</span>
+        <strong id="dashboard-card-criticos">0</strong>
+      </article>
+
+      <article class="summary-card">
+        <span>Remessas sem NF</span>
+        <strong id="dashboard-card-sem-nf">0</strong>
+      </article>
+    </section>
+
+    <div id="dashboard-mensagem" class="message hidden"></div>
+
+    <section class="sector-shell">
+      <aside class="sector-menu">
+        <section class="content-card sector-menu-card">
+          <span class="section-pill">Acessos</span>
+
+          <div class="sector-menu-list">
+            <button id="btn-dashboard-estoques" class="btn btn-primary" type="button"><span class="btn-label">Ver Estoques</span></button>
+            <button id="btn-dashboard-mp" class="btn btn-secondary" type="button"><span class="btn-label">Ver Estoque MP</span></button>
+            <button id="btn-dashboard-simulacao" class="btn btn-secondary" type="button"><span class="btn-label">Simulacao de Submontagem</span></button>
+            <button id="btn-dashboard-alertas" class="btn btn-warning" type="button"><span class="btn-label">Ver Alertas</span></button>
+            <button id="btn-dashboard-indicadores" class="btn btn-secondary" type="button"><span class="btn-label">Ver Indicadores</span></button>
+          </div>
+        </section>
+      </aside>
+
+      <div class="sector-content">
+        <section class="content-card">
+          <div class="card-top">
+            <div>
+              <span class="section-pill">Tempo real</span>
+              <h2>Producao em andamento</h2>
+              <p id="dashboard-producao-total">0 ordem(ns) em andamento</p>
+            </div>
+          </div>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Maquina</th>
+                  <th>Peca</th>
+                  <th>Materia-prima</th>
+                  <th>Planejado</th>
+                  <th>Inicio</th>
+                </tr>
+              </thead>
+              <tbody id="dashboard-producao-tbody">
+                <tr>
+                  <td colspan="5" class="empty-state">Carregando producao em andamento...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <div id="dashboard-estoques-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="dashboard-estoques"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Estoques</span>
+          <h2>Visao geral dos estoques</h2>
+          <p>Resumo dos depositos e da disponibilidade total no sistema.</p>
+        </div>
+
+        <button id="btn-fechar-modal-dashboard-estoques" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div class="view-grid">
+        <div class="view-card">
+          <span>Itens com saldo</span>
+          <strong id="dashboard-estoques-total-itens">0</strong>
+        </div>
+        <div class="view-card">
+          <span>Quantidade total</span>
+          <strong id="dashboard-estoques-total-quantidade">0</strong>
+        </div>
+        <div class="view-card">
+          <span>Depositos monitorados</span>
+          <strong id="dashboard-estoques-total-depositos">0</strong>
+        </div>
+        <div class="view-card">
+          <span>Submontagens com saldo</span>
+          <strong id="dashboard-estoques-total-submontagens">0</strong>
+        </div>
+      </div>
+
+      <div class="subtle-divider"></div>
+
+      <form id="dashboard-estoques-filtro-form" class="toolbar-form stock-toolbar">
+        <div class="field">
+          <label for="dashboard-estoques-filtro-estoque">Estoque</label>
+          <select id="dashboard-estoques-filtro-estoque">
+            <option value="">Todos</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="dashboard-estoques-filtro-codigo">Codigo</label>
+          <input id="dashboard-estoques-filtro-codigo" type="text" placeholder="Ex.: 017/1">
+        </div>
+
+        <div class="field">
+          <label for="dashboard-estoques-filtro-descricao">Descricao</label>
+          <input id="dashboard-estoques-filtro-descricao" type="text" placeholder="Digite parte da descricao">
+        </div>
+
+        <div class="field">
+          <label for="dashboard-estoques-filtro-classificacao">Classificacao</label>
+          <select id="dashboard-estoques-filtro-classificacao">
+            <option value="">Todas</option>
+            <option value="ITEM">Itens</option>
+            <option value="SUBMONTAGEM">Submontagens</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="dashboard-estoques-filtro-ordem">Quantidade</label>
+          <select id="dashboard-estoques-filtro-ordem">
+            <option value="">Padrao</option>
+            <option value="asc">Menor quantidade</option>
+            <option value="desc">Maior quantidade</option>
+          </select>
+        </div>
+
+        <div class="toolbar-actions">
+          <button id="btn-limpar-modal-dashboard-estoques" class="btn btn-neutral" type="button">Limpar</button>
+        </div>
+      </form>
+
+      <div class="subtle-divider"></div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Estoque</th>
+              <th>Codigo</th>
+              <th>Descricao</th>
+              <th>Classificacao</th>
+              <th>Quantidade</th>
+            </tr>
+          </thead>
+          <tbody id="dashboard-estoques-tbody">
+            <tr>
+              <td colspan="5" class="empty-state">Carregando estoques...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="dashboard-mp-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="dashboard-mp"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Materia-prima</span>
+          <h2>Estoque de MP</h2>
+          <p>Consulta dedicada da materia-prima com filtros e disponibilidade atual.</p>
+        </div>
+
+        <button id="btn-fechar-modal-dashboard-mp" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div class="view-grid">
+        <div class="view-card">
+          <span>MP com saldo</span>
+          <strong id="dashboard-mp-total-itens">0</strong>
+        </div>
+        <div class="view-card">
+          <span>Quantidade total MP</span>
+          <strong id="dashboard-mp-total-quantidade">0</strong>
+        </div>
+        <div class="view-card">
+          <span>Laminados</span>
+          <strong id="dashboard-mp-total-laminados">0</strong>
+        </div>
+        <div class="view-card">
+          <span>Fundidos</span>
+          <strong id="dashboard-mp-total-fundidos">0</strong>
+        </div>
+      </div>
+
+      <div class="subtle-divider"></div>
+
+      <form id="dashboard-mp-filtro-form" class="toolbar-form stock-toolbar">
+        <div class="field">
+          <label for="dashboard-mp-filtro-codigo">Codigo</label>
+          <input id="dashboard-mp-filtro-codigo" type="text" placeholder="Ex.: 401FD">
+        </div>
+
+        <div class="field">
+          <label for="dashboard-mp-filtro-nome">Nome</label>
+          <input id="dashboard-mp-filtro-nome" type="text" placeholder="Digite parte do nome">
+        </div>
+
+        <div class="field">
+          <label for="dashboard-mp-filtro-categoria">Categoria</label>
+          <select id="dashboard-mp-filtro-categoria">
+            <option value="">Todas</option>
+            <option value="LAMINADO">Laminado</option>
+            <option value="FUNDIDO">Fundido</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="dashboard-mp-filtro-geometria">Geometria</label>
+          <input id="dashboard-mp-filtro-geometria" type="text" placeholder="Ex.: REDONDO">
+        </div>
+
+        <div class="field">
+          <label for="dashboard-mp-filtro-ordem">Quantidade</label>
+          <select id="dashboard-mp-filtro-ordem">
+            <option value="">Padrao</option>
+            <option value="asc">Menor quantidade</option>
+            <option value="desc">Maior quantidade</option>
+          </select>
+        </div>
+
+        <div class="toolbar-actions">
+          <button id="btn-limpar-modal-dashboard-mp" class="btn btn-neutral" type="button">Limpar</button>
+        </div>
+      </form>
+
+      <div class="subtle-divider"></div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th colspan="6">Estoque de materia-prima</th>
+            </tr>
+            <tr>
+              <th>Codigo</th>
+              <th>Nome</th>
+              <th>Categoria</th>
+              <th>Geometria</th>
+              <th>Bitola</th>
+              <th>Quantidade</th>
+            </tr>
+          </thead>
+          <tbody id="dashboard-mp-tbody">
+            <tr>
+              <td colspan="6" class="empty-state">Carregando estoque de materia-prima...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="dashboard-simulacao-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="dashboard-simulacao"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Simulacao</span>
+          <h2>Simulacao de submontagem</h2>
+          <p>Considere Almoxarifado, Montagem e Expedicao ao mesmo tempo.</p>
+        </div>
+
+        <button id="btn-fechar-modal-dashboard-simulacao" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="dashboard-simulacao-mensagem" class="message hidden"></div>
+
+      <form id="dashboard-simulacao-form" class="form-grid">
+        <input type="hidden" id="dashboard-simulacao-submontagem-id">
+
+        <div class="field span-8">
+          <label for="dashboard-simulacao-submontagem-busca">Submontagem</label>
+          <div class="autocomplete">
+            <input id="dashboard-simulacao-submontagem-busca" type="text" placeholder="Digite codigo ou descricao da submontagem">
+            <div id="dashboard-simulacao-submontagem-sugestoes" class="autocomplete-panel hidden"></div>
+          </div>
+        </div>
+
+        <div class="field span-4">
+          <label for="dashboard-simulacao-quantidade">Quantidade desejada</label>
+          <input id="dashboard-simulacao-quantidade" type="number" min="1" step="1" value="1">
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button class="btn btn-primary" type="submit">Simular</button>
+        </div>
+      </form>
+
+      <div class="summary-row">
+        <article class="summary-card">
+          <span>Saldo pronto</span>
+          <strong id="dashboard-simulacao-card-pronto">0</strong>
+        </article>
+
+        <article class="summary-card">
+          <span>Capacidade total</span>
+          <strong id="dashboard-simulacao-card-capacidade">0</strong>
+        </article>
+
+        <article class="summary-card">
+          <span>Consegue montar</span>
+          <strong id="dashboard-simulacao-card-status">Nao</strong>
+        </article>
+      </div>
+
+      <div class="card-top">
+        <div>
+          <h3 id="dashboard-simulacao-titulo">Nenhuma submontagem simulada</h3>
+          <p id="dashboard-simulacao-subtitulo">Selecione a submontagem para ver a capacidade consolidada.</p>
+        </div>
+      </div>
+
+      <div id="dashboard-simulacao-resumo" class="selected-tags empty">A simulacao vai mostrar o limitante e onde cada componente esta.</div>
+
+      <div class="subtle-divider"></div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Codigo</th>
+              <th>Descricao</th>
+              <th>Estrutura</th>
+              <th>Necessaria</th>
+              <th>Almox</th>
+              <th>Montagem</th>
+              <th>Expedicao</th>
+              <th>Total</th>
+              <th>Capacidade</th>
+            </tr>
+          </thead>
+          <tbody id="dashboard-simulacao-tbody">
+            <tr>
+              <td colspan="9" class="empty-state">Nenhum resultado para exibir.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="dashboard-alertas-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="dashboard-alertas"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Alertas</span>
+          <h2>Itens que pedem atencao</h2>
+          <p>Pecas criticas no Almoxarifado e pendencias que merecem acompanhamento.</p>
+        </div>
+
+        <button id="btn-fechar-modal-dashboard-alertas" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div class="view-grid">
+        <div class="view-card">
+          <span>Pedidos em aberto</span>
+          <strong id="dashboard-alerta-pedidos">0</strong>
+        </div>
+        <div class="view-card">
+          <span>Pendencias externas</span>
+          <strong id="dashboard-alerta-terceiros">0</strong>
+        </div>
+        <div class="view-card">
+          <span>Remessas sem NF</span>
+          <strong id="dashboard-alerta-sem-nf">0</strong>
+        </div>
+        <div class="view-card">
+          <span>Itens criticos</span>
+          <strong id="dashboard-alerta-criticos">0</strong>
+        </div>
+      </div>
+
+      <div class="subtle-divider"></div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Codigo</th>
+              <th>Descricao</th>
+              <th>Saldo</th>
+              <th>Alerta</th>
+              <th>Cobertura</th>
+            </tr>
+          </thead>
+          <tbody id="dashboard-alertas-tbody">
+            <tr>
+              <td colspan="5" class="empty-state">Carregando alertas...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="dashboard-indicadores-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="dashboard-indicadores"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Indicadores</span>
+          <h2>Resumo executivo</h2>
+          <p>Leituras complementares para entender giro, maquinas e estoque.</p>
+        </div>
+
+        <button id="btn-fechar-modal-dashboard-indicadores" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div class="view-grid">
+        <div class="view-card">
+          <span>Produzido no historico</span>
+          <strong id="dashboard-indicador-produzido">0</strong>
+        </div>
+        <div class="view-card">
+          <span>Refugo no historico</span>
+          <strong id="dashboard-indicador-refugo">0</strong>
+        </div>
+        <div class="view-card">
+          <span>Produzido hoje</span>
+          <strong id="dashboard-indicador-produzido-hoje">0</strong>
+        </div>
+        <div class="view-card">
+          <span>Refugo hoje</span>
+          <strong id="dashboard-indicador-refugo-hoje">0</strong>
+        </div>
+      </div>
+
+      <div class="subtle-divider"></div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th colspan="3">Top saidas</th>
+            </tr>
+            <tr>
+              <th>Codigo</th>
+              <th>Descricao</th>
+              <th>Quantidade</th>
+            </tr>
+          </thead>
+          <tbody id="dashboard-saidas-tbody">
+            <tr>
+              <td colspan="3" class="empty-state">Carregando saidas...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="subtle-divider"></div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th colspan="3">Producao por maquina</th>
+            </tr>
+            <tr>
+              <th>Maquina</th>
+              <th>Produzido</th>
+              <th>Refugo</th>
+            </tr>
+          </thead>
+          <tbody id="dashboard-maquinas-tbody">
+            <tr>
+              <td colspan="3" class="empty-state">Carregando producao por maquina...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="subtle-divider"></div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th colspan="4">Estoque em destaque</th>
+            </tr>
+            <tr>
+              <th>Tipo</th>
+              <th>Codigo</th>
+              <th>Descricao</th>
+              <th>Quantidade</th>
+            </tr>
+          </thead>
+          <tbody id="dashboard-destaques-tbody">
+            <tr>
+              <td colspan="4" class="empty-state">Carregando destaques de estoque...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/dashboard-executivo.js"></script>
+</body>
+</html>

@@ -8,8 +8,10 @@ class PainelModel {
       [thirdPartyPendingRows],
       [remessasSemNfRows],
       [refugoRows],
+      [finalizadasHojeRows],
       [solicitacoesRows],
       [byWarehouse],
+      [almoxCriticos],
       [topStock],
       [lowStock],
       [topSaidas],
@@ -52,6 +54,15 @@ class PainelModel {
         WHERE status = 'FINALIZADA'
       `),
       pool.query(`
+        SELECT
+          COUNT(*) AS ordens_finalizadas_hoje,
+          COALESCE(SUM(quantidade_produzida), 0) AS total_produzido_hoje,
+          COALESCE(SUM(quantidade_refugo), 0) AS total_refugo_hoje
+        FROM producao_ordens
+        WHERE status = 'FINALIZADA'
+          AND DATE(updated_at) = CURRENT_DATE()
+      `),
+      pool.query(`
         SELECT COUNT(*) AS abertas
         FROM solicitacoes_estoque
         WHERE status IN ('PENDENTE', 'EM_SEPARACAO', 'ATENDIDA_PARCIAL')
@@ -65,6 +76,98 @@ class PainelModel {
         LEFT JOIN estoque_saldos s ON s.id_estoque = e.id
         GROUP BY e.id, e.nome
         ORDER BY e.id ASC
+      `),
+      pool.query(`
+        SELECT
+          p.codigo,
+          p.descricao,
+          s.quantidade,
+          p.estoque_minimo,
+          p.estoque_seguranca,
+          p.consumo_mensal,
+          CASE
+            WHEN (
+              CASE
+                WHEN COALESCE(p.estoque_seguranca, 0) > 0 THEN p.estoque_seguranca
+                ELSE COALESCE(p.estoque_minimo, 0)
+              END
+            ) > 0
+            AND s.quantidade < (
+              CASE
+                WHEN COALESCE(p.estoque_seguranca, 0) > 0 THEN p.estoque_seguranca
+                ELSE COALESCE(p.estoque_minimo, 0)
+              END
+            ) THEN 'CRITICO'
+            WHEN (
+              CASE
+                WHEN COALESCE(p.estoque_seguranca, 0) > 0 THEN p.estoque_seguranca
+                ELSE COALESCE(p.estoque_minimo, 0)
+              END
+            ) > 0
+            AND s.quantidade = (
+              CASE
+                WHEN COALESCE(p.estoque_seguranca, 0) > 0 THEN p.estoque_seguranca
+                ELSE COALESCE(p.estoque_minimo, 0)
+              END
+            ) THEN 'ATENCAO'
+            ELSE 'OBSERVAR'
+          END AS alerta,
+          CASE
+            WHEN COALESCE(p.consumo_mensal, 0) > 0 THEN ROUND(s.quantidade / (p.consumo_mensal / 30), 1)
+            ELSE NULL
+          END AS dias_cobertura
+        FROM estoque_saldos s
+        INNER JOIN estoques e ON e.id = s.id_estoque
+        INNER JOIN pecas p ON p.id = s.id_peca
+        WHERE UPPER(e.nome) LIKE '%ALMOX%'
+          AND s.quantidade > 0
+          AND (
+            (
+              (CASE
+                WHEN COALESCE(p.estoque_seguranca, 0) > 0 THEN p.estoque_seguranca
+                ELSE COALESCE(p.estoque_minimo, 0)
+              END) > 0
+              AND s.quantidade <= (CASE
+                WHEN COALESCE(p.estoque_seguranca, 0) > 0 THEN p.estoque_seguranca
+                ELSE COALESCE(p.estoque_minimo, 0)
+              END)
+            )
+            OR (
+              COALESCE(p.consumo_mensal, 0) > 0
+              AND (s.quantidade / (p.consumo_mensal / 30)) <= 30
+            )
+          )
+        ORDER BY
+          CASE
+            WHEN (
+              (CASE
+                WHEN COALESCE(p.estoque_seguranca, 0) > 0 THEN p.estoque_seguranca
+                ELSE COALESCE(p.estoque_minimo, 0)
+              END) > 0
+              AND s.quantidade < (CASE
+                WHEN COALESCE(p.estoque_seguranca, 0) > 0 THEN p.estoque_seguranca
+                ELSE COALESCE(p.estoque_minimo, 0)
+              END)
+            ) THEN 0
+            WHEN (
+              (CASE
+                WHEN COALESCE(p.estoque_seguranca, 0) > 0 THEN p.estoque_seguranca
+                ELSE COALESCE(p.estoque_minimo, 0)
+              END) > 0
+              AND s.quantidade = (CASE
+                WHEN COALESCE(p.estoque_seguranca, 0) > 0 THEN p.estoque_seguranca
+                ELSE COALESCE(p.estoque_minimo, 0)
+              END)
+            ) THEN 1
+            ELSE 2
+          END ASC,
+          CASE
+            WHEN COALESCE(p.consumo_mensal, 0) > 0 THEN s.quantidade / (p.consumo_mensal / 30)
+            ELSE 999999
+          END ASC,
+          s.quantidade ASC,
+          p.codigo ASC
+        LIMIT 12
       `),
       pool.query(`
         SELECT
@@ -151,9 +254,11 @@ class PainelModel {
         terceirizacao: thirdPartyPendingRows[0] || { itens_pendentes: 0, quantidade_pendente: 0 },
         remessas_sem_nf: remessasSemNfRows[0] || { total: 0 },
         producao: refugoRows[0] || { ordens_finalizadas: 0, total_refugo: 0, total_produzido: 0 },
+        producao_hoje: finalizadasHojeRows[0] || { ordens_finalizadas_hoje: 0, total_produzido_hoje: 0, total_refugo_hoje: 0 },
         solicitacoes: solicitacoesRows[0] || { abertas: 0 }
       },
       estoque_por_deposito: byWarehouse,
+      almox_criticos: almoxCriticos,
       estoque_maiores: topStock,
       estoque_menores: lowStock,
       saidas_top: topSaidas,

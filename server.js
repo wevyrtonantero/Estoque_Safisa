@@ -36,7 +36,11 @@ app.get('/pagina-pecas', (req, res) => {
 });
 
 app.get('/pagina-dashboard', (req, res) => {
-  res.redirect('/pagina-almoxarifado');
+  res.sendFile(path.join(__dirname, 'views', 'dashboard-executivo.html'));
+});
+
+app.get('/pagina-diretoria', (req, res) => {
+  res.redirect('/pagina-dashboard');
 });
 
 app.get('/pagina-almoxarifado', (req, res) => {
@@ -44,7 +48,7 @@ app.get('/pagina-almoxarifado', (req, res) => {
 });
 
 app.get('/pagina-relatorios', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'relatorios.html'));
+  res.redirect('/pagina-dashboard');
 });
 
 app.get('/pagina-simulacao-montagem', (req, res) => {
