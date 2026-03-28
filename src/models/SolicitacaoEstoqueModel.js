@@ -232,6 +232,23 @@ class SolicitacaoEstoqueModel {
         throw this.createBusinessError('O item solicitado nao foi encontrado.');
       }
 
+      const estoqueOrigem = await this.findSourceStock(connection, origemAtendimento);
+      const saldoOrigem = await EstoqueModel.findSaldoForUpdate(connection, estoqueOrigem.id, data.id_peca);
+      const quantidadeDisponivel = saldoOrigem ? Number(saldoOrigem.quantidade) : 0;
+      const quantidadeSolicitada = Number(data.quantidade_solicitada || 0);
+
+      if (quantidadeDisponivel <= 0) {
+        throw this.createBusinessError(
+          `Nao ha saldo disponivel de ${item.codigo} em ${estoqueOrigem.nome} para gerar a solicitacao.`
+        );
+      }
+
+      if (quantidadeSolicitada > quantidadeDisponivel) {
+        throw this.createBusinessError(
+          `Saldo insuficiente em ${estoqueOrigem.nome}. Disponivel: ${quantidadeDisponivel}.`
+        );
+      }
+
       const [result] = await connection.query(
         `
           INSERT INTO solicitacoes_estoque (

@@ -8,6 +8,8 @@ const saidaApiBaseUrl = '/api/estoque/saida';
 const submontagensApiBaseUrl = '/api/submontagens';
 const producaoApiBaseUrl = '/api/producao';
 const AUTO_REFRESH_MS = 15000;
+const ACTIVE_REQUEST_STATUSES = ['PENDENTE', 'EM_SEPARACAO', 'ATENDIDA_PARCIAL'];
+const CLOSED_REQUEST_STATUSES = ['ATENDIDA', 'CANCELADA'];
 
 let estoquesCache = [];
 let itensCache = [];
@@ -32,6 +34,7 @@ const refs = {
   observacao: document.getElementById('expedicao-observacao'),
   listaTbody: document.getElementById('expedicao-lista-tbody'),
   pedidosTbody: document.getElementById('expedicao-pedidos-tbody'),
+  pedidosFiltroSituacao: document.getElementById('expedicao-pedidos-filtro-situacao'),
   historicoTbody: document.getElementById('expedicao-historico-tbody'),
   estoqueTbody: document.getElementById('expedicao-estoque-tbody'),
   filtroCodigo: document.getElementById('expedicao-filtro-codigo'),
@@ -105,6 +108,7 @@ function bindEvents() {
   document.getElementById('expedicao-btn-pedidos-menu').addEventListener('click', abrirModalPedidos);
   document.getElementById('expedicao-btn-historico-menu').addEventListener('click', abrirModalHistorico);
   document.getElementById('expedicao-btn-producao').addEventListener('click', abrirModalProducao);
+  refs.pedidosFiltroSituacao.addEventListener('change', renderizarPedidos);
   refs.filtroCodigo.addEventListener('input', renderizarEstoque);
   refs.filtroDescricao.addEventListener('input', renderizarEstoque);
   refs.filtroClassificacao.addEventListener('change', renderizarEstoque);
@@ -430,6 +434,10 @@ function handleSolicitacaoOrigemChange() {
 function renderizarSugestoesSolicitacao(termo) {
   const filtro = normalizarBusca(termo);
   const itens = itensCache.filter((item) => {
+    if (obterSaldoOrigemSolicitacao(item) <= 0) {
+      return false;
+    }
+
     if (!filtro) {
       return true;
     }
@@ -438,7 +446,7 @@ function renderizarSugestoesSolicitacao(termo) {
   }).slice(0, 8);
 
   if (!itens.length) {
-    refs.solicitacaoSugestoes.innerHTML = '<div class="autocomplete-empty">Nenhuma peca encontrada.</div>';
+    refs.solicitacaoSugestoes.innerHTML = '<div class="autocomplete-empty">Nenhuma peca com saldo disponivel na origem selecionada.</div>';
     refs.solicitacaoSugestoes.classList.remove('hidden');
     return;
   }
@@ -513,6 +521,23 @@ async function handleCriarSolicitacao(event) {
   try {
     if (!refs.solicitacaoItemId.value) {
       throw new Error('Selecione uma peca ou submontagem valida.');
+    }
+
+    const item = itensCache.find((entry) => Number(entry.id) === Number(refs.solicitacaoItemId.value));
+    if (!item) {
+      throw new Error('Selecione uma peca ou submontagem valida.');
+    }
+
+    const quantidadeSolicitada = Math.max(1, Number.parseInt(refs.solicitacaoQuantidade.value, 10) || 0);
+    const saldoDisponivel = obterSaldoOrigemSolicitacao(item);
+    const origemNome = refs.solicitacaoOrigem.value === 'MONTAGEM' ? 'Montagem' : 'Almoxarifado';
+
+    if (saldoDisponivel <= 0) {
+      throw new Error(`${origemNome} nao possui saldo disponivel para esta solicitacao.`);
+    }
+
+    if (quantidadeSolicitada > saldoDisponivel) {
+      throw new Error(`Saldo insuficiente em ${origemNome}. Disponivel: ${formatInteger(saldoDisponivel)}.`);
     }
 
     const response = await fetch(solicitacoesApiBaseUrl, {
@@ -984,14 +1009,20 @@ function renderizarLista() {
 }
 
 function renderizarPedidos() {
-  document.getElementById('expedicao-pedidos-total').textContent = `${pedidosExpedicaoCache.length} registro(s) encontrado(s)`;
+  const pedidosFiltrados = obterPedidosExpedicaoFiltrados();
+  document.getElementById('expedicao-pedidos-total').textContent = `${pedidosFiltrados.length} registro(s) encontrado(s)`;
 
   if (!pedidosExpedicaoCache.length) {
     refs.pedidosTbody.innerHTML = '<tr><td colspan="8" class="empty-state">Nenhum pedido da Expedicao encontrado.</td></tr>';
     return;
   }
 
-  refs.pedidosTbody.innerHTML = pedidosExpedicaoCache.map((item) => `
+  if (!pedidosFiltrados.length) {
+    refs.pedidosTbody.innerHTML = `<tr><td colspan="8" class="empty-state">${escapeHtml(obterMensagemTimeline(refs.pedidosFiltroSituacao.value, 'pedido da Expedicao'))}</td></tr>`;
+    return;
+  }
+
+  refs.pedidosTbody.innerHTML = pedidosFiltrados.map((item) => `
     <tr>
       <td>${escapeHtml(item.origem_atendimento_nome || 'Almoxarifado')}</td>
       <td class="table-code">${escapeHtml(item.codigo)}</td>
@@ -1094,7 +1125,7 @@ function atualizarBadgesMenu() {
 }
 
 function contarPedidosAbertos(items) {
-  return items.filter((item) => ['PENDENTE', 'EM_SEPARACAO', 'ATENDIDA_PARCIAL'].includes(String(item.status || '').toUpperCase())).length;
+  return items.filter((item) => ACTIVE_REQUEST_STATUSES.includes(String(item.status || '').toUpperCase())).length;
 }
 
 function setBadge(element, count) {
@@ -1105,6 +1136,36 @@ function setBadge(element, count) {
   const safeCount = Number(count || 0);
   element.textContent = formatInteger(safeCount);
   element.classList.toggle('hidden', safeCount <= 0);
+}
+
+function obterPedidosExpedicaoFiltrados() {
+  return pedidosExpedicaoCache.filter((item) => filtrarPorTimeline(item.status, refs.pedidosFiltroSituacao.value));
+}
+
+function filtrarPorTimeline(status, filtro) {
+  const normalized = String(status || '').toUpperCase();
+
+  if (filtro === 'encerradas') {
+    return CLOSED_REQUEST_STATUSES.includes(normalized);
+  }
+
+  if (filtro === 'todas') {
+    return true;
+  }
+
+  return ACTIVE_REQUEST_STATUSES.includes(normalized);
+}
+
+function obterMensagemTimeline(filtro, contexto) {
+  if (filtro === 'encerradas') {
+    return `Nenhum ${contexto} encerrado encontrado.`;
+  }
+
+  if (filtro === 'todas') {
+    return `Nenhum ${contexto} encontrado.`;
+  }
+
+  return `Nenhum ${contexto} ativo encontrado.`;
 }
 
 function obterSaldosExpedicaoFiltrados() {

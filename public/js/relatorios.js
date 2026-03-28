@@ -129,6 +129,10 @@ async function carregarSolicitacoes() {
 function renderizarSugestoes(termo) {
   const filtro = normalizarBusca(termo);
   const itens = itensCache.filter((item) => {
+    if (obterSaldoDisponivelSolicitacao(item) <= 0) {
+      return false;
+    }
+
     if (!filtro) {
       return true;
     }
@@ -137,7 +141,7 @@ function renderizarSugestoes(termo) {
   }).slice(0, 8);
 
   if (!itens.length) {
-    refs.solicitacaoSugestoes.innerHTML = '<div class="autocomplete-empty">Nenhuma peca encontrada.</div>';
+    refs.solicitacaoSugestoes.innerHTML = '<div class="autocomplete-empty">Nenhuma peca com saldo disponivel no Almoxarifado.</div>';
     refs.solicitacaoSugestoes.classList.remove('hidden');
     return;
   }
@@ -193,6 +197,22 @@ async function handleCreateSolicitacao(event) {
     const area = buildAreaFromStockId(refs.solicitacaoArea.value);
     if (!area) {
       throw new Error('Selecione o estoque de destino.');
+    }
+
+    const item = itensCache.find((entry) => Number(entry.id) === Number(refs.solicitacaoItemId.value));
+    if (!item) {
+      throw new Error('Selecione uma peca ou submontagem valida.');
+    }
+
+    const quantidadeSolicitada = Math.max(1, Number.parseInt(refs.solicitacaoQuantidade.value, 10) || 0);
+    const saldoDisponivel = obterSaldoDisponivelSolicitacao(item);
+
+    if (saldoDisponivel <= 0) {
+      throw new Error('O Almoxarifado nao possui saldo disponivel para esta solicitacao.');
+    }
+
+    if (quantidadeSolicitada > saldoDisponivel) {
+      throw new Error(`Saldo insuficiente no Almoxarifado. Disponivel: ${formatInteger(saldoDisponivel)}.`);
     }
 
     const response = await fetch(solicitacoesApiBaseUrl, {
@@ -296,6 +316,10 @@ function renderStatus(status) {
   if (normalized === 'EM_SEPARACAO') className += ' is-info';
 
   return `<span class="${className}">${escapeHtml(normalized || '-')}</span>`;
+}
+
+function obterSaldoDisponivelSolicitacao(item) {
+  return Number(item?.saldo_almoxarifado || 0);
 }
 
 function esconderSugestoes() {

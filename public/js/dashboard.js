@@ -16,6 +16,8 @@ let historicoCache = [];
 let producaoCache = [];
 let materiasPrimasCache = [];
 let autoRefreshHandle = null;
+const ACTIVE_REQUEST_STATUSES = ['PENDENTE', 'EM_SEPARACAO', 'ATENDIDA_PARCIAL'];
+const CLOSED_REQUEST_STATUSES = ['ATENDIDA', 'CANCELADA'];
 
 const refs = {
   mensagem: document.getElementById('almox-mensagem'),
@@ -31,6 +33,7 @@ const refs = {
   pedidosModal: document.getElementById('almox-pedidos-modal'),
   pedidosTotal: document.getElementById('almox-pedidos-total'),
   pedidosTbody: document.getElementById('almox-pedidos-tbody'),
+  pedidosFiltroSituacao: document.getElementById('almox-pedidos-filtro-situacao'),
   pedidosFiltroQ: document.getElementById('almox-pedidos-filtro-q'),
   pedidosFiltroStatus: document.getElementById('almox-pedidos-filtro-status'),
   atendimentoModal: document.getElementById('almox-atendimento-modal'),
@@ -93,6 +96,7 @@ function bindEvents() {
 
   refs.pedidosFiltroQ.addEventListener('input', renderizarPedidos);
   refs.pedidosFiltroStatus.addEventListener('change', renderizarPedidos);
+  refs.pedidosFiltroSituacao.addEventListener('change', renderizarPedidos);
   document.getElementById('almox-btn-limpar-pedidos').addEventListener('click', limparFiltrosPedidos);
   refs.pedidosTbody.addEventListener('click', handlePedidosActions);
 
@@ -289,7 +293,7 @@ function renderizarPedidos() {
   }
 
   if (!pedidosFiltrados.length) {
-    refs.pedidosTbody.innerHTML = '<tr><td colspan="9" class="empty-state">Nenhuma solicitacao encontrada com os filtros informados.</td></tr>';
+    refs.pedidosTbody.innerHTML = `<tr><td colspan="9" class="empty-state">${escapeHtml(obterMensagemSolicitacaoVazia(refs.pedidosFiltroSituacao.value))}</td></tr>`;
     return;
   }
 
@@ -446,7 +450,7 @@ function atualizarBadgesMenu() {
 }
 
 function contarPedidosAbertos(items) {
-  return items.filter((item) => ['PENDENTE', 'EM_SEPARACAO', 'ATENDIDA_PARCIAL'].includes(String(item.status || '').toUpperCase())).length;
+  return items.filter((item) => ACTIVE_REQUEST_STATUSES.includes(String(item.status || '').toUpperCase())).length;
 }
 
 function setBadge(element, count) {
@@ -457,6 +461,32 @@ function setBadge(element, count) {
   const safeCount = Number(count || 0);
   element.textContent = formatInteger(safeCount);
   element.classList.toggle('hidden', safeCount <= 0);
+}
+
+function filtrarPorTimeline(status, filtro, ativos, encerrados) {
+  const normalized = String(status || '').toUpperCase();
+
+  if (filtro === 'encerradas') {
+    return encerrados.includes(normalized);
+  }
+
+  if (filtro === 'todas') {
+    return true;
+  }
+
+  return ativos.includes(normalized);
+}
+
+function obterMensagemSolicitacaoVazia(filtro) {
+  if (filtro === 'encerradas') {
+    return 'Nenhuma solicitacao encerrada encontrada.';
+  }
+
+  if (filtro === 'todas') {
+    return 'Nenhuma solicitacao encontrada com os filtros informados.';
+  }
+
+  return 'Nenhuma solicitacao ativa encontrada.';
 }
 
 function obterSaldosFiltrados() {
@@ -491,10 +521,15 @@ function obterSaldosFiltrados() {
 }
 
 function obterPedidosFiltrados() {
+  const filtroSituacao = refs.pedidosFiltroSituacao.value;
   const filtroQ = normalizarBusca(refs.pedidosFiltroQ.value.trim());
   const filtroStatus = refs.pedidosFiltroStatus.value.trim().toUpperCase();
 
   return solicitacoesCache.filter((item) => {
+    if (!filtrarPorTimeline(item.status, filtroSituacao, ACTIVE_REQUEST_STATUSES, CLOSED_REQUEST_STATUSES)) {
+      return false;
+    }
+
     if (filtroStatus && String(item.status || '').toUpperCase() !== filtroStatus) {
       return false;
     }
@@ -879,6 +914,7 @@ function limparFiltrosEstoque() {
 }
 
 function limparFiltrosPedidos() {
+  refs.pedidosFiltroSituacao.value = 'abertas';
   refs.pedidosFiltroQ.value = '';
   refs.pedidosFiltroStatus.value = '';
   renderizarPedidos();

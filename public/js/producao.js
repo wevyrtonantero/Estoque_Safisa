@@ -3,6 +3,8 @@ const solicitacoesProducaoApiBaseUrl = '/api/solicitacoes-producao';
 const maquinasApiBaseUrl = '/api/maquinas';
 const pecasApiBaseUrl = '/api/pecas?tipo=PRODUZIDA';
 const AUTO_REFRESH_MS = 15000;
+const ACTIVE_PRODUCTION_REQUEST_STATUSES = ['PENDENTE', 'EM_ANALISE', 'EM_PRODUCAO'];
+const CLOSED_PRODUCTION_REQUEST_STATUSES = ['CONCLUIDA', 'CANCELADA'];
 
 let producoesCache = [];
 let solicitacoesProducaoCache = [];
@@ -61,6 +63,7 @@ function bindEvents() {
     field.addEventListener('input', agendarFiltroAutomatico);
     field.addEventListener('change', agendarFiltroAutomatico);
   });
+  document.getElementById('filtro-solicitacoes-producao-situacao').addEventListener('change', renderizarSolicitacoesProducao);
   document.getElementById('producao-form').addEventListener('submit', handleCriarProducao);
   document.getElementById('finalizacao-form').addEventListener('submit', handleFinalizarProducao);
   refs.tabela.addEventListener('click', handleTabelaActions);
@@ -184,14 +187,20 @@ function renderizarTabela() {
 }
 
 function renderizarSolicitacoesProducao() {
-  refs.solicitacoesTotal.textContent = `${solicitacoesProducaoCache.length} registro(s) encontrado(s)`;
+  const solicitacoesFiltradas = obterSolicitacoesProducaoFiltradas();
+  refs.solicitacoesTotal.textContent = `${solicitacoesFiltradas.length} registro(s) encontrado(s)`;
 
   if (!solicitacoesProducaoCache.length) {
     refs.solicitacoesTbody.innerHTML = '<tr><td colspan="7" class="empty-state">Nenhuma solicitacao para a Producao.</td></tr>';
     return;
   }
 
-  refs.solicitacoesTbody.innerHTML = solicitacoesProducaoCache.map((item) => `
+  if (!solicitacoesFiltradas.length) {
+    refs.solicitacoesTbody.innerHTML = `<tr><td colspan="7" class="empty-state">${escapeHtml(obterMensagemTimelineSolicitacao(document.getElementById('filtro-solicitacoes-producao-situacao').value))}</td></tr>`;
+    return;
+  }
+
+  refs.solicitacoesTbody.innerHTML = solicitacoesFiltradas.map((item) => `
     <tr>
       <td>${escapeHtml(item.origem_nome || '-')}</td>
       <td class="table-description">${escapeHtml(`${item.codigo} - ${item.descricao}`)}</td>
@@ -243,7 +252,7 @@ function atualizarIndicadores() {
   const emAndamento = producoesCache.filter((item) => item.status === 'EM_ANDAMENTO').length;
   const finalizadas = producoesCache.filter((item) => item.status === 'FINALIZADA').length;
   const planejada = producoesCache.reduce((total, item) => total + Number(item.quantidade_planejada || 0), 0);
-  const solicitacoesPendentes = solicitacoesProducaoCache.filter((item) => ['PENDENTE', 'EM_ANALISE', 'EM_PRODUCAO'].includes(String(item.status || '').toUpperCase())).length;
+  const solicitacoesPendentes = solicitacoesProducaoCache.filter((item) => ACTIVE_PRODUCTION_REQUEST_STATUSES.includes(String(item.status || '').toUpperCase())).length;
 
   document.getElementById('metric-producao-andamento').textContent = String(emAndamento);
   document.getElementById('metric-producao-finalizada').textContent = String(finalizadas);
@@ -263,6 +272,36 @@ function iniciarAtualizacaoAutomatica() {
 
     atualizarPainelAutomaticamente();
   }, AUTO_REFRESH_MS);
+}
+
+function obterSolicitacoesProducaoFiltradas() {
+  const filtro = document.getElementById('filtro-solicitacoes-producao-situacao').value;
+
+  return solicitacoesProducaoCache.filter((item) => {
+    const normalized = String(item.status || '').toUpperCase();
+
+    if (filtro === 'encerradas') {
+      return CLOSED_PRODUCTION_REQUEST_STATUSES.includes(normalized);
+    }
+
+    if (filtro === 'todas') {
+      return true;
+    }
+
+    return ACTIVE_PRODUCTION_REQUEST_STATUSES.includes(normalized);
+  });
+}
+
+function obterMensagemTimelineSolicitacao(filtro) {
+  if (filtro === 'encerradas') {
+    return 'Nenhuma solicitacao encerrada para a Producao.';
+  }
+
+  if (filtro === 'todas') {
+    return 'Nenhuma solicitacao encontrada para a Producao.';
+  }
+
+  return 'Nenhuma solicitacao ativa para a Producao.';
 }
 
 async function atualizarPainelAutomaticamente() {
