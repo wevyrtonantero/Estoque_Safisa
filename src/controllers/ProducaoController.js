@@ -21,6 +21,8 @@ function buildCreatePayload(body) {
   return {
     id_maquina: normalizeOptionalInteger(body.id_maquina),
     id_peca: normalizeOptionalInteger(body.id_peca),
+    id_materia_prima: normalizeOptionalInteger(body.id_materia_prima),
+    comprimento_corte_mm: normalizeOptionalDecimal(body.comprimento_corte_mm),
     quantidade_planejada: normalizeOptionalInteger(body.quantidade_planejada),
     observacao_inicio: body.observacao_inicio ? String(body.observacao_inicio).trim() : null
   };
@@ -44,6 +46,20 @@ function validateCreatePayload(payload) {
 
   if (!Number.isInteger(payload.id_peca)) {
     errors.push('A peca informada deve ser valida.');
+  }
+
+  if (
+    payload.id_materia_prima !== null
+    && !Number.isInteger(payload.id_materia_prima)
+  ) {
+    errors.push('A materia-prima informada deve ser valida.');
+  }
+
+  if (
+    payload.comprimento_corte_mm !== null
+    && (!Number.isFinite(payload.comprimento_corte_mm) || payload.comprimento_corte_mm <= 0)
+  ) {
+    errors.push('O comprimento de corte em mm deve ser maior que zero.');
   }
 
   if (!Number.isInteger(payload.quantidade_planejada) || payload.quantidade_planejada <= 0) {

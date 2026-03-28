@@ -2,6 +2,7 @@ const producaoApiBaseUrl = '/api/producao';
 const solicitacoesProducaoApiBaseUrl = '/api/solicitacoes-producao';
 const maquinasApiBaseUrl = '/api/maquinas';
 const pecasApiBaseUrl = '/api/pecas?tipo=PRODUZIDA';
+const materiasPrimasAutocompleteApiBaseUrl = '/api/materias-primas-autocomplete';
 const estoquesApiBaseUrl = '/api/estoques';
 const estoqueSaldosApiBaseUrl = '/api/estoque/saldos';
 const AUTO_REFRESH_MS = 15000;
@@ -12,6 +13,7 @@ let producoesCache = [];
 let solicitacoesProducaoCache = [];
 let maquinasCache = [];
 let pecasCache = [];
+let materiasPrimasCache = [];
 let estoquesSetorCache = [];
 let almoxStockId = null;
 let estoqueConsultaDebounceTimer = null;
@@ -47,6 +49,8 @@ const refs = {
   pecaId: document.getElementById('producao-peca-id'),
   pecaSugestoes: document.getElementById('producao-peca-sugestoes'),
   maquinaSelect: document.getElementById('producao-maquina'),
+  materiaPrimaSelect: document.getElementById('producao-materia-prima'),
+  comprimentoInicialInput: document.getElementById('producao-comprimento-corte-inicial'),
   finalizacaoComprimentoWrapper: document.getElementById('finalizacao-comprimento-wrapper'),
   finalizacaoComprimentoInput: document.getElementById('finalizacao-comprimento-corte'),
   finalizacaoComprimentoHint: document.getElementById('finalizacao-comprimento-hint')
@@ -54,7 +58,7 @@ const refs = {
 
 document.addEventListener('DOMContentLoaded', async () => {
   bindEvents();
-  await Promise.all([carregarMaquinas(), carregarPecas(), carregarEstoquesSetor()]);
+  await Promise.all([carregarMaquinas(), carregarPecas(), carregarMateriasPrimas(), carregarEstoquesSetor()]);
   await Promise.all([carregarProducoes(), carregarSolicitacoesProducao(), carregarProximaRuptura()]);
   iniciarAtualizacaoAutomatica();
 });
@@ -98,6 +102,8 @@ function bindEvents() {
   refs.solicitacoesTbody.addEventListener('click', handleSolicitacoesProducaoActions);
   refs.pecaBusca.addEventListener('input', () => {
     refs.pecaId.value = '';
+    refs.materiaPrimaSelect.value = '';
+    refs.comprimentoInicialInput.value = '';
     renderizarSugestoesPeca(refs.pecaBusca.value.trim());
   });
   refs.pecaBusca.addEventListener('focus', () => renderizarSugestoesPeca(refs.pecaBusca.value.trim()));
@@ -175,6 +181,21 @@ async function carregarPecas() {
   }
 
   pecasCache = pecas.filter((peca) => peca.tipo === 'PRODUZIDA' && peca.classificacao === 'ITEM');
+}
+
+async function carregarMateriasPrimas() {
+  const response = await fetch(materiasPrimasAutocompleteApiBaseUrl);
+  const materiasPrimas = await response.json();
+
+  if (!response.ok) {
+    throw new Error(materiasPrimas.message || 'Nao foi possivel carregar as materias-primas.');
+  }
+
+  materiasPrimasCache = Array.isArray(materiasPrimas) ? materiasPrimas : [];
+  refs.materiaPrimaSelect.innerHTML = `
+    <option value="">Selecione</option>
+    ${materiasPrimasCache.map((item) => `<option value="${item.id}">${escapeHtml(`${item.codigo} - ${item.nome}`)}</option>`).join('')}
+  `;
 }
 
 async function carregarProducoes() {
@@ -474,6 +495,7 @@ function handleSugestaoPecaClick(event) {
 
   refs.pecaId.value = option.dataset.pecaId;
   refs.pecaBusca.value = option.dataset.pecaLabel;
+  preencherConfiguracaoInicialPeca(option.dataset.pecaId);
   esconderSugestoes();
 }
 
@@ -487,6 +509,8 @@ async function handleCriarProducao(event) {
       body: JSON.stringify({
         id_maquina: refs.maquinaSelect.value,
         id_peca: refs.pecaId.value,
+        id_materia_prima: refs.materiaPrimaSelect.value,
+        comprimento_corte_mm: refs.comprimentoInicialInput.value.trim(),
         quantidade_planejada: document.getElementById('producao-quantidade-planejada').value,
         observacao_inicio: document.getElementById('producao-observacao-inicio').value.trim()
       })
@@ -634,8 +658,22 @@ function resetFormProducao() {
   refs.pecaId.value = '';
   refs.pecaBusca.value = '';
   document.getElementById('producao-quantidade-planejada').value = '1';
+  refs.materiaPrimaSelect.value = '';
+  refs.comprimentoInicialInput.value = '';
   esconderSugestoes();
   esconderMensagemModal();
+}
+
+function preencherConfiguracaoInicialPeca(pecaId) {
+  const peca = pecasCache.find((item) => Number(item.id) === Number(pecaId));
+  if (!peca) {
+    refs.materiaPrimaSelect.value = '';
+    refs.comprimentoInicialInput.value = '';
+    return;
+  }
+
+  refs.materiaPrimaSelect.value = peca.id_materia_prima ? String(peca.id_materia_prima) : '';
+  refs.comprimentoInicialInput.value = peca.comprimento_mm ? formatInputDecimal(peca.comprimento_mm) : '';
 }
 
 function limparFiltros() {

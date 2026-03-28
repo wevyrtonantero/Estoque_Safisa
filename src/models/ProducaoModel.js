@@ -171,6 +171,27 @@ class ProducaoModel {
     return rows[0] || null;
   }
 
+  static async findMateriaPrimaById(id, connection = pool) {
+    const [rows] = await connection.query(
+      `
+        SELECT
+          id,
+          codigo,
+          nome,
+          categoria,
+          geometria,
+          unidade_estoque,
+          peso_por_metro,
+          peso_unitario_kg
+        FROM materias_primas
+        WHERE id = ?
+      `,
+      [id]
+    );
+
+    return rows[0] || null;
+  }
+
   static async create(data) {
     const connection = await pool.getConnection();
 
@@ -187,6 +208,21 @@ class ProducaoModel {
         throw this.createBusinessError('Selecione uma peca produzida valida para iniciar a producao.');
       }
 
+      let materiaPrimaId = peca.id_materia_prima || null;
+
+      if (data.id_materia_prima) {
+        const materiaPrima = await this.findMateriaPrimaById(data.id_materia_prima, connection);
+        if (!materiaPrima) {
+          throw this.createBusinessError('A materia-prima selecionada para a ordem nao foi encontrada.');
+        }
+
+        materiaPrimaId = materiaPrima.id;
+      }
+
+      const comprimentoCorte = data.comprimento_corte_mm && Number(data.comprimento_corte_mm) > 0
+        ? Number(data.comprimento_corte_mm)
+        : (peca.comprimento_mm || null);
+
       const [result] = await connection.query(
         `
           INSERT INTO producao_ordens (
@@ -201,9 +237,9 @@ class ProducaoModel {
         [
           data.id_maquina,
           data.id_peca,
-          peca.id_materia_prima || null,
+          materiaPrimaId,
           data.quantidade_planejada,
-          peca.comprimento_mm || null,
+          comprimentoCorte,
           data.observacao_inicio || null
         ]
       );

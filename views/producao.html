@@ -273,6 +273,20 @@
           <span class="form-hint">A materia-prima da peca precisa estar vinculada para a finalizacao baixar o estoque.</span>
         </div>
 
+        <div class="field span-8">
+          <label for="producao-materia-prima">Materia-prima da ordem</label>
+          <select id="producao-materia-prima">
+            <option value="">Selecione</option>
+          </select>
+          <span class="form-hint">Esse campo vem da peca, mas pode ser ajustado para a ordem atual.</span>
+        </div>
+
+        <div class="field span-4">
+          <label for="producao-comprimento-corte-inicial">Comprimento de corte (mm)</label>
+          <input id="producao-comprimento-corte-inicial" type="number" min="0" step="0.01" placeholder="Ex.: 125">
+          <span class="form-hint">Usado para consumir corretamente a materia-prima desta ordem.</span>
+        </div>
+
         <div class="field span-12">
           <label for="producao-observacao-inicio">Observacao de inicio</label>
           <input id="producao-observacao-inicio" type="text" maxlength="255" placeholder="Opcional">
