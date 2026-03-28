@@ -28,7 +28,23 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Rotas HTML das paginas administrativas.
 app.get('/', (req, res) => {
-  res.redirect('/pagina-submontagens');
+  res.redirect('/pagina-inicial');
+});
+
+app.get('/pagina-inicial', (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'portal-inicial.html'));
+});
+
+app.get('/pagina-acesso', (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'portal-acesso.html'));
+});
+
+app.get('/pagina-operacao', (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'portal-operacao.html'));
+});
+
+app.get('/pagina-adm', (req, res) => {
+  res.sendFile(path.join(__dirname, 'views', 'portal-adm.html'));
 });
 
 app.get('/pagina-pecas', (req, res) => {
