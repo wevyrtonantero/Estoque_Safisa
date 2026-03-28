@@ -14,6 +14,7 @@ const producaoRoutes = require('./src/routes/producaoRoutes');
 const terceirizacaoRemessaRoutes = require('./src/routes/terceirizacaoRemessaRoutes');
 const tratamentoExternoRoutes = require('./src/routes/tratamentoExternoRoutes');
 const solicitacaoEstoqueRoutes = require('./src/routes/solicitacaoEstoqueRoutes');
+const solicitacaoProducaoRoutes = require('./src/routes/solicitacaoProducaoRoutes');
 const painelRoutes = require('./src/routes/painelRoutes');
 const { testConnection } = require('./database/connection');
 
@@ -103,6 +104,7 @@ app.use('/api', producaoRoutes);
 app.use('/api', terceirizacaoRemessaRoutes);
 app.use('/api', tratamentoExternoRoutes);
 app.use('/api', solicitacaoEstoqueRoutes);
+app.use('/api', solicitacaoProducaoRoutes);
 app.use('/api', painelRoutes);
 
 // Resposta padrao para qualquer rota nao mapeada.

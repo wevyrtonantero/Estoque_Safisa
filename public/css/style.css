@@ -214,6 +214,43 @@ textarea {
   padding: 18px 0 28px;
 }
 
+.sector-shell {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.sector-menu {
+  position: sticky;
+  top: 18px;
+}
+
+.sector-menu-card {
+  padding: 18px;
+}
+
+.sector-menu-copy {
+  margin: 0 0 16px;
+  color: var(--text-soft);
+  line-height: 1.55;
+}
+
+.sector-menu-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sector-menu-list .btn {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.sector-content {
+  min-width: 0;
+}
+
 .topbar {
   display: flex;
   justify-content: space-between;
@@ -1113,6 +1150,14 @@ tbody tr:hover {
 @media (max-width: 960px) {
   .workspace {
     width: min(100%, calc(100% - 24px));
+  }
+
+  .sector-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sector-menu {
+    position: static;
   }
 
   .toolbar-form {

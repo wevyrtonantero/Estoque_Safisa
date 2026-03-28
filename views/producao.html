@@ -35,6 +35,8 @@
       <a class="nav-link" href="/pagina-maquinas"><span class="nav-icon">MQ</span><span>Maquinas</span></a>
       <a class="nav-link" href="/pagina-estoque"><span class="nav-icon">ES</span><span>Estoque</span></a>
       <a class="nav-link is-active" href="/pagina-producao"><span class="nav-icon">PR</span><span>Producao</span></a>
+      <a class="nav-link" href="/pagina-montagem"><span class="nav-icon">MT</span><span>Montagem</span></a>
+      <a class="nav-link" href="/pagina-expedicao"><span class="nav-icon">EX</span><span>Expedicao</span></a>
       <a class="nav-link" href="/pagina-tratamento-externo"><span class="nav-icon">TE</span><span>Tratamento Externo</span></a>
       <a class="nav-link" href="/pagina-remessas-terceiros"><span class="nav-icon">NF</span><span>Remessas / NF</span></a>
       <a class="nav-link" href="/pagina-relatorios"><span class="nav-icon">SP</span><span>Solicitacoes</span></a>
@@ -80,6 +82,37 @@
     </section>
 
     <div id="producao-mensagem" class="message hidden"></div>
+
+    <section class="content-card">
+      <div class="card-top">
+        <div>
+          <span class="section-pill">Solicitacoes</span>
+          <h2>Solicitacoes para a Producao</h2>
+          <p id="total-solicitacoes-producao">0 registro(s) encontrado(s)</p>
+        </div>
+      </div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Origem</th>
+              <th>Peca</th>
+              <th>Quantidade</th>
+              <th>Status</th>
+              <th>Observacao</th>
+              <th>Data</th>
+              <th>Acoes</th>
+            </tr>
+          </thead>
+          <tbody id="solicitacoes-producao-tbody">
+            <tr>
+              <td colspan="7" class="empty-state">Carregando solicitacoes...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
 
     <section class="content-card">
       <div class="card-top">

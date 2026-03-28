@@ -7,6 +7,7 @@ USE safisa;
 CREATE TABLE IF NOT EXISTS solicitacoes_estoque (
   id INT AUTO_INCREMENT PRIMARY KEY,
   area_origem ENUM('EXPEDICAO', 'MONTAGEM') NOT NULL,
+  origem_atendimento ENUM('ALMOXARIFADO', 'MONTAGEM') NOT NULL DEFAULT 'ALMOXARIFADO',
   id_peca INT NOT NULL,
   quantidade_solicitada DECIMAL(12, 2) NOT NULL,
   quantidade_atendida DECIMAL(12, 2) NOT NULL DEFAULT 0,
@@ -30,6 +31,7 @@ CREATE TABLE IF NOT EXISTS solicitacoes_estoque (
   CONSTRAINT chk_solicitacao_atendida
     CHECK (quantidade_atendida >= 0),
   INDEX idx_solicitacao_area (area_origem),
+  INDEX idx_solicitacao_origem_atendimento (origem_atendimento),
   INDEX idx_solicitacao_status (status),
   INDEX idx_solicitacao_data (data_solicitacao)
 ) ENGINE = InnoDB

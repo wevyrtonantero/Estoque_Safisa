@@ -14,12 +14,6 @@
         <h1 class="page-title">Expedicao</h1>
         <p class="page-subtitle">Acompanhe seu estoque, veja o status dos pedidos ao Almoxarifado e registre a saida de venda.</p>
       </div>
-
-      <div class="topbar-actions">
-        <a class="btn btn-neutral" href="/pagina-relatorios?area=expedicao">Solicitar Pecas</a>
-        <a class="btn btn-secondary" href="/pagina-simulacao-montagem?origem=expedicao">Simulacao de Montagem</a>
-        <a class="btn btn-secondary" href="/pagina-estoque">Controle de Estoque</a>
-      </div>
     </header>
 
     <section class="summary-row">
@@ -41,13 +35,101 @@
 
     <div id="expedicao-mensagem" class="message hidden"></div>
 
-    <section class="content-card">
-      <div class="card-top">
+    <section class="sector-shell">
+      <aside class="sector-menu">
+        <section class="content-card sector-menu-card">
+          <span class="section-pill">Menu do Setor</span>
+
+          <div class="sector-menu-list">
+            <button id="expedicao-btn-saida-menu" class="btn btn-primary" type="button">Baixa de Venda</button>
+            <button id="expedicao-btn-solicitar" class="btn btn-neutral" type="button">Solicitar Pecas</button>
+            <button id="expedicao-btn-simular" class="btn btn-secondary" type="button">Simulacao de Montagem</button>
+            <button id="expedicao-btn-pedidos-menu" class="btn btn-neutral" type="button">Meus Pedidos</button>
+            <button id="expedicao-btn-historico-menu" class="btn btn-neutral" type="button">Historico de Saidas</button>
+            <button id="expedicao-btn-producao" class="btn btn-secondary" type="button">Ver Producao</button>
+          </div>
+        </section>
+      </aside>
+
+      <div class="sector-content">
+        <section class="content-card">
+          <div class="card-top">
+            <div>
+              <span class="section-pill">Estoque</span>
+              <h2>Saldo atual da Expedicao</h2>
+              <p id="expedicao-estoque-total">0 registro(s) encontrado(s)</p>
+            </div>
+          </div>
+
+          <form class="toolbar-form" id="expedicao-estoque-filtro-form">
+            <div class="field">
+              <label for="expedicao-filtro-codigo">Codigo</label>
+              <input id="expedicao-filtro-codigo" type="text" placeholder="Ex.: A-176">
+            </div>
+
+            <div class="field">
+              <label for="expedicao-filtro-descricao">Nome / Descricao</label>
+              <input id="expedicao-filtro-descricao" type="text" placeholder="Digite parte do nome">
+            </div>
+
+            <div class="field">
+              <label for="expedicao-filtro-classificacao">Classificacao</label>
+              <select id="expedicao-filtro-classificacao">
+                <option value="">Todos</option>
+                <option value="ITEM">Itens</option>
+                <option value="SUBMONTAGEM">Submontagens</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="expedicao-filtro-quantidade">Quantidade em estoque</label>
+              <select id="expedicao-filtro-quantidade">
+                <option value="">Padrao</option>
+                <option value="asc">Menor quantidade</option>
+                <option value="desc">Maior quantidade</option>
+              </select>
+            </div>
+
+            <button id="expedicao-btn-limpar-filtros-estoque" class="btn btn-neutral" type="button">Limpar</button>
+          </form>
+
+          <div class="subtle-divider"></div>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Codigo</th>
+                  <th>Descricao</th>
+                  <th>Tipo</th>
+                  <th>Classificacao</th>
+                  <th>Quantidade</th>
+                </tr>
+              </thead>
+              <tbody id="expedicao-estoque-tbody">
+                <tr>
+                  <td colspan="5" class="empty-state">Carregando estoque...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <div id="expedicao-saida-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="expedicao-saida"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
         <div>
           <span class="section-pill">Saida</span>
           <h2>Baixa de venda</h2>
           <p>Monte a lista de venda e baixe os itens direto da Expedicao.</p>
         </div>
+
+        <button id="btn-fechar-modal-expedicao-saida" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
       </div>
 
       <div id="expedicao-saida-mensagem" class="message hidden"></div>
@@ -112,23 +194,31 @@
           </tbody>
         </table>
       </div>
-    </section>
+    </div>
+  </div>
 
-    <section class="content-card">
-      <div class="card-top">
+  <div id="expedicao-pedidos-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="expedicao-pedidos"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
         <div>
           <span class="section-pill">Pedidos</span>
           <h2>Status dos pedidos ao Almoxarifado</h2>
           <p id="expedicao-pedidos-total">0 registro(s) encontrado(s)</p>
         </div>
 
-        <a class="btn btn-neutral" href="/pagina-relatorios?area=expedicao">Novo pedido</a>
+        <div class="topbar-actions">
+          <button id="expedicao-btn-solicitar-inline" class="btn btn-neutral" type="button">Novo pedido</button>
+          <button id="btn-fechar-modal-expedicao-pedidos" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+        </div>
       </div>
 
       <div class="table-wrapper">
         <table>
           <thead>
             <tr>
+              <th>Atendido por</th>
               <th>Codigo</th>
               <th>Descricao</th>
               <th>Qtd pacote</th>
@@ -140,20 +230,26 @@
           </thead>
           <tbody id="expedicao-pedidos-tbody">
             <tr>
-              <td colspan="7" class="empty-state">Carregando pedidos...</td>
+              <td colspan="8" class="empty-state">Carregando pedidos...</td>
             </tr>
           </tbody>
         </table>
       </div>
-    </section>
+    </div>
+  </div>
 
-    <section class="content-card">
-      <div class="card-top">
+  <div id="expedicao-historico-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="expedicao-historico"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
         <div>
           <span class="section-pill">Historico</span>
           <h2>Saidas registradas</h2>
           <p id="expedicao-historico-total">0 registro(s) encontrado(s)</p>
         </div>
+
+        <button id="btn-fechar-modal-expedicao-historico" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
       </div>
 
       <div class="table-wrapper">
@@ -174,16 +270,149 @@
           </tbody>
         </table>
       </div>
-    </section>
+    </div>
+  </div>
 
-    <section class="content-card">
-      <div class="card-top">
+  <div id="expedicao-producao-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="expedicao-producao"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
         <div>
-          <span class="section-pill">Estoque</span>
-          <h2>Saldo atual da Expedicao</h2>
-          <p id="expedicao-estoque-total">0 registro(s) encontrado(s)</p>
+          <span class="section-pill">Producao</span>
+          <h2>O que esta sendo produzido</h2>
+          <p>Consulta somente leitura das ordens em andamento.</p>
         </div>
+
+        <button id="btn-fechar-modal-expedicao-producao" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
       </div>
+
+      <div id="expedicao-producao-mensagem" class="message hidden"></div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Ordem</th>
+              <th>Maquina</th>
+              <th>Codigo</th>
+              <th>Descricao</th>
+              <th>Planejada</th>
+              <th>Materia-prima</th>
+              <th>Inicio</th>
+            </tr>
+          </thead>
+          <tbody id="expedicao-producao-tbody">
+            <tr>
+              <td colspan="7" class="empty-state">Carregando producao...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="modal-actions">
+        <button id="btn-fechar-modal-expedicao-producao-rodape" class="btn btn-neutral" type="button">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="expedicao-solicitacao-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="expedicao-solicitacao"></div>
+
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Solicitacao</span>
+          <h2>Pedir pecas</h2>
+          <p>Solicite ao Almoxarifado ou, quando fizer sentido, diretamente para a Montagem.</p>
+        </div>
+
+        <button id="btn-fechar-modal-expedicao-solicitacao" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="expedicao-solicitacao-mensagem" class="message hidden"></div>
+
+      <form id="expedicao-solicitacao-form" class="form-grid">
+        <input type="hidden" id="expedicao-solicitacao-item-id">
+
+        <div class="field span-4">
+          <label for="expedicao-solicitacao-origem">Atendido por</label>
+          <select id="expedicao-solicitacao-origem" required>
+            <option value="ALMOXARIFADO">Almoxarifado</option>
+            <option value="MONTAGEM">Montagem</option>
+          </select>
+        </div>
+
+        <div class="field span-8">
+          <label for="expedicao-solicitacao-item-busca">Peca ou submontagem</label>
+          <div class="autocomplete">
+            <input id="expedicao-solicitacao-item-busca" type="text" placeholder="Digite codigo ou descricao">
+            <div id="expedicao-solicitacao-item-sugestoes" class="autocomplete-panel hidden"></div>
+          </div>
+        </div>
+
+        <div id="expedicao-solicitacao-item-resumo" class="span-12 selected-tags empty">
+          Digite para ver a quantidade por pacote e o saldo na origem escolhida.
+        </div>
+
+        <div class="field span-3">
+          <label for="expedicao-solicitacao-quantidade">Quantidade</label>
+          <input id="expedicao-solicitacao-quantidade" type="number" min="1" step="1" value="1" required>
+        </div>
+
+        <div class="field span-9">
+          <label for="expedicao-solicitacao-observacao">Observacao</label>
+          <input id="expedicao-solicitacao-observacao" type="text" maxlength="255" placeholder="Opcional">
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button id="btn-cancelar-modal-expedicao-solicitacao" class="btn btn-neutral" type="button">Cancelar</button>
+          <button class="btn btn-primary" type="submit">Enviar solicitacao</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="expedicao-simulacao-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="expedicao-simulacao"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Simulacao</span>
+          <h2>Simulacao de Montagem</h2>
+          <p>Veja onde estao as pecas e gere a melhor solicitacao a partir do resultado.</p>
+        </div>
+
+        <button id="btn-fechar-modal-expedicao-simulacao" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="expedicao-simulacao-mensagem" class="message hidden"></div>
+
+      <form id="expedicao-simulacao-form" class="form-grid">
+        <input type="hidden" id="expedicao-simulacao-submontagem-id">
+
+        <div class="field span-8">
+          <label for="expedicao-simulacao-submontagem-busca">Submontagem</label>
+          <div class="autocomplete">
+            <input id="expedicao-simulacao-submontagem-busca" type="text" placeholder="Digite codigo ou descricao da submontagem">
+            <div id="expedicao-simulacao-submontagem-sugestoes" class="autocomplete-panel hidden"></div>
+          </div>
+        </div>
+
+        <div class="field span-4">
+          <label for="expedicao-simulacao-quantidade">Quantidade desejada</label>
+          <input id="expedicao-simulacao-quantidade" type="number" min="1" step="1" value="1">
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button class="btn btn-primary" type="submit">Simular</button>
+        </div>
+      </form>
+
+      <div id="expedicao-simulacao-resumo" class="selected-tags empty">A simulacao vai mostrar o que falta e a melhor acao sugerida.</div>
+
+      <div class="subtle-divider"></div>
 
       <div class="table-wrapper">
         <table>
@@ -191,20 +420,63 @@
             <tr>
               <th>Codigo</th>
               <th>Descricao</th>
-              <th>Tipo</th>
-              <th>Classificacao</th>
-              <th>Quantidade</th>
+              <th>Necessaria</th>
+              <th>Almox</th>
+              <th>Montagem</th>
+              <th>Expedicao</th>
+              <th>Falta</th>
+              <th>Sugestao</th>
+              <th>Acoes</th>
             </tr>
           </thead>
-          <tbody id="expedicao-estoque-tbody">
+          <tbody id="expedicao-simulacao-tbody">
             <tr>
-              <td colspan="5" class="empty-state">Carregando estoque...</td>
+              <td colspan="9" class="empty-state">Nenhuma simulacao executada.</td>
             </tr>
           </tbody>
         </table>
       </div>
-    </section>
-  </main>
+    </div>
+  </div>
+
+  <div id="expedicao-producao-solicitacao-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="expedicao-producao-solicitacao"></div>
+
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Producao</span>
+          <h2>Solicitar a Producao</h2>
+          <p>Registre a necessidade de fabricacao sem sair da Expedicao.</p>
+        </div>
+
+        <button id="btn-fechar-modal-expedicao-producao-solicitacao" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="expedicao-producao-solicitacao-mensagem" class="message hidden"></div>
+
+      <form id="expedicao-producao-solicitacao-form" class="form-grid">
+        <input type="hidden" id="expedicao-producao-solicitacao-item-id">
+
+        <div id="expedicao-producao-solicitacao-resumo" class="span-12 selected-tags empty">Selecione uma necessidade para solicitar a Producao.</div>
+
+        <div class="field span-4">
+          <label for="expedicao-producao-solicitacao-quantidade">Quantidade</label>
+          <input id="expedicao-producao-solicitacao-quantidade" type="number" min="1" step="1" value="1" required>
+        </div>
+
+        <div class="field span-8">
+          <label for="expedicao-producao-solicitacao-observacao">Observacao</label>
+          <input id="expedicao-producao-solicitacao-observacao" type="text" maxlength="255" placeholder="Opcional">
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button id="btn-cancelar-modal-expedicao-producao-solicitacao" class="btn btn-neutral" type="button">Cancelar</button>
+          <button class="btn btn-primary" type="submit">Enviar para Producao</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <script src="/js/expedicao.js"></script>
 </body>

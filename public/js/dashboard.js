@@ -53,6 +53,7 @@ async function carregarSolicitacoes() {
 
   if (q) params.append('q', q);
   if (status) params.append('status', status);
+  params.append('origem_atendimento', 'ALMOXARIFADO');
 
   try {
     const endpoint = `${solicitacoesApiBaseUrl}?${params.toString()}`;

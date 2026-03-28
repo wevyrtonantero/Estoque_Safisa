@@ -7,6 +7,11 @@ class SolicitacaoEstoqueModel {
     MONTAGEM: 'Montagem'
   };
 
+  static ORIGENS_ATENDIMENTO = {
+    ALMOXARIFADO: 'Almoxarifado',
+    MONTAGEM: 'Montagem'
+  };
+
   static createBusinessError(message) {
     const error = new Error(message);
     error.statusCode = 400;
@@ -18,8 +23,17 @@ class SolicitacaoEstoqueModel {
     return ['EXPEDICAO', 'MONTAGEM'].includes(normalized) ? normalized : '';
   }
 
+  static normalizeOrigin(origin) {
+    const normalized = String(origin || '').trim().toUpperCase();
+    return ['ALMOXARIFADO', 'MONTAGEM'].includes(normalized) ? normalized : '';
+  }
+
   static buildAreaLabel(area) {
     return area === 'EXPEDICAO' ? 'Expedição' : 'Montagem';
+  }
+
+  static buildOriginLabel(origin) {
+    return origin === 'MONTAGEM' ? 'Montagem' : 'Almoxarifado';
   }
 
   static async findDestinationStock(connection, area) {
@@ -45,12 +59,27 @@ class SolicitacaoEstoqueModel {
     return stock;
   }
 
+  static async findSourceStock(connection, origin) {
+    const stockName = this.ORIGENS_ATENDIMENTO[origin];
+    if (!stockName) {
+      throw this.createBusinessError('Origem de atendimento invalida para a solicitacao.');
+    }
+
+    const stock = await EstoqueModel.findStockByName(stockName, connection);
+    if (!stock || Number(stock.ativo) !== 1) {
+      throw this.createBusinessError(`O estoque de ${this.buildOriginLabel(origin)} nao esta disponivel.`);
+    }
+
+    return stock;
+  }
+
   static async findById(id, connection = pool) {
     const [rows] = await connection.query(
       `
         SELECT
           s.id,
           s.area_origem,
+          s.origem_atendimento,
           s.id_peca,
           s.quantidade_solicitada,
           s.quantidade_atendida,
@@ -70,7 +99,11 @@ class SolicitacaoEstoqueModel {
           CASE
             WHEN s.area_origem = 'EXPEDICAO' THEN 'Expedição'
             ELSE 'Montagem'
-          END AS destino_nome
+          END AS destino_nome,
+          CASE
+            WHEN s.origem_atendimento = 'MONTAGEM' THEN 'Montagem'
+            ELSE 'Almoxarifado'
+          END AS origem_atendimento_nome
         FROM solicitacoes_estoque s
         INNER JOIN pecas p ON p.id = s.id_peca
         LEFT JOIN maquinas m ON m.id = p.id_maquina
@@ -93,6 +126,11 @@ class SolicitacaoEstoqueModel {
     if (filters.area_origem) {
       conditions.push('s.area_origem = ?');
       values.push(filters.area_origem);
+    }
+
+    if (filters.origem_atendimento) {
+      conditions.push('s.origem_atendimento = ?');
+      values.push(filters.origem_atendimento);
     }
 
     if (filters.status) {
@@ -120,6 +158,7 @@ class SolicitacaoEstoqueModel {
         SELECT
           s.id,
           s.area_origem,
+          s.origem_atendimento,
           s.id_peca,
           s.quantidade_solicitada,
           s.quantidade_atendida,
@@ -139,7 +178,11 @@ class SolicitacaoEstoqueModel {
           CASE
             WHEN s.area_origem = 'EXPEDICAO' THEN 'Expedição'
             ELSE 'Montagem'
-          END AS destino_nome
+          END AS destino_nome,
+          CASE
+            WHEN s.origem_atendimento = 'MONTAGEM' THEN 'Montagem'
+            ELSE 'Almoxarifado'
+          END AS origem_atendimento_nome
         FROM solicitacoes_estoque s
         INNER JOIN pecas p ON p.id = s.id_peca
         LEFT JOIN maquinas m ON m.id = p.id_maquina
@@ -175,6 +218,15 @@ class SolicitacaoEstoqueModel {
         throw this.createBusinessError('A area de origem da solicitacao deve ser valida.');
       }
 
+      const origemAtendimento = this.normalizeOrigin(data.origem_atendimento || 'ALMOXARIFADO');
+      if (!origemAtendimento) {
+        throw this.createBusinessError('A origem de atendimento da solicitacao deve ser valida.');
+      }
+
+      if (area === 'MONTAGEM' && origemAtendimento !== 'ALMOXARIFADO') {
+        throw this.createBusinessError('A Montagem deve solicitar pecas ao Almoxarifado.');
+      }
+
       const item = await EstoqueModel.findItemById(data.id_peca, connection);
       if (!item) {
         throw this.createBusinessError('O item solicitado nao foi encontrado.');
@@ -184,13 +236,15 @@ class SolicitacaoEstoqueModel {
         `
           INSERT INTO solicitacoes_estoque (
             area_origem,
+            origem_atendimento,
             id_peca,
             quantidade_solicitada,
             observacao
-          ) VALUES (?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?)
         `,
         [
           area,
+          origemAtendimento,
           data.id_peca,
           data.quantidade_solicitada,
           data.observacao || null
@@ -254,6 +308,7 @@ class SolicitacaoEstoqueModel {
           SELECT
             id,
             area_origem,
+            origem_atendimento,
             id_peca,
             quantidade_solicitada,
             quantidade_atendida,
@@ -293,14 +348,15 @@ class SolicitacaoEstoqueModel {
         throw this.createBusinessError('A quantidade atendida nao pode ser maior que o saldo pendente da solicitacao.');
       }
 
-      const almox = await this.findAlmoxStock(connection);
+      const origemAtendimento = this.normalizeOrigin(request.origem_atendimento);
+      const estoqueOrigem = await this.findSourceStock(connection, origemAtendimento);
       const destino = await this.findDestinationStock(connection, request.area_origem);
 
-      const saldoOrigem = await EstoqueModel.findSaldoForUpdate(connection, almox.id, request.id_peca);
+      const saldoOrigem = await EstoqueModel.findSaldoForUpdate(connection, estoqueOrigem.id, request.id_peca);
       const quantidadeOrigem = saldoOrigem ? Number(saldoOrigem.quantidade) : 0;
 
       if (quantidadeAtender > quantidadeOrigem) {
-        throw this.createBusinessError(`Saldo insuficiente no Almoxarifado para ${item.codigo}.`);
+        throw this.createBusinessError(`Saldo insuficiente em ${estoqueOrigem.nome} para ${item.codigo}.`);
       }
 
       const saldoDestino = await EstoqueModel.findSaldoForUpdate(connection, destino.id, request.id_peca);
@@ -309,15 +365,15 @@ class SolicitacaoEstoqueModel {
       const novoSaldoOrigem = Number((quantidadeOrigem - quantidadeAtender).toFixed(2));
       const novoSaldoDestino = Number((quantidadeDestino + quantidadeAtender).toFixed(2));
 
-      await EstoqueModel.persistSaldo(connection, almox.id, request.id_peca, novoSaldoOrigem, saldoOrigem);
+      await EstoqueModel.persistSaldo(connection, estoqueOrigem.id, request.id_peca, novoSaldoOrigem, saldoOrigem);
       await EstoqueModel.persistSaldo(connection, destino.id, request.id_peca, novoSaldoDestino, saldoDestino);
       await EstoqueModel.createMovimentacao(connection, {
         id_peca: request.id_peca,
-        id_estoque_origem: almox.id,
+        id_estoque_origem: estoqueOrigem.id,
         id_estoque_destino: destino.id,
         tipo_movimentacao: 'TRANSFERENCIA',
         quantidade: quantidadeAtender,
-        observacao: `${data.observacao || 'Atendimento de solicitacao interna.'} Solicitação #${request.id} para ${destino.nome}.`.slice(0, 255)
+        observacao: `${data.observacao || 'Atendimento de solicitacao interna.'} Solicitação #${request.id} de ${estoqueOrigem.nome} para ${destino.nome}.`.slice(0, 255)
       });
 
       const quantidadeAtendidaTotal = Number((Number(request.quantidade_atendida) + quantidadeAtender).toFixed(2));

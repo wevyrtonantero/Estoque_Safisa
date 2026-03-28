@@ -16,6 +16,8 @@ const schemaFiles = [
   'schema_estoque_movimentacoes.sql',
   'schema_producao_ordens.sql',
   'schema_estrutura_submontagem.sql',
+  'schema_solicitacoes_estoque.sql',
+  'schema_solicitacoes_producao.sql',
   'schema_peca_fornecedor.sql',
   'schema_materia_prima_fornecedor.sql'
 ];

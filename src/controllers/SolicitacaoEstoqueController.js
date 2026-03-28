@@ -47,6 +47,7 @@ const SolicitacaoEstoqueController = {
     try {
       const result = await SolicitacaoEstoqueModel.findAll({
         area_origem: req.query.area_origem ? String(req.query.area_origem).trim().toUpperCase() : '',
+        origem_atendimento: req.query.origem_atendimento ? String(req.query.origem_atendimento).trim().toUpperCase() : '',
         status: req.query.status ? String(req.query.status).trim().toUpperCase() : '',
         q: req.query.q ? String(req.query.q).trim() : '',
         abertas: String(req.query.abertas || '').trim() === '1'
@@ -77,6 +78,9 @@ const SolicitacaoEstoqueController = {
   async create(req, res) {
     try {
       const payload = buildCreatePayload(req.body);
+      payload.origem_atendimento = req.body.origem_atendimento
+        ? String(req.body.origem_atendimento).trim().toUpperCase()
+        : 'ALMOXARIFADO';
 
       if (!payload.area_origem) {
         return res.status(400).json({ message: 'A area de origem deve ser informada.' });

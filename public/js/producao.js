@@ -1,8 +1,10 @@
 const producaoApiBaseUrl = '/api/producao';
+const solicitacoesProducaoApiBaseUrl = '/api/solicitacoes-producao';
 const maquinasApiBaseUrl = '/api/maquinas';
 const pecasApiBaseUrl = '/api/pecas?tipo=PRODUZIDA';
 
 let producoesCache = [];
+let solicitacoesProducaoCache = [];
 let maquinasCache = [];
 let pecasCache = [];
 let filtroDebounceTimer = null;
@@ -13,6 +15,8 @@ const refs = {
   finalizacaoMensagem: document.getElementById('finalizacao-mensagem'),
   tabela: document.getElementById('producao-tbody'),
   total: document.getElementById('total-producao'),
+  solicitacoesTotal: document.getElementById('total-solicitacoes-producao'),
+  solicitacoesTbody: document.getElementById('solicitacoes-producao-tbody'),
   filtroForm: document.getElementById('producao-filtro-form'),
   modal: document.getElementById('producao-modal'),
   finalizacaoModal: document.getElementById('finalizacao-modal'),
@@ -30,7 +34,7 @@ const refs = {
 document.addEventListener('DOMContentLoaded', async () => {
   bindEvents();
   await Promise.all([carregarMaquinas(), carregarPecas()]);
-  await carregarProducoes();
+  await Promise.all([carregarProducoes(), carregarSolicitacoesProducao()]);
 });
 
 function bindEvents() {
@@ -56,6 +60,7 @@ function bindEvents() {
   document.getElementById('producao-form').addEventListener('submit', handleCriarProducao);
   document.getElementById('finalizacao-form').addEventListener('submit', handleFinalizarProducao);
   refs.tabela.addEventListener('click', handleTabelaActions);
+  refs.solicitacoesTbody.addEventListener('click', handleSolicitacoesProducaoActions);
   refs.pecaBusca.addEventListener('input', () => {
     refs.pecaId.value = '';
     renderizarSugestoesPeca(refs.pecaBusca.value.trim());
@@ -64,6 +69,24 @@ function bindEvents() {
   refs.pecaSugestoes.addEventListener('click', handleSugestaoPecaClick);
   document.addEventListener('click', handleGlobalClick);
   document.addEventListener('keydown', handleKeyboardShortcuts);
+}
+
+async function carregarSolicitacoesProducao() {
+  try {
+    const response = await fetch(solicitacoesProducaoApiBaseUrl);
+    const solicitacoes = await response.json();
+
+    if (!response.ok) {
+      throw new Error(solicitacoes.message || 'Nao foi possivel carregar as solicitacoes de producao.');
+    }
+
+    solicitacoesProducaoCache = solicitacoes;
+    renderizarSolicitacoesProducao();
+  } catch (error) {
+    solicitacoesProducaoCache = [];
+    renderizarSolicitacoesProducao();
+    mostrarMensagem(error.message, 'error');
+  }
 }
 
 async function carregarMaquinas() {
@@ -154,6 +177,62 @@ function renderizarTabela() {
   `).join('');
 }
 
+function renderizarSolicitacoesProducao() {
+  refs.solicitacoesTotal.textContent = `${solicitacoesProducaoCache.length} registro(s) encontrado(s)`;
+
+  if (!solicitacoesProducaoCache.length) {
+    refs.solicitacoesTbody.innerHTML = '<tr><td colspan="7" class="empty-state">Nenhuma solicitacao para a Producao.</td></tr>';
+    return;
+  }
+
+  refs.solicitacoesTbody.innerHTML = solicitacoesProducaoCache.map((item) => `
+    <tr>
+      <td>${escapeHtml(item.origem_nome || '-')}</td>
+      <td class="table-description">${escapeHtml(`${item.codigo} - ${item.descricao}`)}</td>
+      <td class="table-quantity">${formatInteger(item.quantidade_solicitada)}</td>
+      <td>${renderSolicitacaoStatusBadge(item.status)}</td>
+      <td>${escapeHtml(item.observacao || '-')}</td>
+      <td>${formatarData(item.data_solicitacao)}</td>
+      <td class="table-actions-cell">
+        ${renderizarAcoesSolicitacaoProducao(item)}
+      </td>
+    </tr>
+  `).join('');
+}
+
+function renderizarAcoesSolicitacaoProducao(item) {
+  const status = String(item.status || '').toUpperCase();
+
+  if (['CONCLUIDA', 'CANCELADA'].includes(status)) {
+    return `<span class="status-chip ${status === 'CONCLUIDA' ? 'is-success' : 'is-danger'}">${escapeHtml(status)}</span>`;
+  }
+
+  const actions = [];
+
+  if (status === 'PENDENTE') {
+    actions.push('<button type="button" class="row-menu-item" data-req-action="EM_ANALISE" data-id="' + item.id + '">Em analise</button>');
+  }
+
+  if (['PENDENTE', 'EM_ANALISE'].includes(status)) {
+    actions.push('<button type="button" class="row-menu-item" data-req-action="EM_PRODUCAO" data-id="' + item.id + '">Em producao</button>');
+  }
+
+  if (['EM_ANALISE', 'EM_PRODUCAO'].includes(status)) {
+    actions.push('<button type="button" class="row-menu-item" data-req-action="CONCLUIDA" data-id="' + item.id + '">Concluir</button>');
+  }
+
+  actions.push('<button type="button" class="row-menu-item danger" data-req-action="CANCELADA" data-id="' + item.id + '">Cancelar</button>');
+
+  return `
+    <details class="row-menu">
+      <summary class="row-menu-trigger" aria-label="Abrir acoes">...</summary>
+      <div class="row-menu-panel">
+        ${actions.join('')}
+      </div>
+    </details>
+  `;
+}
+
 function atualizarIndicadores() {
   const emAndamento = producoesCache.filter((item) => item.status === 'EM_ANDAMENTO').length;
   const finalizadas = producoesCache.filter((item) => item.status === 'FINALIZADA').length;
@@ -223,7 +302,7 @@ async function handleCriarProducao(event) {
 
     fecharModalProducao();
     mostrarMensagem('Ordem de producao iniciada com sucesso.', 'success');
-    await carregarProducoes();
+    await Promise.all([carregarProducoes(), carregarSolicitacoesProducao()]);
   } catch (error) {
     mostrarMensagemModal(error.message, 'error');
   }
@@ -252,7 +331,7 @@ async function handleFinalizarProducao(event) {
 
     fecharModalFinalizacao();
     mostrarMensagem('Ordem de producao finalizada com sucesso.', 'success');
-    await carregarProducoes();
+    await Promise.all([carregarProducoes(), carregarSolicitacoesProducao()]);
   } catch (error) {
     mostrarMensagemFinalizacao(error.message, 'error');
   }
@@ -277,6 +356,20 @@ function handleTabelaActions(event) {
   if (actionButton.dataset.action === 'excluir') {
     excluirProducao(producao);
   }
+}
+
+function handleSolicitacoesProducaoActions(event) {
+  const actionButton = event.target.closest('button[data-req-action]');
+  if (!actionButton) {
+    return;
+  }
+
+  const solicitacao = solicitacoesProducaoCache.find((item) => Number(item.id) === Number(actionButton.dataset.id));
+  if (!solicitacao) {
+    return;
+  }
+
+  atualizarStatusSolicitacaoProducao(solicitacao, actionButton.dataset.reqAction);
 }
 
 function abrirModalProducao() {
@@ -433,7 +526,30 @@ async function excluirProducao(producao) {
     }
 
     mostrarMensagem('Ordem de producao excluida com sucesso.', 'success');
-    await carregarProducoes();
+    await Promise.all([carregarProducoes(), carregarSolicitacoesProducao()]);
+  } catch (error) {
+    mostrarMensagem(error.message, 'error');
+  }
+}
+
+async function atualizarStatusSolicitacaoProducao(solicitacao, status) {
+  try {
+    const response = await fetch(`${solicitacoesProducaoApiBaseUrl}/${solicitacao.id}/status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        status,
+        observacao: solicitacao.observacao || null
+      })
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(extractErrorMessage(result));
+    }
+
+    mostrarMensagem(`Solicitacao ${solicitacao.codigo} atualizada para ${status}.`, 'success');
+    await carregarSolicitacoesProducao();
   } catch (error) {
     mostrarMensagem(error.message, 'error');
   }
@@ -507,6 +623,25 @@ function renderStatusBadge(status) {
   }
 
   return `<span class="${cssClass}">${escapeHtml(status || '-')}</span>`;
+}
+
+function renderSolicitacaoStatusBadge(status) {
+  const normalized = String(status || '').toUpperCase();
+  let cssClass = 'status-chip';
+
+  if (normalized === 'CONCLUIDA') {
+    cssClass += ' is-success';
+  } else if (normalized === 'EM_PRODUCAO') {
+    cssClass += ' is-info';
+  } else if (normalized === 'EM_ANALISE') {
+    cssClass += ' is-warning';
+  } else if (normalized === 'CANCELADA') {
+    cssClass += ' is-danger';
+  } else if (normalized === 'PENDENTE') {
+    cssClass += ' is-danger';
+  }
+
+  return `<span class="${cssClass}">${escapeHtml(normalized || '-')}</span>`;
 }
 
 function formatInteger(value) {
