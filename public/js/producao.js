@@ -2,12 +2,14 @@ const producaoApiBaseUrl = '/api/producao';
 const solicitacoesProducaoApiBaseUrl = '/api/solicitacoes-producao';
 const maquinasApiBaseUrl = '/api/maquinas';
 const pecasApiBaseUrl = '/api/pecas?tipo=PRODUZIDA';
+const AUTO_REFRESH_MS = 15000;
 
 let producoesCache = [];
 let solicitacoesProducaoCache = [];
 let maquinasCache = [];
 let pecasCache = [];
 let filtroDebounceTimer = null;
+let autoRefreshHandle = null;
 
 const refs = {
   mensagem: document.getElementById('producao-mensagem'),
@@ -17,6 +19,7 @@ const refs = {
   total: document.getElementById('total-producao'),
   solicitacoesTotal: document.getElementById('total-solicitacoes-producao'),
   solicitacoesTbody: document.getElementById('solicitacoes-producao-tbody'),
+  metricSolicitacoesPendentes: document.getElementById('metric-solicitacoes-pendentes'),
   filtroForm: document.getElementById('producao-filtro-form'),
   modal: document.getElementById('producao-modal'),
   finalizacaoModal: document.getElementById('finalizacao-modal'),
@@ -35,6 +38,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   bindEvents();
   await Promise.all([carregarMaquinas(), carregarPecas()]);
   await Promise.all([carregarProducoes(), carregarSolicitacoesProducao()]);
+  iniciarAtualizacaoAutomatica();
 });
 
 function bindEvents() {
@@ -82,9 +86,11 @@ async function carregarSolicitacoesProducao() {
 
     solicitacoesProducaoCache = solicitacoes;
     renderizarSolicitacoesProducao();
+    atualizarIndicadores();
   } catch (error) {
     solicitacoesProducaoCache = [];
     renderizarSolicitacoesProducao();
+    atualizarIndicadores();
     mostrarMensagem(error.message, 'error');
   }
 }
@@ -237,10 +243,34 @@ function atualizarIndicadores() {
   const emAndamento = producoesCache.filter((item) => item.status === 'EM_ANDAMENTO').length;
   const finalizadas = producoesCache.filter((item) => item.status === 'FINALIZADA').length;
   const planejada = producoesCache.reduce((total, item) => total + Number(item.quantidade_planejada || 0), 0);
+  const solicitacoesPendentes = solicitacoesProducaoCache.filter((item) => ['PENDENTE', 'EM_ANALISE', 'EM_PRODUCAO'].includes(String(item.status || '').toUpperCase())).length;
 
   document.getElementById('metric-producao-andamento').textContent = String(emAndamento);
   document.getElementById('metric-producao-finalizada').textContent = String(finalizadas);
   document.getElementById('metric-producao-planejada').textContent = formatInteger(planejada);
+  refs.metricSolicitacoesPendentes.textContent = String(solicitacoesPendentes);
+}
+
+function iniciarAtualizacaoAutomatica() {
+  if (autoRefreshHandle) {
+    window.clearInterval(autoRefreshHandle);
+  }
+
+  autoRefreshHandle = window.setInterval(() => {
+    if (document.hidden) {
+      return;
+    }
+
+    atualizarPainelAutomaticamente();
+  }, AUTO_REFRESH_MS);
+}
+
+async function atualizarPainelAutomaticamente() {
+  try {
+    await Promise.all([carregarProducoes(), carregarSolicitacoesProducao()]);
+  } catch (error) {
+    console.error('Falha ao atualizar a tela de Producao:', error);
+  }
 }
 
 function renderizarSugestoesPeca(termo) {

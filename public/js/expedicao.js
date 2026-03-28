@@ -7,6 +7,7 @@ const solicitacoesProducaoApiBaseUrl = '/api/solicitacoes-producao';
 const saidaApiBaseUrl = '/api/estoque/saida';
 const submontagensApiBaseUrl = '/api/submontagens';
 const producaoApiBaseUrl = '/api/producao';
+const AUTO_REFRESH_MS = 15000;
 
 let estoquesCache = [];
 let itensCache = [];
@@ -17,6 +18,8 @@ let historicoSaidasCache = [];
 let saidaLista = [];
 let estruturasSubmontagemCache = new Map();
 let submontagensCache = [];
+let producaoEmAndamentoCache = [];
+let autoRefreshHandle = null;
 
 const refs = {
   mensagem: document.getElementById('expedicao-mensagem'),
@@ -35,6 +38,8 @@ const refs = {
   filtroDescricao: document.getElementById('expedicao-filtro-descricao'),
   filtroClassificacao: document.getElementById('expedicao-filtro-classificacao'),
   filtroQuantidade: document.getElementById('expedicao-filtro-quantidade'),
+  badgePedidos: document.getElementById('expedicao-badge-pedidos'),
+  badgeProducao: document.getElementById('expedicao-badge-producao'),
   saidaModal: document.getElementById('expedicao-saida-modal'),
   pedidosModal: document.getElementById('expedicao-pedidos-modal'),
   historicoModal: document.getElementById('expedicao-historico-modal'),
@@ -74,6 +79,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   try {
     await carregarTudo();
+    iniciarAtualizacaoAutomatica();
   } catch (error) {
     mostrarMensagem(error.message, 'error');
   }
@@ -176,7 +182,8 @@ async function carregarTudo() {
     carregarEstoqueMontagem(),
     carregarEstoqueExpedicao(),
     carregarPedidosExpedicao(),
-    carregarHistoricoSaidas()
+    carregarHistoricoSaidas(),
+    carregarProducaoEmAndamento()
   ]);
 }
 
@@ -911,14 +918,7 @@ async function abrirModalProducao() {
   openModal(refs.producaoModal);
 
   try {
-    const response = await fetch(`${producaoApiBaseUrl}?status=EM_ANDAMENTO`);
-    const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error(result.message || 'Nao foi possivel carregar a producao em andamento.');
-    }
-
-    renderizarProducao(result);
+    await carregarProducaoEmAndamento();
   } catch (error) {
     refs.producaoMensagem.textContent = error.message;
     refs.producaoMensagem.className = 'message error';
@@ -948,6 +948,19 @@ function renderizarProducao(producoes) {
       <td>${formatDate(item.data_inicio)}</td>
     </tr>
   `).join('');
+}
+
+async function carregarProducaoEmAndamento() {
+  const response = await fetch(`${producaoApiBaseUrl}?status=EM_ANDAMENTO`);
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || 'Nao foi possivel carregar a producao em andamento.');
+  }
+
+  producaoEmAndamentoCache = Array.isArray(result) ? result : [];
+  renderizarProducao(producaoEmAndamentoCache);
+  atualizarBadgesMenu();
 }
 
 function renderizarLista() {
@@ -1044,6 +1057,54 @@ function atualizarIndicadores() {
   document.getElementById('expedicao-card-pedidos').textContent = String(
     pedidosExpedicaoCache.filter((item) => ['PENDENTE', 'EM_SEPARACAO', 'ATENDIDA_PARCIAL'].includes(item.status)).length
   );
+  atualizarBadgesMenu();
+}
+
+function iniciarAtualizacaoAutomatica() {
+  if (autoRefreshHandle) {
+    window.clearInterval(autoRefreshHandle);
+  }
+
+  autoRefreshHandle = window.setInterval(() => {
+    if (document.hidden) {
+      return;
+    }
+
+    atualizarPainelAutomaticamente();
+  }, AUTO_REFRESH_MS);
+}
+
+async function atualizarPainelAutomaticamente() {
+  try {
+    await Promise.all([
+      carregarEstoqueMontagem(),
+      carregarEstoqueExpedicao(),
+      carregarPedidosExpedicao(),
+      carregarHistoricoSaidas(),
+      carregarProducaoEmAndamento()
+    ]);
+  } catch (error) {
+    console.error('Falha ao atualizar badges da Expedicao:', error);
+  }
+}
+
+function atualizarBadgesMenu() {
+  setBadge(refs.badgePedidos, contarPedidosAbertos(pedidosExpedicaoCache));
+  setBadge(refs.badgeProducao, producaoEmAndamentoCache.length);
+}
+
+function contarPedidosAbertos(items) {
+  return items.filter((item) => ['PENDENTE', 'EM_SEPARACAO', 'ATENDIDA_PARCIAL'].includes(String(item.status || '').toUpperCase())).length;
+}
+
+function setBadge(element, count) {
+  if (!element) {
+    return;
+  }
+
+  const safeCount = Number(count || 0);
+  element.textContent = formatInteger(safeCount);
+  element.classList.toggle('hidden', safeCount <= 0);
 }
 
 function obterSaldosExpedicaoFiltrados() {

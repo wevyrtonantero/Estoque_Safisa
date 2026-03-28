@@ -323,6 +323,57 @@ class TerceirizacaoRemessaModel {
     };
   }
 
+  static async findPendingReturnItems(filters = {}) {
+    const conditions = [
+      "r.status IN ('ENVIADA', 'RETORNO_PARCIAL')",
+      'ri.quantidade_enviada > ri.quantidade_retorno'
+    ];
+    const values = [];
+
+    if (filters.codigo) {
+      conditions.push('p.codigo LIKE ?');
+      values.push(`%${filters.codigo}%`);
+    }
+
+    if (filters.descricao) {
+      conditions.push('p.descricao LIKE ?');
+      values.push(`%${filters.descricao}%`);
+    }
+
+    const [rows] = await pool.query(
+      `
+        SELECT
+          ri.id AS id_item,
+          ri.id_remessa,
+          ri.id_peca,
+          ri.tipo_tratamento,
+          ri.servicos,
+          ri.dureza_hrc,
+          ri.profundidade,
+          ri.quantidade_enviada,
+          ri.quantidade_retorno,
+          GREATEST(ri.quantidade_enviada - ri.quantidade_retorno, 0) AS quantidade_pendente,
+          ri.status AS item_status,
+          ri.updated_at,
+          p.codigo,
+          p.descricao,
+          COALESCE(NULLIF(f.nome, ''), r.nome_empresa) AS nome_empresa,
+          r.numero_nf,
+          r.data_envio,
+          r.status AS remessa_status
+        FROM terceirizacao_remessa_itens ri
+        INNER JOIN terceirizacao_remessas r ON r.id = ri.id_remessa
+        INNER JOIN pecas p ON p.id = ri.id_peca
+        INNER JOIN fornecedores f ON f.id = r.id_fornecedor
+        WHERE ${conditions.join(' AND ')}
+        ORDER BY r.id DESC, p.codigo ASC, ri.id ASC
+      `,
+      values
+    );
+
+    return rows;
+  }
+
   static async updateRemessaStatus(connection, idRemessa) {
     const [rows] = await connection.query(
       `

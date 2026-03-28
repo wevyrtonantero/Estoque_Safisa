@@ -6,6 +6,7 @@ const solicitacoesApiBaseUrl = '/api/solicitacoes-estoque';
 const solicitacoesProducaoApiBaseUrl = '/api/solicitacoes-producao';
 const submontagensApiBaseUrl = '/api/submontagens';
 const producaoApiBaseUrl = '/api/producao';
+const AUTO_REFRESH_MS = 15000;
 
 let estoquesCache = [];
 let itensCache = [];
@@ -13,6 +14,8 @@ let submontagensCache = [];
 let saldosMontagemCache = [];
 let pedidosMontagemCache = [];
 let pedidosRecebidosCache = [];
+let producaoEmAndamentoCache = [];
+let autoRefreshHandle = null;
 
 const refs = {
   mensagem: document.getElementById('montagem-mensagem'),
@@ -31,6 +34,9 @@ const refs = {
   filtroDescricao: document.getElementById('montagem-filtro-descricao'),
   filtroClassificacao: document.getElementById('montagem-filtro-classificacao'),
   filtroQuantidade: document.getElementById('montagem-filtro-quantidade'),
+  badgePedidos: document.getElementById('montagem-badge-pedidos'),
+  badgeRecebidos: document.getElementById('montagem-badge-recebidos'),
+  badgeProducao: document.getElementById('montagem-badge-producao'),
   transferenciaModal: document.getElementById('montagem-transferencia-modal'),
   pedidosModal: document.getElementById('montagem-pedidos-modal'),
   pedidosRecebidosModal: document.getElementById('montagem-recebidos-modal'),
@@ -76,6 +82,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   try {
     await carregarTudo();
+    iniciarAtualizacaoAutomatica();
   } catch (error) {
     mostrarMensagem(error.message, 'error');
   }
@@ -199,7 +206,8 @@ async function carregarTudo() {
     carregarSubmontagens(),
     carregarEstoqueMontagem(),
     carregarPedidosMontagem(),
-    carregarPedidosRecebidos()
+    carregarPedidosRecebidos(),
+    carregarProducaoEmAndamento()
   ]);
 }
 
@@ -277,6 +285,7 @@ async function carregarPedidosRecebidos() {
 
   pedidosRecebidosCache = result;
   renderizarPedidosRecebidos();
+  atualizarBadgesMenu();
 }
 
 function renderizarSugestoes(termo) {
@@ -761,14 +770,7 @@ async function abrirModalProducao() {
   openModal(refs.producaoModal);
 
   try {
-    const response = await fetch(`${producaoApiBaseUrl}?status=EM_ANDAMENTO`);
-    const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error(result.message || 'Nao foi possivel carregar a producao em andamento.');
-    }
-
-    renderizarProducao(result);
+    await carregarProducaoEmAndamento();
   } catch (error) {
     refs.producaoMensagem.textContent = error.message;
     refs.producaoMensagem.className = 'message error';
@@ -798,6 +800,19 @@ function renderizarProducao(producoes) {
       <td>${formatDate(item.data_inicio)}</td>
     </tr>
   `).join('');
+}
+
+async function carregarProducaoEmAndamento() {
+  const response = await fetch(`${producaoApiBaseUrl}?status=EM_ANDAMENTO`);
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || 'Nao foi possivel carregar a producao em andamento.');
+  }
+
+  producaoEmAndamentoCache = Array.isArray(result) ? result : [];
+  renderizarProducao(producaoEmAndamentoCache);
+  atualizarBadgesMenu();
 }
 
 function renderizarPedidos() {
@@ -971,6 +986,54 @@ function atualizarIndicadores() {
   document.getElementById('montagem-card-pedidos').textContent = String(
     pedidosMontagemCache.filter((item) => ['PENDENTE', 'EM_SEPARACAO', 'ATENDIDA_PARCIAL'].includes(item.status)).length
   );
+  atualizarBadgesMenu();
+}
+
+function iniciarAtualizacaoAutomatica() {
+  if (autoRefreshHandle) {
+    window.clearInterval(autoRefreshHandle);
+  }
+
+  autoRefreshHandle = window.setInterval(() => {
+    if (document.hidden) {
+      return;
+    }
+
+    atualizarPainelAutomaticamente();
+  }, AUTO_REFRESH_MS);
+}
+
+async function atualizarPainelAutomaticamente() {
+  try {
+    await Promise.all([
+      carregarEstoqueMontagem(),
+      carregarPedidosMontagem(),
+      carregarPedidosRecebidos(),
+      carregarProducaoEmAndamento()
+    ]);
+  } catch (error) {
+    console.error('Falha ao atualizar badges da Montagem:', error);
+  }
+}
+
+function atualizarBadgesMenu() {
+  setBadge(refs.badgePedidos, contarPedidosAbertos(pedidosMontagemCache));
+  setBadge(refs.badgeRecebidos, contarPedidosAbertos(pedidosRecebidosCache));
+  setBadge(refs.badgeProducao, producaoEmAndamentoCache.length);
+}
+
+function contarPedidosAbertos(items) {
+  return items.filter((item) => ['PENDENTE', 'EM_SEPARACAO', 'ATENDIDA_PARCIAL'].includes(String(item.status || '').toUpperCase())).length;
+}
+
+function setBadge(element, count) {
+  if (!element) {
+    return;
+  }
+
+  const safeCount = Number(count || 0);
+  element.textContent = formatInteger(safeCount);
+  element.classList.toggle('hidden', safeCount <= 0);
 }
 
 function obterSaldosMontagemFiltrados() {

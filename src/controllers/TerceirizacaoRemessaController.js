@@ -94,6 +94,20 @@ const TerceirizacaoRemessaController = {
     }
   },
 
+  async getPendingReturns(req, res) {
+    try {
+      const itens = await TerceirizacaoRemessaModel.findPendingReturnItems({
+        codigo: req.query.codigo ? String(req.query.codigo).trim() : '',
+        descricao: req.query.descricao ? String(req.query.descricao).trim() : ''
+      });
+
+      return res.status(200).json(itens);
+    } catch (error) {
+      console.error('Erro ao listar retornos pendentes da terceirizacao:', error);
+      return res.status(500).json({ message: 'Erro ao listar retornos pendentes da terceirizacao.' });
+    }
+  },
+
   async getById(req, res) {
     try {
       const remessa = await TerceirizacaoRemessaModel.findById(req.params.id);

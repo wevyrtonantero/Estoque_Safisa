@@ -10,60 +10,145 @@
   <main class="workspace">
     <header class="topbar">
       <div class="topbar-copy">
-        <p class="page-kicker">Almoxarifado SAFISA</p>
-        <h1 class="page-title">Solicitacoes de Pecas</h1>
-        <p class="page-subtitle">Veja quem pediu, altere o status, atenda o material e transfira para o estoque de destino.</p>
-      </div>
-
-      <div class="topbar-actions">
-        <a class="btn btn-neutral" href="/pagina-montagem">Montagem</a>
-        <a class="btn btn-neutral" href="/pagina-expedicao">Expedicao</a>
-        <a class="btn btn-neutral" href="/pagina-simulacao-montagem">Simulacao</a>
-        <a class="btn btn-secondary" href="/pagina-estoque">Controle de Estoque</a>
-        <a class="btn btn-secondary" href="/pagina-estoque-materias-primas">Estoque MP</a>
-        <a class="btn btn-secondary" href="/pagina-tratamento-externo">Tratamento Externo</a>
+        <p class="page-kicker">Setor SAFISA</p>
+        <h1 class="page-title">Almoxarifado</h1>
+        <p class="page-subtitle">Acompanhe o estoque do Almoxarifado, atenda solicitacoes e receba materiais e pecas.</p>
       </div>
     </header>
 
     <section class="summary-row">
       <article class="summary-card">
-        <span>Pendentes</span>
-        <strong id="dashboard-metric-pendente">0</strong>
+        <span>Itens no estoque</span>
+        <strong id="almox-card-itens">0</strong>
       </article>
 
       <article class="summary-card">
-        <span>Em Separacao</span>
-        <strong id="dashboard-metric-separacao">0</strong>
+        <span>Quantidade total</span>
+        <strong id="almox-card-quantidade">0</strong>
       </article>
 
       <article class="summary-card">
-        <span>Atendidas / Parciais</span>
-        <strong id="dashboard-metric-atendidas">0</strong>
+        <span>Alertas</span>
+        <strong id="almox-card-alertas">0</strong>
+      </article>
+
+      <article class="summary-card">
+        <span>Pedidos em aberto</span>
+        <strong id="almox-card-pedidos">0</strong>
       </article>
     </section>
 
-    <div id="dashboard-mensagem" class="message hidden"></div>
+    <div id="almox-mensagem" class="message hidden"></div>
 
-    <section class="content-card">
-      <div class="card-top">
+    <section class="sector-shell">
+      <aside class="sector-menu">
+        <section class="content-card sector-menu-card">
+          <span class="section-pill">Menu do Setor</span>
+
+          <div class="sector-menu-list">
+            <button id="almox-btn-pedidos" class="btn btn-primary" type="button"><span class="btn-label">Solicitacoes Recebidas</span><span id="almox-badge-pedidos" class="btn-badge hidden">0</span></button>
+            <button id="almox-btn-tratamento" class="btn btn-neutral" type="button"><span class="btn-label">Entrada do Tratamento Externo</span><span id="almox-badge-tratamento" class="btn-badge hidden">0</span></button>
+            <button id="almox-btn-mp" class="btn btn-secondary" type="button"><span class="btn-label">Entrada de Materia-prima</span></button>
+            <button id="almox-btn-historico" class="btn btn-neutral" type="button"><span class="btn-label">Historico de Movimentacoes</span></button>
+            <button id="almox-btn-producao" class="btn btn-secondary" type="button"><span class="btn-label">Ver Producao</span><span id="almox-badge-producao" class="btn-badge hidden">0</span></button>
+          </div>
+        </section>
+      </aside>
+
+      <div class="sector-content">
+        <section class="content-card">
+          <div class="card-top">
+            <div>
+              <span class="section-pill">Estoque</span>
+              <h2>Saldo atual do Almoxarifado</h2>
+              <p id="almox-estoque-total">0 registro(s) encontrado(s)</p>
+            </div>
+          </div>
+
+          <form id="almox-estoque-filtro-form" class="toolbar-form stock-toolbar">
+            <div class="field">
+              <label for="almox-filtro-codigo">Codigo</label>
+              <input id="almox-filtro-codigo" type="text" placeholder="Ex.: 017/1">
+            </div>
+
+            <div class="field">
+              <label for="almox-filtro-descricao">Descricao</label>
+              <input id="almox-filtro-descricao" type="text" placeholder="Digite parte da descricao">
+            </div>
+
+            <div class="field">
+              <label for="almox-filtro-classificacao">Classificacao</label>
+              <select id="almox-filtro-classificacao">
+                <option value="">Todas</option>
+                <option value="ITEM">Itens</option>
+                <option value="SUBMONTAGEM">Submontagens</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="almox-filtro-quantidade">Quantidade em estoque</label>
+              <select id="almox-filtro-quantidade">
+                <option value="">Padrao</option>
+                <option value="asc">Menor quantidade</option>
+                <option value="desc">Maior quantidade</option>
+              </select>
+            </div>
+
+            <div class="toolbar-actions">
+              <button id="almox-btn-limpar-filtros" class="btn btn-neutral" type="button">Limpar</button>
+            </div>
+          </form>
+
+          <div class="subtle-divider"></div>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Codigo</th>
+                  <th>Descricao</th>
+                  <th>Tipo</th>
+                  <th>Classificacao</th>
+                  <th>Quantidade</th>
+                  <th>Alerta</th>
+                  <th>Cobertura</th>
+                </tr>
+              </thead>
+              <tbody id="almox-estoque-tbody">
+                <tr>
+                  <td colspan="7" class="empty-state">Carregando estoque...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <div id="almox-pedidos-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="almox-pedidos"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
         <div>
-          <span class="section-pill">Almoxarifado</span>
+          <span class="section-pill">Solicitacoes</span>
           <h2>Fila do Almoxarifado</h2>
-          <p id="dashboard-total">0 registro(s) encontrado(s)</p>
+          <p id="almox-pedidos-total">0 registro(s) encontrado(s)</p>
         </div>
 
-        <a class="btn btn-primary" href="/pagina-relatorios">Solicitacoes de Pecas</a>
+        <button id="btn-fechar-modal-almox-pedidos" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
       </div>
 
-      <form id="dashboard-filtro-form" class="toolbar-form">
+      <form id="almox-pedidos-filtro-form" class="toolbar-form">
         <div class="field">
-          <label for="dashboard-filtro-q">Busca</label>
-          <input id="dashboard-filtro-q" type="text" placeholder="Codigo, descricao ou observacao">
+          <label for="almox-pedidos-filtro-q">Busca</label>
+          <input id="almox-pedidos-filtro-q" type="text" placeholder="Codigo, descricao ou observacao">
         </div>
 
         <div class="field">
-          <label for="dashboard-filtro-status">Status</label>
-          <select id="dashboard-filtro-status">
+          <label for="almox-pedidos-filtro-status">Status</label>
+          <select id="almox-pedidos-filtro-status">
             <option value="">Todos</option>
             <option value="PENDENTE">PENDENTE</option>
             <option value="EM_SEPARACAO">EM_SEPARACAO</option>
@@ -73,7 +158,7 @@
           </select>
         </div>
 
-        <button id="dashboard-btn-limpar" class="btn btn-neutral" type="button">Limpar</button>
+        <button id="almox-btn-limpar-pedidos" class="btn btn-neutral" type="button">Limpar</button>
       </form>
 
       <div class="subtle-divider"></div>
@@ -93,54 +178,280 @@
               <th>Acoes</th>
             </tr>
           </thead>
-          <tbody id="dashboard-tbody">
+          <tbody id="almox-pedidos-tbody">
             <tr>
               <td colspan="9" class="empty-state">Carregando solicitacoes...</td>
             </tr>
           </tbody>
         </table>
       </div>
-    </section>
+    </div>
+  </div>
 
-    <div id="atendimento-modal" class="modal hidden" aria-hidden="true">
-      <div class="modal-backdrop" data-close-modal="atendimento"></div>
+  <div id="almox-atendimento-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="almox-atendimento"></div>
 
-      <div class="modal-dialog">
-        <div class="modal-header">
-          <div>
-            <span class="section-pill">Almoxarifado</span>
-            <h2>Atender Solicitacao</h2>
-            <p>Transferencia direta do Almoxarifado para o estoque que fez o pedido.</p>
-          </div>
-
-          <button id="btn-fechar-modal-atendimento" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Atendimento</span>
+          <h2>Atender Solicitacao</h2>
+          <p>Transferencia direta do Almoxarifado para o estoque que fez o pedido.</p>
         </div>
 
-        <div id="atendimento-mensagem" class="message hidden"></div>
+        <button id="btn-fechar-modal-almox-atendimento" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
 
-        <form id="atendimento-form" class="form-grid">
-          <input type="hidden" id="atendimento-id">
+      <div id="almox-atendimento-mensagem" class="message hidden"></div>
 
-          <div id="atendimento-resumo" class="span-12 selected-tags empty">Selecione uma solicitacao para atender.</div>
+      <form id="almox-atendimento-form" class="form-grid">
+        <input type="hidden" id="almox-atendimento-id">
 
-          <div class="field span-4">
-            <label for="atendimento-quantidade">Quantidade a separar</label>
-            <input id="atendimento-quantidade" type="number" min="1" step="1" value="1" required>
-          </div>
+        <div id="almox-atendimento-resumo" class="span-12 selected-tags empty">Selecione uma solicitacao para atender.</div>
 
-          <div class="field span-8">
-            <label for="atendimento-observacao">Observacao</label>
-            <input id="atendimento-observacao" type="text" maxlength="255" placeholder="Opcional">
-          </div>
+        <div class="field span-4">
+          <label for="almox-atendimento-quantidade">Quantidade a separar</label>
+          <input id="almox-atendimento-quantidade" type="number" min="1" step="1" value="1" required>
+        </div>
 
-          <div class="span-12 modal-actions">
-            <button id="btn-cancelar-modal-atendimento" class="btn btn-neutral" type="button">Cancelar</button>
-            <button class="btn btn-success" type="submit">Confirmar Atendimento</button>
-          </div>
-        </form>
+        <div class="field span-8">
+          <label for="almox-atendimento-observacao">Observacao</label>
+          <input id="almox-atendimento-observacao" type="text" maxlength="255" placeholder="Opcional">
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button id="btn-cancelar-modal-almox-atendimento" class="btn btn-neutral" type="button">Cancelar</button>
+          <button class="btn btn-success" type="submit">Confirmar Atendimento</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="almox-tratamento-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="almox-tratamento"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Tratamento Externo</span>
+          <h2>Receber pecas das remessas terceirizadas</h2>
+          <p id="almox-tratamento-total">0 registro(s) encontrado(s)</p>
+        </div>
+
+        <button id="btn-fechar-modal-almox-tratamento" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <form id="almox-tratamento-filtro-form" class="toolbar-form">
+        <div class="field">
+          <label for="almox-tratamento-filtro-codigo">Codigo</label>
+          <input id="almox-tratamento-filtro-codigo" type="text" placeholder="Ex.: 176">
+        </div>
+
+        <div class="field">
+          <label for="almox-tratamento-filtro-descricao">Descricao</label>
+          <input id="almox-tratamento-filtro-descricao" type="text" placeholder="Digite parte da descricao">
+        </div>
+
+        <button id="almox-btn-limpar-tratamento" class="btn btn-neutral" type="button">Limpar</button>
+      </form>
+
+      <div class="subtle-divider"></div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Codigo</th>
+              <th>Descricao</th>
+              <th>Empresa</th>
+              <th>Pendente</th>
+              <th>Remessa</th>
+              <th>Acoes</th>
+            </tr>
+          </thead>
+          <tbody id="almox-tratamento-tbody">
+            <tr>
+              <td colspan="6" class="empty-state">Carregando pecas em tratamento externo...</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
-  </main>
+  </div>
+
+  <div id="almox-recebimento-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="almox-recebimento"></div>
+
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Recebimento</span>
+          <h2>Receber peca no estoque</h2>
+          <p>Confirme a quantidade recebida e escolha o estoque de destino.</p>
+        </div>
+
+        <button id="btn-fechar-modal-almox-recebimento" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="almox-recebimento-mensagem" class="message hidden"></div>
+
+      <form id="almox-recebimento-form" class="form-grid">
+        <input type="hidden" id="almox-recebimento-id-item">
+
+        <div id="almox-recebimento-resumo" class="span-12 selected-tags empty">Selecione uma peca para continuar.</div>
+
+        <div class="field span-4">
+          <label for="almox-recebimento-quantidade">Quantidade recebida</label>
+          <input id="almox-recebimento-quantidade" type="number" min="1" step="1" value="1" required>
+        </div>
+
+        <div class="field span-8">
+          <label for="almox-recebimento-destino">Estoque de destino</label>
+          <select id="almox-recebimento-destino" required>
+            <option value="">Selecione</option>
+          </select>
+        </div>
+
+        <div class="field span-12">
+          <label for="almox-recebimento-observacao">Observacao</label>
+          <input id="almox-recebimento-observacao" type="text" maxlength="255" placeholder="Opcional">
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button id="btn-cancelar-modal-almox-recebimento" class="btn btn-neutral" type="button">Cancelar</button>
+          <button class="btn btn-success" type="submit">Confirmar Recebimento</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="almox-mp-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="almox-mp"></div>
+
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Materia-prima</span>
+          <h2>Nova entrada de materia-prima</h2>
+          <p>Registre a entrada na unidade base da materia-prima.</p>
+        </div>
+
+        <button id="btn-fechar-modal-almox-mp" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="almox-mp-mensagem" class="message hidden"></div>
+
+      <form id="almox-mp-form" class="form-grid">
+        <input type="hidden" id="almox-mp-id">
+
+        <div class="field span-12">
+          <label for="almox-mp-busca">Materia-prima</label>
+          <div class="autocomplete">
+            <input id="almox-mp-busca" type="text" placeholder="Digite ID ou descricao da materia-prima">
+            <div id="almox-mp-sugestoes" class="autocomplete-panel hidden"></div>
+          </div>
+        </div>
+
+        <div id="almox-mp-resumo" class="span-12 selected-tags empty">Selecione uma materia-prima para continuar.</div>
+
+        <div class="field span-6">
+          <label for="almox-mp-quantidade">Quantidade de entrada</label>
+          <input id="almox-mp-quantidade" type="number" min="0" step="0.0001" placeholder="0" required>
+        </div>
+
+        <div class="field span-6">
+          <label for="almox-mp-observacao">Observacao</label>
+          <input id="almox-mp-observacao" type="text" maxlength="255" placeholder="Opcional">
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button id="btn-cancelar-modal-almox-mp" class="btn btn-neutral" type="button">Cancelar</button>
+          <button class="btn btn-primary" type="submit">Salvar Entrada</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="almox-historico-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="almox-historico"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Historico</span>
+          <h2>Movimentacoes do Almoxarifado</h2>
+          <p id="almox-historico-total">0 movimentacao(oes)</p>
+        </div>
+
+        <button id="btn-fechar-modal-almox-historico" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div class="table-wrapper">
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Tipo</th>
+              <th>Codigo</th>
+              <th>Descricao</th>
+              <th>Quantidade</th>
+              <th>Origem</th>
+              <th>Destino</th>
+              <th>Observacao</th>
+            </tr>
+          </thead>
+          <tbody id="almox-historico-tbody">
+            <tr>
+              <td colspan="8" class="empty-state">Carregando movimentacoes...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="almox-producao-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="almox-producao"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Producao</span>
+          <h2>O que esta sendo produzido</h2>
+          <p>Consulta somente leitura das ordens em andamento.</p>
+        </div>
+
+        <button id="btn-fechar-modal-almox-producao" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="almox-producao-mensagem" class="message hidden"></div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Ordem</th>
+              <th>Maquina</th>
+              <th>Codigo</th>
+              <th>Descricao</th>
+              <th>Planejada</th>
+              <th>Materia-prima</th>
+              <th>Inicio</th>
+            </tr>
+          </thead>
+          <tbody id="almox-producao-tbody">
+            <tr>
+              <td colspan="7" class="empty-state">Carregando producao...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="modal-actions">
+        <button id="btn-fechar-modal-almox-producao-rodape" class="btn btn-neutral" type="button">Fechar</button>
+      </div>
+    </div>
+  </div>
 
   <script src="/js/dashboard.js"></script>
 </body>
