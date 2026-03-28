@@ -59,6 +59,13 @@ function buildReturnPayload(body) {
   };
 }
 
+function buildFinalizePendingPayload(body) {
+  return {
+    id_item: normalizeOptionalInteger(body.id_item ?? body.id),
+    justificativa: body.justificativa ? String(body.justificativa).trim() : null
+  };
+}
+
 function extractErrorResponse(error, fallbackMessage) {
   if (error.statusCode) {
     return { status: error.statusCode, body: { message: error.message } };
@@ -180,6 +187,26 @@ const TerceirizacaoRemessaController = {
       return res.status(200).json(result);
     } catch (error) {
       const response = extractErrorResponse(error, 'Erro ao registrar o retorno da terceirizacao.');
+      return res.status(response.status).json(response.body);
+    }
+  },
+
+  async finalizePendingItem(req, res) {
+    try {
+      const payload = buildFinalizePendingPayload(req.body);
+
+      if (!Number.isInteger(payload.id_item)) {
+        return res.status(400).json({ message: 'O item da remessa deve ser valido.' });
+      }
+
+      if (!payload.justificativa) {
+        return res.status(400).json({ message: 'A justificativa deve ser informada.' });
+      }
+
+      const result = await TerceirizacaoRemessaModel.finalizePendingItem(payload);
+      return res.status(200).json(result);
+    } catch (error) {
+      const response = extractErrorResponse(error, 'Erro ao finalizar a pendencia da remessa.');
       return res.status(response.status).json(response.body);
     }
   }

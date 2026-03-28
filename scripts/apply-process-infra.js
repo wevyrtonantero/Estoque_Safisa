@@ -66,6 +66,61 @@ async function ensureEstoqueMateriaPrimaAllowsNegative() {
   }
 }
 
+async function ensureTerceirizacaoEncerramentoColumns() {
+  const requiredColumns = [
+    {
+      name: 'encerrado_manualmente',
+      sql: `
+        ALTER TABLE terceirizacao_remessa_itens
+        ADD COLUMN encerrado_manualmente TINYINT(1) NOT NULL DEFAULT 0 AFTER observacao
+      `
+    },
+    {
+      name: 'justificativa_encerramento',
+      sql: `
+        ALTER TABLE terceirizacao_remessa_itens
+        ADD COLUMN justificativa_encerramento VARCHAR(255) NULL AFTER encerrado_manualmente
+      `
+    },
+    {
+      name: 'data_encerramento',
+      sql: `
+        ALTER TABLE terceirizacao_remessa_itens
+        ADD COLUMN data_encerramento DATETIME NULL AFTER justificativa_encerramento
+      `
+    }
+  ];
+
+  for (const column of requiredColumns) {
+    const [rows] = await pool.query(`
+      SELECT COUNT(*) AS total
+      FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'terceirizacao_remessa_itens'
+        AND COLUMN_NAME = ?
+    `, [column.name]);
+
+    if (!Number(rows[0]?.total || 0)) {
+      await pool.query(column.sql);
+    }
+  }
+
+  const [indexRows] = await pool.query(`
+    SELECT COUNT(*) AS total
+    FROM information_schema.STATISTICS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'terceirizacao_remessa_itens'
+      AND INDEX_NAME = 'idx_terc_item_encerrado'
+  `);
+
+  if (!Number(indexRows[0]?.total || 0)) {
+    await pool.query(`
+      ALTER TABLE terceirizacao_remessa_itens
+      ADD INDEX idx_terc_item_encerrado (encerrado_manualmente)
+    `);
+  }
+}
+
 async function main() {
   await runSqlFile('database/schema_solicitacoes_estoque.sql');
   await ensureSolicitacoesEstoqueSchema();
@@ -74,6 +129,7 @@ async function main() {
   await ensureEstoqueMateriaPrimaAllowsNegative();
   await runSqlFile('database/schema_tratamento_externo.sql');
   await runSqlFile('database/schema_terceirizacao_remessas.sql');
+  await ensureTerceirizacaoEncerramentoColumns();
   console.log('Infraestrutura de processo aplicada com sucesso.');
 }
 

@@ -34,7 +34,12 @@ const refs = {
   retornoResumo: document.getElementById('remessa-retorno-resumo'),
   retornoQuantidade: document.getElementById('remessa-retorno-quantidade'),
   retornoEstoque: document.getElementById('remessa-retorno-estoque'),
-  retornoObservacao: document.getElementById('remessa-retorno-observacao')
+  retornoObservacao: document.getElementById('remessa-retorno-observacao'),
+  finalizacaoModal: document.getElementById('remessa-finalizacao-modal'),
+  finalizacaoMensagem: document.getElementById('remessa-finalizacao-mensagem'),
+  finalizacaoItemId: document.getElementById('remessa-finalizacao-item-id'),
+  finalizacaoResumo: document.getElementById('remessa-finalizacao-resumo'),
+  finalizacaoJustificativa: document.getElementById('remessa-finalizacao-justificativa')
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -66,9 +71,13 @@ function bindEvents() {
   document.getElementById('btn-fechar-modal-remessa-retorno').addEventListener('click', fecharModalRetorno);
   document.getElementById('btn-cancelar-modal-remessa-retorno').addEventListener('click', fecharModalRetorno);
   document.getElementById('remessa-retorno-form').addEventListener('submit', handleRegistrarRetorno);
+  document.getElementById('btn-fechar-modal-remessa-finalizacao').addEventListener('click', fecharModalFinalizacao);
+  document.getElementById('btn-cancelar-modal-remessa-finalizacao').addEventListener('click', fecharModalFinalizacao);
+  document.getElementById('remessa-finalizacao-form').addEventListener('submit', handleFinalizarPendencia);
   refs.detalheModal.addEventListener('click', handleBackdrop);
   refs.nfModal.addEventListener('click', handleBackdrop);
   refs.retornoModal.addEventListener('click', handleBackdrop);
+  refs.finalizacaoModal.addEventListener('click', handleBackdrop);
   document.addEventListener('click', handleGlobalClick);
   document.addEventListener('keydown', handleKeyboardShortcuts);
 }
@@ -215,7 +224,10 @@ async function abrirModalDetalhe(id) {
     refs.itensTbody.innerHTML = result.itens.map((item) => `
       <tr>
         <td class="table-code">${escapeHtml(item.codigo)}</td>
-        <td class="table-description">${escapeHtml(item.descricao)}</td>
+        <td class="table-description">
+          ${escapeHtml(item.descricao)}
+          ${item.encerrado_manualmente ? `<div class="table-note">Pendencia finalizada: ${escapeHtml(item.justificativa_encerramento || 'Sem justificativa')}</div>` : ''}
+        </td>
         <td>${escapeHtml(buildTreatmentLabel(item))}</td>
         <td class="table-quantity">${formatInteger(item.quantidade_enviada)}</td>
         <td class="table-quantity">${formatInteger(item.quantidade_retorno)}</td>
@@ -224,7 +236,10 @@ async function abrirModalDetalhe(id) {
           <details class="row-menu">
             <summary class="row-menu-trigger" aria-label="Abrir acoes">...</summary>
             <div class="row-menu-panel">
-              <button type="button" class="row-menu-item" data-action="retorno" data-item-id="${item.id}">Registrar retorno</button>
+              ${Number(item.quantidade_pendente || 0) > 0 && !item.encerrado_manualmente
+                ? `<button type="button" class="row-menu-item" data-action="retorno" data-item-id="${item.id}">Registrar retorno</button>
+                   <button type="button" class="row-menu-item" data-action="finalizar-pendencia" data-item-id="${item.id}">Finalizar pendencia</button>`
+                : '<span class="row-menu-item is-muted">Sem acoes pendentes</span>'}
             </div>
           </details>
         </td>
@@ -304,7 +319,7 @@ async function handleSalvarNf(event) {
 }
 
 function handleItemActions(event) {
-  const button = event.target.closest('button[data-action="retorno"]');
+  const button = event.target.closest('button[data-action]');
   if (!button || !remessaSelecionada) {
     return;
   }
@@ -314,20 +329,27 @@ function handleItemActions(event) {
     return;
   }
 
-  itemRetornoSelecionado = item;
-  refs.retornoMensagem.className = 'message hidden';
-  refs.retornoMensagem.textContent = '';
-  refs.retornoItemId.value = String(item.id);
-  refs.retornoQuantidade.value = '1';
-  const pendente = Number(item.quantidade_enviada) - Number(item.quantidade_retorno);
-  refs.retornoQuantidade.max = String(pendente);
-  refs.retornoResumo.classList.remove('empty');
-  refs.retornoResumo.classList.add('selected-tags');
-  refs.retornoResumo.innerHTML = `
-    <span class="selected-tag">${escapeHtml(`${item.codigo} - ${item.descricao}`)}</span>
-    <span class="selected-tag">${escapeHtml(`Pendente: ${formatInteger(pendente)}`)}</span>
-  `;
-  openModal(refs.retornoModal);
+  if (button.dataset.action === 'retorno') {
+    itemRetornoSelecionado = item;
+    refs.retornoMensagem.className = 'message hidden';
+    refs.retornoMensagem.textContent = '';
+    refs.retornoItemId.value = String(item.id);
+    refs.retornoQuantidade.value = '1';
+    const pendente = Number(item.quantidade_pendente ?? (Number(item.quantidade_enviada) - Number(item.quantidade_retorno)));
+    refs.retornoQuantidade.max = String(pendente);
+    refs.retornoResumo.classList.remove('empty');
+    refs.retornoResumo.classList.add('selected-tags');
+    refs.retornoResumo.innerHTML = `
+      <span class="selected-tag">${escapeHtml(`${item.codigo} - ${item.descricao}`)}</span>
+      <span class="selected-tag">${escapeHtml(`Pendente: ${formatInteger(pendente)}`)}</span>
+    `;
+    openModal(refs.retornoModal);
+    return;
+  }
+
+  if (button.dataset.action === 'finalizar-pendencia') {
+    abrirModalFinalizacao(item);
+  }
 }
 
 function fecharModalRetorno() {
@@ -338,6 +360,32 @@ function fecharModalRetorno() {
   refs.retornoMensagem.className = 'message hidden';
   refs.retornoMensagem.textContent = '';
   closeModal(refs.retornoModal);
+}
+
+function abrirModalFinalizacao(item) {
+  itemRetornoSelecionado = item;
+  refs.finalizacaoMensagem.className = 'message hidden';
+  refs.finalizacaoMensagem.textContent = '';
+  refs.finalizacaoItemId.value = String(item.id);
+  refs.finalizacaoJustificativa.value = '';
+  const pendente = Number(item.quantidade_pendente ?? (Number(item.quantidade_enviada) - Number(item.quantidade_retorno)));
+  refs.finalizacaoResumo.classList.remove('empty');
+  refs.finalizacaoResumo.classList.add('selected-tags');
+  refs.finalizacaoResumo.innerHTML = `
+    <span class="selected-tag">${escapeHtml(`${item.codigo} - ${item.descricao}`)}</span>
+    <span class="selected-tag">${escapeHtml(`Pendente a encerrar: ${formatInteger(pendente)}`)}</span>
+  `;
+  openModal(refs.finalizacaoModal);
+}
+
+function fecharModalFinalizacao() {
+  itemRetornoSelecionado = null;
+  document.getElementById('remessa-finalizacao-form').reset();
+  refs.finalizacaoResumo.classList.add('selected-tags', 'empty');
+  refs.finalizacaoResumo.textContent = 'Selecione um item para finalizar a pendencia.';
+  refs.finalizacaoMensagem.className = 'message hidden';
+  refs.finalizacaoMensagem.textContent = '';
+  closeModal(refs.finalizacaoModal);
 }
 
 async function handleRegistrarRetorno(event) {
@@ -369,6 +417,36 @@ async function handleRegistrarRetorno(event) {
     refs.retornoMensagem.textContent = error.message;
     refs.retornoMensagem.className = 'message error';
     refs.retornoMensagem.classList.remove('hidden');
+  }
+}
+
+async function handleFinalizarPendencia(event) {
+  event.preventDefault();
+
+  try {
+    const response = await fetch(`${terceirizacaoApiBaseUrl}/finalizar-pendencia`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id_item: refs.finalizacaoItemId.value,
+        justificativa: refs.finalizacaoJustificativa.value.trim()
+      })
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.message || 'Nao foi possivel finalizar a pendencia.');
+    }
+
+    fecharModalFinalizacao();
+    mostrarMensagem('Pendencia finalizada com justificativa.', 'success');
+    await carregarRemessas();
+    remessaSelecionada = result;
+    await abrirModalDetalhe(result.id);
+  } catch (error) {
+    refs.finalizacaoMensagem.textContent = error.message;
+    refs.finalizacaoMensagem.className = 'message error';
+    refs.finalizacaoMensagem.classList.remove('hidden');
   }
 }
 
@@ -468,6 +546,9 @@ function handleBackdrop(event) {
   if (event.target.dataset.closeModal === 'remessa-retorno') {
     fecharModalRetorno();
   }
+  if (event.target.dataset.closeModal === 'remessa-finalizacao') {
+    fecharModalFinalizacao();
+  }
 }
 
 function handleGlobalClick(event) {
@@ -501,6 +582,10 @@ function handleKeyboardShortcuts(event) {
     fecharModalRetorno();
     return;
   }
+  if (!refs.finalizacaoModal.classList.contains('hidden')) {
+    fecharModalFinalizacao();
+    return;
+  }
   if (!refs.nfModal.classList.contains('hidden')) {
     fecharModalNf();
     return;
@@ -532,7 +617,8 @@ function openModal(modal) {
 function closeModal(modal) {
   modal.classList.add('hidden');
   modal.setAttribute('aria-hidden', 'true');
-  const hasModal = [refs.detalheModal, refs.nfModal, refs.retornoModal].some((entry) => !entry.classList.contains('hidden'));
+  const hasModal = [refs.detalheModal, refs.nfModal, refs.retornoModal, refs.finalizacaoModal]
+    .some((entry) => !entry.classList.contains('hidden'));
   document.body.classList.toggle('has-modal', hasModal);
 }
 

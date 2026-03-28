@@ -39,6 +39,9 @@ CREATE TABLE IF NOT EXISTS terceirizacao_remessa_itens (
   massa_unitaria_kg DECIMAL(10, 4) NULL,
   peso_total_enviado_kg DECIMAL(12, 4) NULL,
   observacao VARCHAR(255) NULL,
+  encerrado_manualmente TINYINT(1) NOT NULL DEFAULT 0,
+  justificativa_encerramento VARCHAR(255) NULL,
+  data_encerramento DATETIME NULL,
   status ENUM('ENVIADO', 'RETORNO_PARCIAL', 'RETORNADO') NOT NULL DEFAULT 'ENVIADO',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -49,7 +52,8 @@ CREATE TABLE IF NOT EXISTS terceirizacao_remessa_itens (
     FOREIGN KEY (id_peca) REFERENCES pecas(id),
   INDEX idx_terc_item_remessa (id_remessa),
   INDEX idx_terc_item_peca (id_peca),
-  INDEX idx_terc_item_status (status)
+  INDEX idx_terc_item_status (status),
+  INDEX idx_terc_item_encerrado (encerrado_manualmente)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_unicode_ci;

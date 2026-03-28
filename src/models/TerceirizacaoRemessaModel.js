@@ -206,7 +206,14 @@ class TerceirizacaoRemessaModel {
       values.push(`%${filters.empresa}%`);
     }
 
-    if (filters.status) {
+    if (filters.status === 'ATIVAS') {
+      conditions.push("r.status IN ('ENVIADA', 'RETORNO_PARCIAL')");
+    } else if (filters.status === 'ENCERRADAS') {
+      conditions.push("r.status IN ('RETORNO_TOTAL', 'CANCELADA')");
+    } else if (filters.status === 'PENDENTES_NF') {
+      conditions.push("r.status IN ('ENVIADA', 'RETORNO_PARCIAL')");
+      conditions.push("(r.numero_nf IS NULL OR r.numero_nf = '')");
+    } else if (filters.status) {
       conditions.push('r.status = ?');
       values.push(filters.status);
     }
@@ -234,6 +241,7 @@ class TerceirizacaoRemessaModel {
           COUNT(ri.id) AS total_itens,
           COALESCE(SUM(ri.quantidade_enviada), 0) AS quantidade_enviada_total,
           COALESCE(SUM(ri.quantidade_retorno), 0) AS quantidade_retorno_total,
+          COALESCE(SUM(CASE WHEN COALESCE(ri.encerrado_manualmente, 0) = 1 THEN 1 ELSE 0 END), 0) AS itens_encerrados_manualmente,
           COALESCE(SUM(ri.peso_total_enviado_kg), 0) AS peso_total_enviado_kg
         FROM terceirizacao_remessas r
         INNER JOIN fornecedores f ON f.id = r.id_fornecedor
@@ -304,6 +312,13 @@ class TerceirizacaoRemessaModel {
           ri.massa_unitaria_kg,
           ri.peso_total_enviado_kg,
           ri.observacao,
+          COALESCE(ri.encerrado_manualmente, 0) AS encerrado_manualmente,
+          ri.justificativa_encerramento,
+          ri.data_encerramento,
+          CASE
+            WHEN COALESCE(ri.encerrado_manualmente, 0) = 1 THEN 0
+            ELSE GREATEST(ri.quantidade_enviada - ri.quantidade_retorno, 0)
+          END AS quantidade_pendente,
           ri.status,
           ri.created_at,
           ri.updated_at,
@@ -326,7 +341,8 @@ class TerceirizacaoRemessaModel {
   static async findPendingReturnItems(filters = {}) {
     const conditions = [
       "r.status IN ('ENVIADA', 'RETORNO_PARCIAL')",
-      'ri.quantidade_enviada > ri.quantidade_retorno'
+      'ri.quantidade_enviada > ri.quantidade_retorno',
+      'COALESCE(ri.encerrado_manualmente, 0) = 0'
     ];
     const values = [];
 
@@ -352,7 +368,13 @@ class TerceirizacaoRemessaModel {
           ri.profundidade,
           ri.quantidade_enviada,
           ri.quantidade_retorno,
-          GREATEST(ri.quantidade_enviada - ri.quantidade_retorno, 0) AS quantidade_pendente,
+          CASE
+            WHEN COALESCE(ri.encerrado_manualmente, 0) = 1 THEN 0
+            ELSE GREATEST(ri.quantidade_enviada - ri.quantidade_retorno, 0)
+          END AS quantidade_pendente,
+          COALESCE(ri.encerrado_manualmente, 0) AS encerrado_manualmente,
+          ri.justificativa_encerramento,
+          ri.data_encerramento,
           ri.status AS item_status,
           ri.updated_at,
           p.codigo,
@@ -379,7 +401,7 @@ class TerceirizacaoRemessaModel {
       `
         SELECT
           COUNT(*) AS total_itens,
-          SUM(CASE WHEN status = 'RETORNADO' THEN 1 ELSE 0 END) AS retornados,
+          SUM(CASE WHEN status = 'RETORNADO' OR COALESCE(encerrado_manualmente, 0) = 1 THEN 1 ELSE 0 END) AS retornados,
           SUM(CASE WHEN status = 'RETORNO_PARCIAL' THEN 1 ELSE 0 END) AS retorno_parcial
         FROM terceirizacao_remessa_itens
         WHERE id_remessa = ?
@@ -570,6 +592,7 @@ class TerceirizacaoRemessaModel {
             ri.id_peca,
             ri.quantidade_enviada,
             ri.quantidade_retorno,
+            COALESCE(ri.encerrado_manualmente, 0) AS encerrado_manualmente,
             ri.status,
             p.codigo,
             p.descricao
@@ -584,6 +607,10 @@ class TerceirizacaoRemessaModel {
       const item = rows[0] || null;
       if (!item) {
         throw this.createBusinessError('Item da remessa nao encontrado.');
+      }
+
+      if (Number(item.encerrado_manualmente || 0) === 1) {
+        throw this.createBusinessError('Este item ja foi encerrado manualmente e nao aceita novo retorno.');
       }
 
       const pendente = Number((Number(item.quantidade_enviada) - Number(item.quantidade_retorno)).toFixed(2));
@@ -616,6 +643,75 @@ class TerceirizacaoRemessaModel {
           WHERE id = ?
         `,
         [novoRetorno, novoStatus, data.id_item]
+      );
+
+      await this.updateRemessaStatus(connection, item.id_remessa);
+
+      await connection.commit();
+      return this.findById(item.id_remessa);
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }
+
+  static async finalizePendingItem(data) {
+    const connection = await pool.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      const [rows] = await connection.query(
+        `
+          SELECT
+            ri.id,
+            ri.id_remessa,
+            ri.id_peca,
+            ri.quantidade_enviada,
+            ri.quantidade_retorno,
+            COALESCE(ri.encerrado_manualmente, 0) AS encerrado_manualmente,
+            ri.status,
+            p.codigo,
+            p.descricao
+          FROM terceirizacao_remessa_itens ri
+          INNER JOIN pecas p ON p.id = ri.id_peca
+          WHERE ri.id = ?
+          FOR UPDATE
+        `,
+        [data.id_item]
+      );
+
+      const item = rows[0] || null;
+      if (!item) {
+        throw this.createBusinessError('Item da remessa nao encontrado.');
+      }
+
+      const pendente = Number((Number(item.quantidade_enviada) - Number(item.quantidade_retorno)).toFixed(2));
+      if (pendente <= 0) {
+        throw this.createBusinessError('Este item nao possui saldo pendente para encerramento.');
+      }
+
+      if (Number(item.encerrado_manualmente || 0) === 1) {
+        throw this.createBusinessError('Este item ja foi encerrado manualmente.');
+      }
+
+      if (!data.justificativa) {
+        throw this.createBusinessError('Informe a justificativa para finalizar a pendencia.');
+      }
+
+      await connection.query(
+        `
+          UPDATE terceirizacao_remessa_itens
+          SET
+            encerrado_manualmente = 1,
+            justificativa_encerramento = ?,
+            data_encerramento = NOW(),
+            status = 'RETORNADO'
+          WHERE id = ?
+        `,
+        [data.justificativa, data.id_item]
       );
 
       await this.updateRemessaStatus(connection, item.id_remessa);

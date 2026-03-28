@@ -101,10 +101,13 @@
         <div class="field">
           <label for="filtro-remessa-status">Status</label>
           <select id="filtro-remessa-status">
-            <option value="">Todos</option>
+            <option value="ATIVAS" selected>Ativas</option>
+            <option value="PENDENTES_NF">Pendentes de NF</option>
             <option value="ENVIADA">ENVIADA</option>
             <option value="RETORNO_PARCIAL">RETORNO_PARCIAL</option>
+            <option value="ENCERRADAS">Encerradas</option>
             <option value="RETORNO_TOTAL">RETORNO_TOTAL</option>
+            <option value="">Todas</option>
           </select>
         </div>
 
@@ -288,6 +291,40 @@
         <div class="span-12 modal-actions">
           <button id="btn-cancelar-modal-remessa-retorno" class="btn btn-neutral" type="button">Cancelar</button>
           <button class="btn btn-success" type="submit">Registrar Retorno</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="remessa-finalizacao-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="remessa-finalizacao"></div>
+
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Finalizacao</span>
+          <h2>Fechar Pendencia</h2>
+          <p>Use quando o restante nao vai retornar e voce quer tirar este item da fila ativa com justificativa.</p>
+        </div>
+
+        <button id="btn-fechar-modal-remessa-finalizacao" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="remessa-finalizacao-mensagem" class="message hidden"></div>
+
+      <form id="remessa-finalizacao-form" class="form-grid">
+        <input type="hidden" id="remessa-finalizacao-item-id">
+
+        <div id="remessa-finalizacao-resumo" class="span-12 selected-tags empty">Selecione um item para finalizar a pendencia.</div>
+
+        <div class="field span-12">
+          <label for="remessa-finalizacao-justificativa">Justificativa</label>
+          <input id="remessa-finalizacao-justificativa" type="text" maxlength="255" placeholder="Ex.: saldo perdido, diferenca aceita, nao retornara mais" required>
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button id="btn-cancelar-modal-remessa-finalizacao" class="btn btn-neutral" type="button">Cancelar</button>
+          <button class="btn btn-warning" type="submit">Finalizar pendencia</button>
         </div>
       </form>
     </div>
