@@ -7,61 +7,12 @@
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-  <div id="drawer-scrim" class="drawer-scrim hidden"></div>
-
-  <aside id="app-drawer" class="app-drawer" aria-hidden="true">
-    <div class="drawer-header">
-      <div>
-        <div class="brand-stack">
-          <div class="brand-mark">SF</div>
-          <div>
-            <p class="brand-label">SAFISA</p>
-            <h2 class="brand-title">Painel Administrativo</h2>
-          </div>
-        </div>
-        <p class="brand-copy">Fila operacional para terceirizacao ou envio direto ao estoque final.</p>
-      </div>
-
-      <button id="drawer-close" class="icon-btn" type="button" aria-label="Fechar menu">X</button>
-    </div>
-
-    <nav class="drawer-nav">
-      <a class="nav-link" href="/pagina-almoxarifado"><span class="nav-icon">AL</span><span>Almoxarifado</span></a>
-      <a class="nav-link" href="/pagina-pecas"><span class="nav-icon">PC</span><span>Pecas</span></a>
-      <a class="nav-link" href="/pagina-submontagens"><span class="nav-icon">SB</span><span>Submontagens</span></a>
-      <a class="nav-link" href="/pagina-materias-primas"><span class="nav-icon">MP</span><span>Materia-prima</span></a>
-      <a class="nav-link" href="/pagina-estoque-materias-primas"><span class="nav-icon">EM</span><span>Estoque MP</span></a>
-      <a class="nav-link" href="/pagina-fornecedores"><span class="nav-icon">FR</span><span>Fornecedores</span></a>
-      <a class="nav-link" href="/pagina-maquinas"><span class="nav-icon">MQ</span><span>Maquinas</span></a>
-      <a class="nav-link" href="/pagina-estoque"><span class="nav-icon">ES</span><span>Estoque</span></a>
-      <a class="nav-link" href="/pagina-producao"><span class="nav-icon">PR</span><span>Producao</span></a>
-      <a class="nav-link" href="/pagina-montagem"><span class="nav-icon">MT</span><span>Montagem</span></a>
-      <a class="nav-link" href="/pagina-expedicao"><span class="nav-icon">EX</span><span>Expedicao</span></a>
-      <a class="nav-link is-active" href="/pagina-tratamento-externo"><span class="nav-icon">TE</span><span>Tratamento Externo</span></a>
-      <a class="nav-link" href="/pagina-remessas-terceiros"><span class="nav-icon">NF</span><span>Remessas / NF</span></a>
-      <a class="nav-link" href="/pagina-relatorios"><span class="nav-icon">SP</span><span>Solicitacoes</span></a>
-    </nav>
-  </aside>
-
   <main class="workspace">
     <header class="topbar">
-      <div class="topbar-main">
-        <button id="menu-toggle" class="icon-btn icon-btn-menu" type="button" aria-label="Abrir menu">
-          <span></span>
-          <span></span>
-          <span></span>
-        </button>
-
-        <div class="topbar-copy">
-          <p class="page-kicker">Area Administrativa SAFISA</p>
-          <h1 class="page-title">Tratamento Externo</h1>
-          <p class="page-subtitle">As pecas finalizadas na producao chegam aqui e podem seguir para terceirizacao ou direto para o estoque final.</p>
-        </div>
-      </div>
-
-      <div class="topbar-actions">
-        <a href="/pagina-producao" class="btn btn-neutral">Producao</a>
-        <a href="/pagina-remessas-terceiros" class="btn btn-secondary">Remessas / NF</a>
+      <div class="topbar-copy">
+        <p class="page-kicker">Setor SAFISA</p>
+        <h1 class="page-title">Tratamento Externo</h1>
+        <p class="page-subtitle">A fila operacional recebe a peca da producao e decide se ela vai para terceiro ou direto para o estoque final.</p>
       </div>
     </header>
 
@@ -84,59 +35,80 @@
 
     <div id="tratamento-externo-mensagem" class="message hidden"></div>
 
-    <section class="content-card">
-      <div class="card-top">
-        <div>
-          <span class="section-pill">Fila</span>
-          <h2>Pecas Disponiveis</h2>
-          <p id="total-tratamento-externo">0 registro(s) encontrado(s)</p>
-        </div>
-      </div>
+    <section class="sector-shell">
+      <aside class="sector-menu">
+        <section class="content-card sector-menu-card">
+          <span class="section-pill">Menu do Setor</span>
 
-      <form id="tratamento-externo-filtro-form" class="toolbar-form">
-        <div class="field">
-          <label for="filtro-te-codigo">Codigo</label>
-          <input id="filtro-te-codigo" type="text" placeholder="Ex.: 176">
-        </div>
+          <div class="sector-menu-list">
+            <button id="btn-tratamento-historico-menu" class="btn btn-neutral" type="button"><span class="btn-label">Historico</span></button>
+            <a href="/pagina-remessas-terceiros" class="btn btn-secondary"><span class="btn-label">Remessas / NF</span></a>
+          </div>
+        </section>
+      </aside>
 
-        <div class="field">
-          <label for="filtro-te-descricao">Descricao</label>
-          <input id="filtro-te-descricao" type="text" placeholder="Digite parte da descricao">
-        </div>
+      <div class="sector-content">
+        <section class="content-card">
+          <div class="card-top">
+            <div>
+              <span class="section-pill">Fila</span>
+              <h2>Pecas Disponiveis</h2>
+              <p id="total-tratamento-externo">0 registro(s) encontrado(s)</p>
+            </div>
+          </div>
 
-        <button id="btn-limpar-filtros-te" class="btn btn-neutral" type="button">Limpar</button>
-      </form>
+          <form id="tratamento-externo-filtro-form" class="toolbar-form">
+            <div class="field">
+              <label for="filtro-te-codigo">Codigo</label>
+              <input id="filtro-te-codigo" type="text" placeholder="Ex.: 176">
+            </div>
 
-      <div class="subtle-divider"></div>
+            <div class="field">
+              <label for="filtro-te-descricao">Descricao</label>
+              <input id="filtro-te-descricao" type="text" placeholder="Digite parte da descricao">
+            </div>
 
-      <div class="table-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th>Codigo</th>
-              <th>Descricao</th>
-              <th>Maquina</th>
-              <th>Quantidade</th>
-              <th>Ultima Atualizacao</th>
-              <th>Acoes</th>
-            </tr>
-          </thead>
-          <tbody id="tratamento-externo-tbody">
-            <tr>
-              <td colspan="6" class="empty-state">Carregando fila de tratamento externo...</td>
-            </tr>
-          </tbody>
-        </table>
+            <button id="btn-limpar-filtros-te" class="btn btn-neutral" type="button">Limpar</button>
+          </form>
+
+          <div class="subtle-divider"></div>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Codigo</th>
+                  <th>Descricao</th>
+                  <th>Maquina</th>
+                  <th>Quantidade</th>
+                  <th>Ultima Atualizacao</th>
+                  <th>Acoes</th>
+                </tr>
+              </thead>
+              <tbody id="tratamento-externo-tbody">
+                <tr>
+                  <td colspan="6" class="empty-state">Carregando fila de tratamento externo...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
       </div>
     </section>
+  </main>
 
-    <section class="content-card">
-      <div class="card-top">
+  <div id="tratamento-historico-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="tratamento-historico"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
         <div>
           <span class="section-pill">Historico</span>
           <h2>Movimentacoes Recentes</h2>
           <p id="total-tratamento-externo-movimentacoes">0 movimentacao(oes)</p>
         </div>
+
+        <button id="btn-fechar-modal-tratamento-historico" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
       </div>
 
       <div class="table-wrapper">
@@ -158,8 +130,8 @@
           </tbody>
         </table>
       </div>
-    </section>
-  </main>
+    </div>
+  </div>
 
   <div id="encaminhamento-modal" class="modal hidden" aria-hidden="true">
     <div class="modal-backdrop" data-close-modal="encaminhamento"></div>

@@ -15,8 +15,7 @@ const refs = {
   movimentacoesTabela: document.getElementById('tratamento-externo-movimentacoes-tbody'),
   totalMovimentacoes: document.getElementById('total-tratamento-externo-movimentacoes'),
   filtroForm: document.getElementById('tratamento-externo-filtro-form'),
-  drawer: document.getElementById('app-drawer'),
-  drawerScrim: document.getElementById('drawer-scrim'),
+  historicoModal: document.getElementById('tratamento-historico-modal'),
   encaminhamentoModal: document.getElementById('encaminhamento-modal'),
   encaminhamentoMensagem: document.getElementById('encaminhamento-mensagem'),
   encaminhamentoResumo: document.getElementById('encaminhamento-resumo'),
@@ -52,9 +51,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 function bindEvents() {
-  document.getElementById('menu-toggle').addEventListener('click', () => toggleDrawer(true));
-  document.getElementById('drawer-close').addEventListener('click', () => toggleDrawer(false));
-  refs.drawerScrim.addEventListener('click', () => toggleDrawer(false));
+  document.getElementById('btn-tratamento-historico-menu').addEventListener('click', abrirModalHistorico);
+  document.getElementById('btn-fechar-modal-tratamento-historico').addEventListener('click', fecharModalHistorico);
   document.getElementById('btn-limpar-filtros-te').addEventListener('click', limparFiltros);
   refs.filtroForm.addEventListener('submit', (event) => {
     event.preventDefault();
@@ -71,6 +69,7 @@ function bindEvents() {
   document.getElementById('btn-fechar-modal-estoque-direto').addEventListener('click', fecharModalEstoqueDireto);
   document.getElementById('btn-cancelar-modal-estoque-direto').addEventListener('click', fecharModalEstoqueDireto);
   document.getElementById('estoque-direto-form').addEventListener('submit', handleEnviarEstoqueSubmit);
+  refs.historicoModal.addEventListener('click', handleBackdrop);
   refs.encaminhamentoModal.addEventListener('click', handleBackdrop);
   refs.estoqueDiretoModal.addEventListener('click', handleBackdrop);
   document.addEventListener('click', handleGlobalClick);
@@ -210,6 +209,14 @@ function atualizarIndicadores() {
   document.getElementById('metric-te-itens').textContent = String(saldosCache.length);
   document.getElementById('metric-te-quantidade').textContent = formatInteger(quantidadeTotal);
   document.getElementById('metric-te-movimentacoes').textContent = String(movimentacoesCache.length);
+}
+
+function abrirModalHistorico() {
+  openModal(refs.historicoModal);
+}
+
+function fecharModalHistorico() {
+  closeModal(refs.historicoModal);
 }
 
 function handleTabelaActions(event) {
@@ -402,6 +409,10 @@ function agendarFiltroAutomatico() {
 }
 
 function handleBackdrop(event) {
+  if (event.target.dataset.closeModal === 'tratamento-historico') {
+    fecharModalHistorico();
+  }
+
   if (event.target.dataset.closeModal === 'encaminhamento') {
     fecharModalEncaminhamento();
   }
@@ -438,6 +449,11 @@ function handleKeyboardShortcuts(event) {
 
   closeAllRowMenus();
 
+  if (!refs.historicoModal.classList.contains('hidden')) {
+    fecharModalHistorico();
+    return;
+  }
+
   if (!refs.estoqueDiretoModal.classList.contains('hidden')) {
     fecharModalEstoqueDireto();
     return;
@@ -446,10 +462,6 @@ function handleKeyboardShortcuts(event) {
   if (!refs.encaminhamentoModal.classList.contains('hidden')) {
     fecharModalEncaminhamento();
     return;
-  }
-
-  if (refs.drawer.classList.contains('is-open')) {
-    toggleDrawer(false);
   }
 }
 
@@ -472,14 +484,9 @@ function openModal(modal) {
 function closeModal(modal) {
   modal.classList.add('hidden');
   modal.setAttribute('aria-hidden', 'true');
-  const hasModal = [refs.encaminhamentoModal, refs.estoqueDiretoModal].some((entry) => !entry.classList.contains('hidden'));
+  const hasModal = [refs.historicoModal, refs.encaminhamentoModal, refs.estoqueDiretoModal]
+    .some((entry) => entry && !entry.classList.contains('hidden'));
   document.body.classList.toggle('has-modal', hasModal);
-}
-
-function toggleDrawer(shouldOpen) {
-  refs.drawer.classList.toggle('is-open', shouldOpen);
-  refs.drawerScrim.classList.toggle('hidden', !shouldOpen);
-  document.body.classList.toggle('has-drawer', shouldOpen);
 }
 
 function mostrarMensagem(texto, tipo) {
