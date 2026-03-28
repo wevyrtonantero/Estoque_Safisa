@@ -60,8 +60,11 @@ class ProducaoModel {
           p.classificacao AS peca_classificacao,
           mp.codigo AS materia_prima_codigo,
           mp.nome AS materia_prima_nome,
+          mp.liga AS materia_prima_liga,
           mp.material AS materia_prima_material,
           mp.geometria AS materia_prima_geometria,
+          mp.bitola AS materia_prima_bitola,
+          mp.bitola_mm AS materia_prima_bitola_mm,
           mp.unidade_estoque AS materia_prima_unidade_estoque
         FROM producao_ordens po
         INNER JOIN maquinas m ON m.id = po.id_maquina
@@ -113,8 +116,11 @@ class ProducaoModel {
           p.comprimento_mm AS peca_comprimento_mm,
           mp.codigo AS materia_prima_codigo,
           mp.nome AS materia_prima_nome,
+          mp.liga AS materia_prima_liga,
           mp.material AS materia_prima_material,
           mp.geometria AS materia_prima_geometria,
+          mp.bitola AS materia_prima_bitola,
+          mp.bitola_mm AS materia_prima_bitola_mm,
           mp.unidade_estoque AS materia_prima_unidade_estoque,
           mp.peso_por_metro,
           mp.peso_unitario_kg
@@ -272,10 +278,6 @@ class ProducaoModel {
       const totalFinal = Number(data.quantidade_produzida) + Number(data.quantidade_refugo);
       if (totalFinal <= 0) {
         throw this.createBusinessError('Informe uma quantidade produzida ou refugo maior que zero.');
-      }
-
-      if (totalFinal > Number(ordem.quantidade_planejada)) {
-        throw this.createBusinessError('A soma de produzida e refugo nao pode ser maior que a quantidade planejada.');
       }
 
       if (!ordem.id_materia_prima) {

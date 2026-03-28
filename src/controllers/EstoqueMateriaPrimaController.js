@@ -102,6 +102,27 @@ const EstoqueMateriaPrimaController = {
     }
   },
 
+  async getSaldoByMateriaPrimaId(req, res) {
+    try {
+      const idMateriaPrima = normalizeOptionalInteger(req.params.id_materia_prima);
+
+      if (!Number.isInteger(idMateriaPrima)) {
+        return res.status(400).json({ message: 'A materia-prima informada deve ser valida.' });
+      }
+
+      const saldo = await EstoqueMateriaPrimaModel.findSaldoSnapshotByMateriaPrimaId(idMateriaPrima);
+
+      if (!saldo) {
+        return res.status(404).json({ message: 'Materia-prima nao encontrada.' });
+      }
+
+      return res.status(200).json(saldo);
+    } catch (error) {
+      console.error('Erro ao buscar saldo da materia-prima:', error);
+      return res.status(500).json({ message: 'Erro ao buscar saldo da materia-prima.' });
+    }
+  },
+
   async createEntrada(req, res) {
     try {
       const payload = buildEntradaPayload(req.body);

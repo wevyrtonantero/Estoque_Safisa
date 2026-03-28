@@ -3,6 +3,7 @@ const solicitacoesProducaoApiBaseUrl = '/api/solicitacoes-producao';
 const maquinasApiBaseUrl = '/api/maquinas';
 const pecasApiBaseUrl = '/api/pecas?tipo=PRODUZIDA';
 const materiasPrimasAutocompleteApiBaseUrl = '/api/materias-primas-autocomplete';
+const estoqueMateriaPrimaApiBaseUrl = '/api/estoque-materias-primas';
 const estoquesApiBaseUrl = '/api/estoques';
 const estoqueSaldosApiBaseUrl = '/api/estoque/saldos';
 const AUTO_REFRESH_MS = 15000;
@@ -14,6 +15,7 @@ let solicitacoesProducaoCache = [];
 let maquinasCache = [];
 let pecasCache = [];
 let materiasPrimasCache = [];
+let materiasPrimasSaldosCache = new Map();
 let estoquesSetorCache = [];
 let almoxStockId = null;
 let estoqueConsultaDebounceTimer = null;
@@ -51,9 +53,20 @@ const refs = {
   maquinaSelect: document.getElementById('producao-maquina'),
   materiaPrimaSelect: document.getElementById('producao-materia-prima'),
   comprimentoInicialInput: document.getElementById('producao-comprimento-corte-inicial'),
+  materiaPrimaResumoWrapper: document.getElementById('producao-mp-resumo-wrapper'),
+  materiaPrimaResumoTitulo: document.getElementById('producao-mp-resumo-titulo'),
+  materiaPrimaResumoSubtitulo: document.getElementById('producao-mp-resumo-subtitulo'),
+  materiaPrimaLigaChip: document.getElementById('producao-mp-liga-chip'),
+  materiaPrimaGeometriaChip: document.getElementById('producao-mp-geometria-chip'),
+  materiaPrimaBitolaChip: document.getElementById('producao-mp-bitola-chip'),
+  materiaPrimaEstoqueChip: document.getElementById('producao-mp-estoque-chip'),
+  materiaPrimaBarrasChip: document.getElementById('producao-mp-barras-chip'),
+  materiaPrimaConsumoChip: document.getElementById('producao-mp-consumo-chip'),
+  materiaPrimaAlerta: document.getElementById('producao-mp-alerta'),
   finalizacaoComprimentoWrapper: document.getElementById('finalizacao-comprimento-wrapper'),
   finalizacaoComprimentoInput: document.getElementById('finalizacao-comprimento-corte'),
-  finalizacaoComprimentoHint: document.getElementById('finalizacao-comprimento-hint')
+  finalizacaoComprimentoHint: document.getElementById('finalizacao-comprimento-hint'),
+  finalizacaoEspecificacaoChip: document.getElementById('finalizacao-especificacao-chip')
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -104,10 +117,14 @@ function bindEvents() {
     refs.pecaId.value = '';
     refs.materiaPrimaSelect.value = '';
     refs.comprimentoInicialInput.value = '';
+    renderizarResumoMateriaPrimaSelecionada();
     renderizarSugestoesPeca(refs.pecaBusca.value.trim());
   });
   refs.pecaBusca.addEventListener('focus', () => renderizarSugestoesPeca(refs.pecaBusca.value.trim()));
   refs.pecaSugestoes.addEventListener('click', handleSugestaoPecaClick);
+  refs.materiaPrimaSelect.addEventListener('change', handleMateriaPrimaOrdemChange);
+  document.getElementById('producao-quantidade-planejada').addEventListener('input', handlePlanejamentoMateriaPrimaChange);
+  refs.comprimentoInicialInput.addEventListener('input', handlePlanejamentoMateriaPrimaChange);
   document.addEventListener('click', handleGlobalClick);
   document.addEventListener('keydown', handleKeyboardShortcuts);
 }
@@ -242,7 +259,7 @@ function renderizarTabela() {
       <td class="table-quantity">${formatInteger(producao.quantidade_planejada)}</td>
       <td class="table-quantity">${formatInteger(producao.quantidade_produzida || 0)}</td>
       <td class="table-quantity">${formatInteger(producao.quantidade_refugo || 0)}</td>
-      <td>${escapeHtml(producao.materia_prima_codigo ? `${producao.materia_prima_codigo} - ${producao.materia_prima_nome}` : 'Sem materia-prima')}</td>
+      <td>${renderMateriaPrimaCelula(producao)}</td>
       <td>${escapeHtml(formatarConsumo(producao))}</td>
       <td>${formatarData(producao.data_inicio)}</td>
       <td class="table-actions-cell">
@@ -325,12 +342,10 @@ function renderizarAcoesSolicitacaoProducao(item) {
 function atualizarIndicadores() {
   const emAndamento = producoesCache.filter((item) => item.status === 'EM_ANDAMENTO').length;
   const finalizadas = producoesCache.filter((item) => item.status === 'FINALIZADA').length;
-  const quantidadeProduzida = producoesCache.reduce((total, item) => total + Number(item.quantidade_produzida || 0), 0);
   const solicitacoesPendentes = solicitacoesProducaoCache.filter((item) => ACTIVE_PRODUCTION_REQUEST_STATUSES.includes(String(item.status || '').toUpperCase())).length;
 
   document.getElementById('metric-producao-andamento').textContent = String(emAndamento);
   document.getElementById('metric-producao-finalizada').textContent = String(finalizadas);
-  document.getElementById('metric-producao-produzida').textContent = formatInteger(quantidadeProduzida);
   refs.metricSolicitacoesPendentes.textContent = String(solicitacoesPendentes);
   setBadge(refs.badgeSolicitacoes, solicitacoesPendentes);
 }
@@ -499,6 +514,14 @@ function handleSugestaoPecaClick(event) {
   esconderSugestoes();
 }
 
+async function handleMateriaPrimaOrdemChange() {
+  await renderizarResumoMateriaPrimaSelecionada(refs.materiaPrimaSelect.value);
+}
+
+async function handlePlanejamentoMateriaPrimaChange() {
+  await renderizarResumoMateriaPrimaSelecionada(refs.materiaPrimaSelect.value);
+}
+
 async function handleCriarProducao(event) {
   event.preventDefault();
 
@@ -623,9 +646,10 @@ function fecharModalProducao() {
 function abrirModalFinalizacao(producao) {
   document.getElementById('finalizacao-id').value = producao.id;
   document.getElementById('finalizacao-titulo').textContent = `${producao.peca_codigo} - ${producao.peca_descricao}`;
-  document.getElementById('finalizacao-subtitulo').textContent = `${producao.maquina_nome} | ${producao.materia_prima_codigo ? `${producao.materia_prima_codigo} - ${producao.materia_prima_nome}` : 'Sem materia-prima'}`;
+  document.getElementById('finalizacao-subtitulo').textContent = `${producao.maquina_nome} | ${formatarMateriaPrimaTitulo(producao)}`;
   document.getElementById('finalizacao-planejada-chip').textContent = `Planejada: ${formatInteger(producao.quantidade_planejada)}`;
-  document.getElementById('finalizacao-mp-chip').textContent = `Materia-prima: ${producao.materia_prima_codigo || '-'}`;
+  document.getElementById('finalizacao-mp-chip').textContent = `Materia-prima: ${formatarMateriaPrimaTitulo(producao)}`;
+  refs.finalizacaoEspecificacaoChip.textContent = `Especificacao: ${formatarResumoTecnicoMateriaPrima(producao)}`;
   document.getElementById('finalizacao-regra-chip').textContent = `Regra: ${producao.materia_prima_geometria === 'FUNDIDO' ? 'consumo unitario' : 'consumo por comprimento'}`;
   document.getElementById('finalizacao-quantidade-produzida').value = '0';
   document.getElementById('finalizacao-quantidade-refugo').value = '0';
@@ -646,6 +670,7 @@ function fecharModalFinalizacao() {
   document.getElementById('finalizacao-subtitulo').textContent = 'Selecione uma ordem em andamento na tabela.';
   document.getElementById('finalizacao-planejada-chip').textContent = 'Planejada: 0';
   document.getElementById('finalizacao-mp-chip').textContent = 'Materia-prima: -';
+  refs.finalizacaoEspecificacaoChip.textContent = 'Especificacao: -';
   document.getElementById('finalizacao-regra-chip').textContent = 'Regra: aguardando';
   refs.finalizacaoComprimentoInput.value = '';
   refs.finalizacaoComprimentoWrapper.classList.remove('hidden');
@@ -660,6 +685,8 @@ function resetFormProducao() {
   document.getElementById('producao-quantidade-planejada').value = '1';
   refs.materiaPrimaSelect.value = '';
   refs.comprimentoInicialInput.value = '';
+  materiasPrimasSaldosCache = new Map();
+  renderizarResumoMateriaPrimaSelecionada();
   esconderSugestoes();
   esconderMensagemModal();
 }
@@ -674,6 +701,87 @@ function preencherConfiguracaoInicialPeca(pecaId) {
 
   refs.materiaPrimaSelect.value = peca.id_materia_prima ? String(peca.id_materia_prima) : '';
   refs.comprimentoInicialInput.value = peca.comprimento_mm ? formatInputDecimal(peca.comprimento_mm) : '';
+  renderizarResumoMateriaPrimaSelecionada(refs.materiaPrimaSelect.value);
+}
+
+async function carregarSaldoMateriaPrimaSelecionada(materiaPrimaId) {
+  const numericId = Number(materiaPrimaId);
+  if (!Number.isInteger(numericId) || numericId <= 0) {
+    return null;
+  }
+
+  if (materiasPrimasSaldosCache.has(numericId)) {
+    return materiasPrimasSaldosCache.get(numericId);
+  }
+
+  const response = await fetch(`${estoqueMateriaPrimaApiBaseUrl}/saldos/${numericId}`);
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || 'Nao foi possivel carregar o saldo da materia-prima.');
+  }
+
+  materiasPrimasSaldosCache.set(numericId, result);
+  return result;
+}
+
+async function renderizarResumoMateriaPrimaSelecionada(materiaPrimaId = refs.materiaPrimaSelect.value) {
+  const materiaPrima = materiasPrimasCache.find((item) => Number(item.id) === Number(materiaPrimaId));
+
+  if (!materiaPrima) {
+    refs.materiaPrimaResumoWrapper.classList.add('hidden');
+    refs.materiaPrimaResumoTitulo.textContent = 'Nenhuma materia-prima selecionada';
+    refs.materiaPrimaResumoSubtitulo.textContent = 'Selecione uma materia-prima para ver a especificacao tecnica usada nesta ordem.';
+    refs.materiaPrimaLigaChip.textContent = 'Liga: -';
+    refs.materiaPrimaGeometriaChip.textContent = 'Geometria: -';
+    refs.materiaPrimaBitolaChip.textContent = 'Bitola: -';
+    refs.materiaPrimaEstoqueChip.textContent = 'Saldo: -';
+    refs.materiaPrimaBarrasChip.textContent = 'Barras: -';
+    refs.materiaPrimaConsumoChip.textContent = 'Consumo previsto: -';
+    setPlanejamentoMateriaPrimaAlert('', '');
+    return;
+  }
+
+  try {
+    const saldo = await carregarSaldoMateriaPrimaSelecionada(materiaPrima.id);
+    const quantidadePlanejada = Number.parseInt(document.getElementById('producao-quantidade-planejada').value || '0', 10) || 0;
+    const comprimentoCorteMm = Number.parseFloat(String(refs.comprimentoInicialInput.value || '').replace(',', '.')) || 0;
+    const comprimentoPadraoMm = Number(saldo?.comprimento_padrao_mm || materiaPrima.comprimento_padrao_mm || 3000);
+    const pesoPorBarraKg = Number(materiaPrima.peso_por_metro || saldo?.peso_por_metro || 0) * (comprimentoPadraoMm / 1000);
+    const saldoQuantidade = Number(saldo?.quantidade || 0);
+    const barrasEquivalentes = pesoPorBarraKg > 0 ? saldoQuantidade / pesoPorBarraKg : null;
+    const consumoPrevisto = calcularConsumoPrevistoMateriaPrima(materiaPrima, quantidadePlanejada, comprimentoCorteMm, comprimentoPadraoMm);
+
+    refs.materiaPrimaResumoWrapper.classList.remove('hidden');
+    refs.materiaPrimaResumoTitulo.textContent = formatarMateriaPrimaTitulo(materiaPrima);
+    refs.materiaPrimaResumoSubtitulo.textContent = materiaPrima.material || 'Sem descricao tecnica cadastrada.';
+    refs.materiaPrimaLigaChip.textContent = `Liga: ${materiaPrima.liga || '-'}`;
+    refs.materiaPrimaGeometriaChip.textContent = `Geometria: ${materiaPrima.geometria || '-'}`;
+    refs.materiaPrimaBitolaChip.textContent = `Bitola: ${formatarBitolaMateriaPrima(materiaPrima)}`;
+    refs.materiaPrimaEstoqueChip.textContent = `Saldo: ${formatarSaldoMateriaPrimaPlanejamento(materiaPrima, saldoQuantidade)}`;
+    refs.materiaPrimaBarrasChip.textContent = `Barras: ${formatarEquivalenciaBarras(barrasEquivalentes, comprimentoPadraoMm, materiaPrima)}`;
+    refs.materiaPrimaConsumoChip.textContent = `Consumo previsto: ${formatarConsumoPrevistoPlanejamento(consumoPrevisto)}`;
+
+    const alertaPlanejamento = construirAlertaPlanejamentoMateriaPrima({
+      materiaPrima,
+      saldoQuantidade,
+      consumoPrevisto,
+      barrasEquivalentes
+    });
+
+    setPlanejamentoMateriaPrimaAlert(alertaPlanejamento.message, alertaPlanejamento.tone);
+  } catch (error) {
+    refs.materiaPrimaResumoWrapper.classList.remove('hidden');
+    refs.materiaPrimaResumoTitulo.textContent = formatarMateriaPrimaTitulo(materiaPrima);
+    refs.materiaPrimaResumoSubtitulo.textContent = materiaPrima.material || 'Sem descricao tecnica cadastrada.';
+    refs.materiaPrimaLigaChip.textContent = `Liga: ${materiaPrima.liga || '-'}`;
+    refs.materiaPrimaGeometriaChip.textContent = `Geometria: ${materiaPrima.geometria || '-'}`;
+    refs.materiaPrimaBitolaChip.textContent = `Bitola: ${formatarBitolaMateriaPrima(materiaPrima)}`;
+    refs.materiaPrimaEstoqueChip.textContent = 'Saldo: indisponivel';
+    refs.materiaPrimaBarrasChip.textContent = 'Barras: indisponivel';
+    refs.materiaPrimaConsumoChip.textContent = 'Consumo previsto: -';
+    setPlanejamentoMateriaPrimaAlert(error.message, 'warning');
+  }
 }
 
 function limparFiltros() {
@@ -990,6 +1098,199 @@ function renderSolicitacaoStatusBadge(status) {
   }
 
   return `<span class="${cssClass}">${escapeHtml(normalized || '-')}</span>`;
+}
+
+function renderMateriaPrimaCelula(producao) {
+  const titulo = formatarMateriaPrimaTitulo(producao);
+  const resumoTecnico = formatarResumoTecnicoMateriaPrima(producao);
+
+  return `
+    <div class="table-stack">
+      <strong class="table-primary-line">${escapeHtml(titulo)}</strong>
+      <span class="table-secondary-line">${escapeHtml(resumoTecnico)}</span>
+    </div>
+  `;
+}
+
+function formatarMateriaPrimaTitulo(item) {
+  const codigo = item.materia_prima_codigo || item.codigo || '';
+  const nome = item.materia_prima_nome || item.nome || '';
+
+  if (codigo && nome) {
+    return `${codigo} - ${nome}`;
+  }
+
+  if (codigo) {
+    return codigo;
+  }
+
+  if (nome) {
+    return nome;
+  }
+
+  return 'Sem materia-prima';
+}
+
+function formatarResumoTecnicoMateriaPrima(item) {
+  const liga = item.materia_prima_liga || item.liga || '';
+  const geometria = item.materia_prima_geometria || item.geometria || '';
+  const bitola = formatarBitolaMateriaPrima(item);
+  const partes = [liga, geometria, bitola].filter((parte) => parte && parte !== '-');
+
+  return partes.length ? partes.join(' | ') : '-';
+}
+
+function formatarBitolaMateriaPrima(item) {
+  const bitola = item.materia_prima_bitola || item.bitola || '';
+  const bitolaMmRaw = item.materia_prima_bitola_mm ?? item.bitola_mm ?? null;
+  const bitolaMm = Number(bitolaMmRaw);
+
+  if (bitola && Number.isFinite(bitolaMm) && bitolaMm > 0) {
+    return `${bitola} | ${formatDecimal(bitolaMm)} mm`;
+  }
+
+  if (bitola) {
+    return bitola;
+  }
+
+  if (Number.isFinite(bitolaMm) && bitolaMm > 0) {
+    return `${formatDecimal(bitolaMm)} mm`;
+  }
+
+  return '-';
+}
+
+function calcularConsumoPrevistoMateriaPrima(materiaPrima, quantidadePlanejada, comprimentoCorteMm, comprimentoPadraoMm = 3000) {
+  const categoria = String(materiaPrima.categoria || '').toUpperCase();
+
+  if (!Number.isFinite(quantidadePlanejada) || quantidadePlanejada <= 0) {
+    return null;
+  }
+
+  if (categoria === 'FUNDIDO') {
+    return {
+      quantidade: quantidadePlanejada,
+      unidade: 'UN',
+      barras: null,
+      comprimentoBarraM: null,
+      pesoKg: Number.isFinite(Number(materiaPrima.peso_unitario_kg))
+        ? Number((quantidadePlanejada * Number(materiaPrima.peso_unitario_kg)).toFixed(4))
+        : null
+    };
+  }
+
+  const pesoPorMetro = Number(materiaPrima.peso_por_metro || 0);
+  if (!Number.isFinite(comprimentoCorteMm) || comprimentoCorteMm <= 0 || pesoPorMetro <= 0) {
+    return null;
+  }
+
+  const metros = Number((((quantidadePlanejada * comprimentoCorteMm) / 1000)).toFixed(4));
+  const pesoKg = Number((metros * pesoPorMetro).toFixed(4));
+  const comprimentoBarraM = Number(comprimentoPadraoMm || 3000) / 1000;
+  const barras = comprimentoBarraM > 0 ? Number((metros / comprimentoBarraM).toFixed(4)) : null;
+
+  return {
+    quantidade: metros,
+    unidade: 'M',
+    barras,
+    comprimentoBarraM,
+    pesoKg
+  };
+}
+
+function formatarSaldoMateriaPrimaPlanejamento(materiaPrima, quantidade) {
+  const unidade = String(materiaPrima.unidade_estoque || '').toUpperCase() || 'UN';
+  return `${formatDecimal(quantidade)} ${unidade}`;
+}
+
+function formatarEquivalenciaBarras(barrasEquivalentes, comprimentoPadraoMm, materiaPrima) {
+  if (String(materiaPrima.categoria || '').toUpperCase() === 'FUNDIDO') {
+    return 'nao se aplica';
+  }
+
+  if (!Number.isFinite(barrasEquivalentes)) {
+    return 'nao calculada';
+  }
+
+  const comprimentoMetros = Number(comprimentoPadraoMm || 3000) / 1000;
+  return `${formatDecimal(barrasEquivalentes)} barra(s) de ${formatDecimal(comprimentoMetros)} m`;
+}
+
+function formatarConsumoPrevistoPlanejamento(consumoPrevisto) {
+  if (!consumoPrevisto) {
+    return 'preencha quantidade e corte';
+  }
+
+  if (consumoPrevisto.unidade === 'UN') {
+    if (Number.isFinite(consumoPrevisto.pesoKg)) {
+      return `${formatInteger(consumoPrevisto.quantidade)} UN | ${formatDecimal(consumoPrevisto.pesoKg)} kg`;
+    }
+
+    return `${formatInteger(consumoPrevisto.quantidade)} UN`;
+  }
+
+  const partes = [
+    `${formatDecimal(consumoPrevisto.quantidade)} m`,
+    `${formatDecimal(consumoPrevisto.pesoKg || 0)} kg`
+  ];
+
+  if (Number.isFinite(consumoPrevisto.barras)) {
+    partes.push(`${formatDecimal(consumoPrevisto.barras)} barra(s)`);
+  }
+
+  return partes.join(' | ');
+}
+
+function construirAlertaPlanejamentoMateriaPrima({ materiaPrima, saldoQuantidade, consumoPrevisto, barrasEquivalentes }) {
+  if (!consumoPrevisto) {
+    if (String(materiaPrima.categoria || '').toUpperCase() === 'FUNDIDO') {
+      return {
+        message: 'Planejamento em modo de acompanhamento. A finalizacao nao sera bloqueada por falta de saldo.',
+        tone: 'info'
+      };
+    }
+
+    return {
+      message: 'ATENCAO: defina o comprimento de corte para ver a previsao de consumo desta ordem. A finalizacao nao sera bloqueada por falta de saldo.',
+      tone: 'warning'
+    };
+  }
+
+  const saldoComparavel = String(materiaPrima.categoria || '').toUpperCase() === 'FUNDIDO'
+    ? saldoQuantidade
+    : saldoQuantidade;
+  const consumoComparavel = String(materiaPrima.categoria || '').toUpperCase() === 'FUNDIDO'
+    ? Number(consumoPrevisto.quantidade || 0)
+    : Number(consumoPrevisto.pesoKg || 0);
+
+  if (consumoComparavel > saldoComparavel) {
+    return {
+      message: 'ATENCAO: a previsao desta ordem consome mais do que o saldo atual. O sistema vai permitir finalizar mesmo assim e o estoque da MP podera ficar negativo ate a reposicao.',
+      tone: 'warning'
+    };
+  }
+
+  if (Number.isFinite(barrasEquivalentes) && barrasEquivalentes < 1) {
+    return {
+      message: 'ATENCAO: o saldo atual nao fecha uma barra padrao completa. Revise o planejamento desta ordem.',
+      tone: 'warning'
+    };
+  }
+
+  return {
+    message: 'Saldo suficiente para a previsao desta ordem no planejamento atual.',
+    tone: 'success'
+  };
+}
+
+function setPlanejamentoMateriaPrimaAlert(message, tone = '') {
+  refs.materiaPrimaAlerta.textContent = message || '';
+  refs.materiaPrimaAlerta.classList.toggle('hidden', !message);
+  refs.materiaPrimaAlerta.classList.remove('is-warning', 'is-success', 'is-info');
+
+  if (message && tone) {
+    refs.materiaPrimaAlerta.classList.add(`is-${tone}`);
+  }
 }
 
 function formatInteger(value) {

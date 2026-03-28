@@ -77,6 +77,37 @@ class EstoqueMateriaPrimaModel {
     return rows[0] || null;
   }
 
+  static async findSaldoSnapshotByMateriaPrimaId(idMateriaPrima) {
+    const [rows] = await pool.query(
+      `
+        SELECT
+          mp.id AS id_materia_prima,
+          mp.codigo,
+          mp.nome,
+          mp.categoria,
+          mp.material,
+          mp.liga,
+          mp.geometria,
+          mp.bitola,
+          mp.bitola_mm,
+          mp.comprimento_padrao_mm,
+          mp.peso_por_metro,
+          mp.peso_unitario_kg,
+          mp.unidade_estoque,
+          COALESCE(s.quantidade, 0) AS quantidade,
+          COALESCE(fs.fornecedores_nomes, fp.nome, '') AS fornecedores_nomes
+        FROM materias_primas mp
+        LEFT JOIN estoque_materias_primas_saldos s ON s.id_materia_prima = mp.id
+        LEFT JOIN fornecedores fp ON fp.id = mp.id_fornecedor_principal
+        LEFT JOIN (${this.supplierSummarySubquery()}) fs ON fs.id_materia_prima = mp.id
+        WHERE mp.id = ?
+      `,
+      [idMateriaPrima]
+    );
+
+    return rows[0] || null;
+  }
+
   static async findSaldos(filters = {}) {
     const conditions = ['COALESCE(s.quantidade, 0) > 0'];
     const values = [];
@@ -332,12 +363,6 @@ class EstoqueMateriaPrimaModel {
         saldo_resultante: quantidadeAtual,
         unidade: materiaPrima.unidade_estoque
       };
-    }
-
-    if (quantidadeConsumida > quantidadeAtual) {
-      throw this.createBusinessError(
-        `Saldo insuficiente da materia-prima ${materiaPrima.codigo} - ${materiaPrima.nome}.`
-      );
     }
 
     const novoSaldo = Number((quantidadeAtual - quantidadeConsumida).toFixed(4));

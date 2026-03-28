@@ -13,8 +13,6 @@ CREATE TABLE IF NOT EXISTS estoque_materias_primas_saldos (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_emp_saldos_materia_prima
     FOREIGN KEY (id_materia_prima) REFERENCES materias_primas(id),
-  CONSTRAINT chk_emp_saldos_quantidade
-    CHECK (quantidade >= 0),
   CONSTRAINT uq_emp_saldos_materia_prima UNIQUE (id_materia_prima),
   INDEX idx_emp_saldos_materia_prima (id_materia_prima)
 ) ENGINE = InnoDB

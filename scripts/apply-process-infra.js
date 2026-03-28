@@ -48,11 +48,30 @@ async function ensureSolicitacoesEstoqueSchema() {
   }
 }
 
+async function ensureEstoqueMateriaPrimaAllowsNegative() {
+  const [checkRows] = await pool.query(`
+    SELECT COUNT(*) AS total
+    FROM information_schema.TABLE_CONSTRAINTS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'estoque_materias_primas_saldos'
+      AND CONSTRAINT_NAME = 'chk_emp_saldos_quantidade'
+      AND CONSTRAINT_TYPE = 'CHECK'
+  `);
+
+  if (Number(checkRows[0]?.total || 0)) {
+    await pool.query(`
+      ALTER TABLE estoque_materias_primas_saldos
+      DROP CHECK chk_emp_saldos_quantidade
+    `);
+  }
+}
+
 async function main() {
   await runSqlFile('database/schema_solicitacoes_estoque.sql');
   await ensureSolicitacoesEstoqueSchema();
   await runSqlFile('database/schema_solicitacoes_producao.sql');
   await runSqlFile('database/schema_estoque_materias_primas.sql');
+  await ensureEstoqueMateriaPrimaAllowsNegative();
   await runSqlFile('database/schema_tratamento_externo.sql');
   await runSqlFile('database/schema_terceirizacao_remessas.sql');
   console.log('Infraestrutura de processo aplicada com sucesso.');

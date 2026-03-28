@@ -287,6 +287,27 @@
           <span class="form-hint">Usado para consumir corretamente a materia-prima desta ordem.</span>
         </div>
 
+        <div id="producao-mp-resumo-wrapper" class="span-12 embedded-section hidden">
+          <div class="structure-highlight">
+            <div>
+              <p class="page-kicker">Materia-prima em foco</p>
+              <h3 id="producao-mp-resumo-titulo">Nenhuma materia-prima selecionada</h3>
+              <p id="producao-mp-resumo-subtitulo">Selecione uma materia-prima para ver a especificacao tecnica usada nesta ordem.</p>
+            </div>
+
+            <div class="structure-kpis">
+              <span id="producao-mp-liga-chip" class="mini-chip">Liga: -</span>
+              <span id="producao-mp-geometria-chip" class="mini-chip">Geometria: -</span>
+              <span id="producao-mp-bitola-chip" class="mini-chip">Bitola: -</span>
+              <span id="producao-mp-estoque-chip" class="mini-chip">Saldo: -</span>
+              <span id="producao-mp-barras-chip" class="mini-chip">Barras: -</span>
+              <span id="producao-mp-consumo-chip" class="mini-chip">Consumo previsto: -</span>
+            </div>
+          </div>
+
+          <div id="producao-mp-alerta" class="inline-note hidden"></div>
+        </div>
+
         <div class="field span-12">
           <label for="producao-observacao-inicio">Observacao de inicio</label>
           <input id="producao-observacao-inicio" type="text" maxlength="255" placeholder="Opcional">
@@ -330,6 +351,7 @@
             <div class="structure-kpis">
               <span id="finalizacao-planejada-chip" class="mini-chip">Planejada: 0</span>
               <span id="finalizacao-mp-chip" class="mini-chip">Materia-prima: -</span>
+              <span id="finalizacao-especificacao-chip" class="mini-chip">Especificacao: -</span>
               <span id="finalizacao-regra-chip" class="mini-chip">Regra: aguardando</span>
             </div>
           </div>

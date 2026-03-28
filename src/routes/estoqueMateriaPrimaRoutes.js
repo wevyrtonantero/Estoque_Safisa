@@ -5,6 +5,7 @@ const EstoqueMateriaPrimaController = require('../controllers/EstoqueMateriaPrim
 const router = express.Router();
 
 router.get('/estoque-materias-primas/saldos', EstoqueMateriaPrimaController.getSaldos);
+router.get('/estoque-materias-primas/saldos/:id_materia_prima', EstoqueMateriaPrimaController.getSaldoByMateriaPrimaId);
 router.get('/estoque-materias-primas/movimentacoes', EstoqueMateriaPrimaController.getMovimentacoes);
 router.post('/estoque-materias-primas/entrada', EstoqueMateriaPrimaController.createEntrada);
 router.post('/estoque-materias-primas/ajuste', EstoqueMateriaPrimaController.createAjuste);

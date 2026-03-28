@@ -147,6 +147,10 @@ class MateriaPrimaModel {
           mp.geometria,
           mp.bitola,
           mp.bitola_mm,
+          mp.comprimento_padrao_mm,
+          mp.peso_por_metro,
+          mp.peso_unitario_kg,
+          mp.unidade_estoque,
           mp.id_fornecedor_principal,
           COALESCE(fs.fornecedores_nomes, '') AS fornecedores_nomes
         FROM materias_primas mp
