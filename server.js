@@ -36,6 +36,10 @@ app.get('/pagina-pecas', (req, res) => {
 });
 
 app.get('/pagina-dashboard', (req, res) => {
+  res.redirect('/pagina-almoxarifado');
+});
+
+app.get('/pagina-almoxarifado', (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'dashboard.html'));
 });
 
