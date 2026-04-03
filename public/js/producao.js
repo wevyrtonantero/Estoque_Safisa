@@ -774,6 +774,7 @@ function limparFiltrosConsultaEstoques() {
   if (almoxStockId) {
     refs.estoquesSetor.value = String(almoxStockId);
   }
+  atualizarFiltroEstadoConsultaEstoques();
   carregarConsultaEstoques();
 }
 
@@ -792,23 +793,30 @@ async function carregarConsultaEstoques() {
     refs.estoquesTotal.textContent = '0 registro(s) encontrado(s)';
     estoqueConsultaCache = [];
     refs.estoquesTbody.innerHTML = '<tr><td colspan="8" class="empty-state">Selecione um estoque para consultar.</td></tr>';
+    atualizarFiltroEstadoConsultaEstoques();
     return;
   }
 
+  const aplicaPrioridade = Number(refs.estoquesSetor.value) === Number(almoxStockId);
   const params = new URLSearchParams({
-    estoque: refs.estoquesSetor.value,
-    modo: 'todos'
+    estoque: refs.estoquesSetor.value
   });
 
+  if (aplicaPrioridade) {
+    params.append('modo', 'todos');
+  }
+
   try {
-    const response = await fetch(`${estoquePrioridadesApiBaseUrl}?${params.toString()}`);
+    const endpoint = aplicaPrioridade ? estoquePrioridadesApiBaseUrl : estoqueSaldosApiBaseUrl;
+    const response = await fetch(`${endpoint}?${params.toString()}`);
     const saldos = await response.json();
 
     if (!response.ok) {
       throw new Error(saldos.message || 'Nao foi possivel carregar o estoque selecionado.');
     }
 
-    estoqueConsultaCache = Array.isArray(saldos) ? saldos : [];
+    estoqueConsultaCache = normalizarRegistrosConsultaEstoque(Array.isArray(saldos) ? saldos : [], aplicaPrioridade);
+    atualizarFiltroEstadoConsultaEstoques();
     renderizarConsultaEstoques();
   } catch (error) {
     estoqueConsultaCache = [];
@@ -832,15 +840,15 @@ function renderizarConsultaEstoques() {
   }
 
   refs.estoquesTbody.innerHTML = saldos.map((item) => `
-    <tr class="${item.estado_necessidade === 'CRITICO' ? 'table-row-attention' : ''}">
+    <tr class="${item.aplica_prioridade && item.estado_necessidade === 'CRITICO' ? 'table-row-attention' : ''}">
       <td class="table-code">${escapeHtml(item.codigo)}</td>
       <td class="table-description">${escapeHtml(item.descricao)}</td>
       <td>${escapeHtml(obterFornecedorLabel(item))}</td>
       <td>${escapeHtml(item.classificacao)}</td>
       <td class="table-quantity">${formatDecimal(item.quantidade)}</td>
-      <td class="table-quantity">${formatDecimal(item.quantidade_saida_mes)}</td>
+      <td class="table-quantity">${item.aplica_prioridade ? formatDecimal(item.quantidade_saida_mes) : '-'}</td>
       <td>${escapeHtml(formatarDuracaoPrioridade(item))}</td>
-      <td>${renderizarEstadoNecessidade(item.estado_necessidade)}</td>
+      <td>${renderizarEstadoNecessidade(item.estado_necessidade, item.aplica_prioridade)}</td>
     </tr>
   `).join('');
 }
@@ -870,11 +878,11 @@ function obterConsultaEstoquesFiltrados() {
       return false;
     }
 
-    if (filtroEstado === 'PRIORITARIOS' && String(item.estado_necessidade || '').toUpperCase() === 'NORMAL') {
+    if (filtroEstado && !item.aplica_prioridade) {
       return false;
     }
 
-    if (filtroEstado && filtroEstado !== 'PRIORITARIOS' && String(item.estado_necessidade || '').toUpperCase() !== filtroEstado) {
+    if (filtroEstado && String(item.estado_necessidade || '').toUpperCase() !== filtroEstado) {
       return false;
     }
 
@@ -888,6 +896,27 @@ function obterConsultaEstoquesFiltrados() {
   }
 
   return registros;
+}
+
+function normalizarRegistrosConsultaEstoque(items, aplicaPrioridade) {
+  return items.map((item) => ({
+    ...item,
+    quantidade: Number(item.quantidade || 0),
+    quantidade_saida_mes: aplicaPrioridade ? Number(item.quantidade_saida_mes || item.consumo_mensal || 0) : null,
+    dias_cobertura: aplicaPrioridade ? item.dias_cobertura ?? null : null,
+    data_prevista_ruptura: aplicaPrioridade ? item.data_prevista_ruptura ?? null : null,
+    estado_necessidade: aplicaPrioridade ? String(item.estado_necessidade || 'NORMAL').toUpperCase() : '',
+    aplica_prioridade: aplicaPrioridade
+  }));
+}
+
+function atualizarFiltroEstadoConsultaEstoques() {
+  const aplicaPrioridade = Number(refs.estoquesSetor.value || 0) === Number(almoxStockId);
+  if (!aplicaPrioridade) {
+    refs.estoquesEstado.value = '';
+  }
+
+  refs.estoquesEstado.disabled = !aplicaPrioridade;
 }
 
 function handleGlobalClick(event) {
@@ -1348,6 +1377,10 @@ function formatarDataCurta(data) {
 }
 
 function formatarDuracaoPrioridade(item) {
+  if (!item?.aplica_prioridade) {
+    return '-';
+  }
+
   const dias = Number(item.dias_cobertura);
   const dataPrevista = formatarDataCurta(item.data_prevista_ruptura);
 
@@ -1362,7 +1395,11 @@ function formatarDuracaoPrioridade(item) {
   return `${formatDecimal(dias)} dia(s) | ate ${dataPrevista}`;
 }
 
-function renderizarEstadoNecessidade(estado) {
+function renderizarEstadoNecessidade(estado, aplicaPrioridade = true) {
+  if (!aplicaPrioridade) {
+    return '-';
+  }
+
   const normalized = String(estado || '').toUpperCase();
   let cssClass = 'status-chip';
 

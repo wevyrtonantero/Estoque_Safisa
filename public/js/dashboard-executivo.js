@@ -257,7 +257,7 @@ function renderizarTabelaProducao(items) {
 }
 
 function preencherFiltroEstoques() {
-  const base = estoquesPrioridadesCache.length ? estoquesPrioridadesCache : estoquesDetalhadosCache;
+  const base = obterRegistrosDetalhadosDashboard();
   const options = Array.from(new Set(base.map((item) => String(item.estoque_nome || '').trim()).filter(Boolean)));
   refs.estoquesFiltroEstoque.innerHTML = `
     <option value="">Todos</option>
@@ -274,16 +274,16 @@ function renderizarTabelaEstoquesDetalhados() {
   }
 
   refs.estoquesTbody.innerHTML = items.map((item) => `
-    <tr class="${item.estado_necessidade === 'CRITICO' ? 'table-row-attention' : ''}">
+    <tr class="${item.aplica_prioridade && item.estado_necessidade === 'CRITICO' ? 'table-row-attention' : ''}">
       <td>${escapeHtml(item.estoque_nome)}</td>
       <td class="table-code">${escapeHtml(item.codigo)}</td>
       <td class="table-description">${escapeHtml(item.descricao)}</td>
       <td>${escapeHtml(obterFornecedorLabel(item))}</td>
       <td>${escapeHtml(item.classificacao)}</td>
       <td class="table-quantity">${formatDecimal(item.quantidade)}</td>
-      <td class="table-quantity">${formatDecimal(item.quantidade_saida_mes)}</td>
+      <td class="table-quantity">${item.aplica_prioridade ? formatDecimal(item.quantidade_saida_mes) : '-'}</td>
       <td>${escapeHtml(formatarDuracaoPrioridade(item))}</td>
-      <td>${renderizarEstadoNecessidade(item.estado_necessidade)}</td>
+      <td>${renderizarEstadoNecessidade(item.estado_necessidade, item.aplica_prioridade)}</td>
     </tr>
   `).join('');
 }
@@ -568,7 +568,7 @@ function obterEstoquesDetalhadosFiltrados() {
   const filtroEstado = String(refs.estoquesFiltroEstado.value || '').trim().toUpperCase();
   const ordem = refs.estoquesFiltroOrdem.value;
 
-  const registros = estoquesPrioridadesCache.filter((item) => {
+  const registros = obterRegistrosDetalhadosDashboard().filter((item) => {
     if (filtroEstoque && normalizarBusca(item.estoque_nome) !== filtroEstoque) {
       return false;
     }
@@ -589,11 +589,11 @@ function obterEstoquesDetalhadosFiltrados() {
       return false;
     }
 
-    if (filtroEstado === 'PRIORITARIOS' && String(item.estado_necessidade || '').toUpperCase() === 'NORMAL') {
+    if (filtroEstado && !item.aplica_prioridade) {
       return false;
     }
 
-    if (filtroEstado && filtroEstado !== 'PRIORITARIOS' && String(item.estado_necessidade || '').toUpperCase() !== filtroEstado) {
+    if (filtroEstado && String(item.estado_necessidade || '').toUpperCase() !== filtroEstado) {
       return false;
     }
 
@@ -605,6 +605,52 @@ function obterEstoquesDetalhadosFiltrados() {
   } else if (ordem === 'desc') {
     registros.sort((a, b) => Number(b.quantidade || 0) - Number(a.quantidade || 0));
   }
+
+  return registros;
+}
+
+function obterRegistrosDetalhadosDashboard() {
+  const registros = [];
+  const idsExistentes = new Set();
+  const prioridadesPorChave = new Map(
+    alertasAlmoxCache.map((item) => [`${normalizarBusca(item.estoque_nome)}:${Number(item.id_peca)}`, item])
+  );
+
+  estoquesDetalhadosCache.forEach((item) => {
+    const aplicaPrioridade = normalizarBusca(item.estoque_nome).includes('almox');
+    const prioridade = aplicaPrioridade
+      ? prioridadesPorChave.get(`${normalizarBusca(item.estoque_nome)}:${Number(item.id_peca)}`) || null
+      : null;
+
+    registros.push({
+      ...item,
+      quantidade: Number(prioridade?.quantidade ?? item.quantidade ?? 0),
+      quantidade_saida_mes: aplicaPrioridade ? Number(prioridade?.quantidade_saida_mes ?? item.consumo_mensal ?? 0) : null,
+      dias_cobertura: aplicaPrioridade ? prioridade?.dias_cobertura ?? null : null,
+      data_prevista_ruptura: aplicaPrioridade ? prioridade?.data_prevista_ruptura ?? null : null,
+      estado_necessidade: aplicaPrioridade ? String(prioridade?.estado_necessidade || 'NORMAL').toUpperCase() : '',
+      aplica_prioridade: aplicaPrioridade
+    });
+
+    idsExistentes.add(`${normalizarBusca(item.estoque_nome)}:${Number(item.id_peca)}`);
+  });
+
+  obterAlertasAlmoxOperacionais().forEach((item) => {
+    const key = `${normalizarBusca(item.estoque_nome)}:${Number(item.id_peca)}`;
+    if (idsExistentes.has(key)) {
+      return;
+    }
+
+    registros.push({
+      ...item,
+      quantidade: Number(item.quantidade || 0),
+      quantidade_saida_mes: Number(item.quantidade_saida_mes || 0),
+      dias_cobertura: item.dias_cobertura ?? null,
+      data_prevista_ruptura: item.data_prevista_ruptura ?? null,
+      estado_necessidade: String(item.estado_necessidade || 'NORMAL').toUpperCase(),
+      aplica_prioridade: true
+    });
+  });
 
   return registros;
 }
@@ -645,7 +691,11 @@ function obterMateriasPrimasFiltradas() {
   return registros;
 }
 
-function renderizarEstadoNecessidade(estado) {
+function renderizarEstadoNecessidade(estado, aplicaPrioridade = true) {
+  if (!aplicaPrioridade) {
+    return '-';
+  }
+
   const normalized = String(estado || '').toUpperCase();
   let cssClass = 'status-chip';
 
@@ -676,6 +726,10 @@ function formatarDataCurta(value) {
 }
 
 function formatarDuracaoPrioridade(item) {
+  if (!item?.aplica_prioridade) {
+    return '-';
+  }
+
   const dias = Number(item.dias_cobertura);
   const dataPrevista = formatarDataCurta(item.data_prevista_ruptura);
 

@@ -191,6 +191,11 @@ function resolveStockTargets(row) {
     }
   }
 
+  // Regra operacional atual: o saldo importado pelo cadastro de pecas deve
+  // permanecer no Almoxarifado, sem alimentar automaticamente a Montagem.
+  componentes += elaboracao;
+  elaboracao = 0;
+
   return {
     componentes: Number(componentes.toFixed(2)),
     elaboracao: Number(elaboracao.toFixed(2))
