@@ -1,14 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 const mysql = require('mysql2/promise');
+const { createConnectionConfig } = require('../database/config');
 
-const connectionConfig = {
-  host: 'localhost',
-  user: 'root',
-  password: 'root',
-  database: 'safisa',
-  charset: 'utf8mb4'
-};
+const connectionConfig = createConnectionConfig();
 
 const EXPORT_PATH = path.join(__dirname, '..', 'exports', 'import-pecas-csv-2026-04-02-summary.json');
 

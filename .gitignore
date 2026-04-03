@@ -8,6 +8,7 @@ backups/*.bundle
 
 .env
 .env.*
+!.env.example
 
 dist/
 build/

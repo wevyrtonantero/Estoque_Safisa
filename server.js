@@ -17,9 +17,10 @@ const solicitacaoEstoqueRoutes = require('./src/routes/solicitacaoEstoqueRoutes'
 const solicitacaoProducaoRoutes = require('./src/routes/solicitacaoProducaoRoutes');
 const painelRoutes = require('./src/routes/painelRoutes');
 const { testConnection } = require('./database/connection');
+const { appConfig } = require('./database/config');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = appConfig.port;
 const NO_CACHE_HEADERS = {
   'Cache-Control': 'no-store, no-cache, must-revalidate, private',
   Pragma: 'no-cache',

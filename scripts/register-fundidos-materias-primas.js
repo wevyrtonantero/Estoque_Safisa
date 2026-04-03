@@ -1,11 +1,7 @@
 const mysql = require('mysql2/promise');
+const { createConnectionConfig } = require('../database/config');
 
-const connectionConfig = {
-  host: 'localhost',
-  user: 'root',
-  password: 'root',
-  database: 'safisa'
-};
+const connectionConfig = createConnectionConfig();
 
 const FUNDIDO_FIELDS = {
   categoria: 'FUNDIDO',

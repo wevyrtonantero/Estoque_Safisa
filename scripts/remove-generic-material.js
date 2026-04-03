@@ -1,12 +1,7 @@
 const mysql = require('mysql2/promise');
+const { createConnectionConfig } = require('../database/config');
 
-const connectionConfig = {
-  host: 'localhost',
-  user: 'root',
-  password: 'root',
-  database: 'safisa',
-  charset: 'utf8mb4'
-};
+const connectionConfig = createConnectionConfig();
 
 async function fetchScalar(connection, sql, params = []) {
   const [rows] = await connection.query(sql, params);

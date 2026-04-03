@@ -1,12 +1,7 @@
 const mysql = require('mysql2/promise');
+const { createConnectionConfig } = require('../database/config');
 
-const connectionConfig = {
-  host: 'localhost',
-  user: 'root',
-  password: 'root',
-  database: 'safisa',
-  charset: 'utf8mb4'
-};
+const connectionConfig = createConnectionConfig();
 
 const FUNDIDO_SUPPLIER_ID = 6;
 const OBSERVATION = 'Carga inicial de estoque a partir da planilha enviada em 2026-04-02.';

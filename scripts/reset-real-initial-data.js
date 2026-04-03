@@ -1,6 +1,7 @@
 ﻿const fs = require('fs/promises');
 const path = require('path');
 const mysql = require('mysql2/promise');
+const { createConnectionConfig } = require('../database/config');
 
 const projectRoot = path.resolve(__dirname, '..');
 const databaseDir = path.join(projectRoot, 'database');
@@ -274,13 +275,9 @@ async function loadRealPieces() {
 }
 
 async function main() {
-  const connection = await mysql.createConnection({
-    host: 'localhost',
-    user: 'root',
-    password: 'root',
-    database: 'safisa',
-    multipleStatements: true
-  });
+  const connection = await mysql.createConnection(
+    createConnectionConfig({ multipleStatements: true })
+  );
 
   try {
     await connection.query(

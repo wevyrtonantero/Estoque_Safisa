@@ -1,15 +1,8 @@
 // Conexao com o banco de dados MySQL.
 const mysql = require('mysql2/promise');
+const { createPoolConfig } = require('./config');
 
-const pool = mysql.createPool({
-  host: 'localhost',
-  user: 'root',
-  password: 'root',
-  database: 'safisa',
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
-});
+const pool = mysql.createPool(createPoolConfig());
 
 // Testa se o banco esta acessivel antes de usar o CRUD.
 async function testConnection() {
