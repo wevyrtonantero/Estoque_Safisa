@@ -32,24 +32,43 @@
         <span>Pedidos em aberto</span>
         <strong id="montagem-card-pedidos">0</strong>
       </article>
+
+      <article class="summary-card">
+        <span>Pedidos da Expedicao</span>
+        <strong id="montagem-card-recebidos">0</strong>
+      </article>
     </section>
 
     <div id="montagem-mensagem" class="message hidden"></div>
 
     <section class="sector-shell">
       <aside class="sector-menu">
-        <section class="content-card sector-menu-card">
-          <span class="section-pill">Menu do Setor</span>
+        <details class="sector-menu-card">
+          <summary class="sector-menu-summary">
+            <div class="sector-menu-heading">
+              <span class="section-pill">Montagem</span>
+              <strong>Menu</strong>
+            </div>
+            <span class="sector-menu-trigger" aria-hidden="true">...</span>
+          </summary>
 
-          <div class="sector-menu-list">
-            <button id="montagem-btn-transferencia-menu" class="btn btn-primary" type="button"><span class="btn-label">Enviar para Expedicao</span></button>
-            <button id="montagem-btn-solicitar" class="btn btn-neutral" type="button"><span class="btn-label">Solicitar Pecas</span></button>
-            <button id="montagem-btn-simular" class="btn btn-secondary" type="button"><span class="btn-label">Simulacao de Montagem</span></button>
-            <button id="montagem-btn-pedidos-menu" class="btn btn-neutral" type="button"><span class="btn-label">Meus Pedidos</span><span id="montagem-badge-pedidos" class="btn-badge hidden">0</span></button>
-            <button id="montagem-btn-recebidos-menu" class="btn btn-neutral" type="button"><span class="btn-label">Pedidos da Expedicao</span><span id="montagem-badge-recebidos" class="btn-badge hidden">0</span></button>
-            <button id="montagem-btn-producao" class="btn btn-secondary" type="button"><span class="btn-label">Ver Producao</span><span id="montagem-badge-producao" class="btn-badge hidden">0</span></button>
+          <div class="sector-menu-panel">
+            <div class="sector-menu-panel-head">
+              <span class="section-pill">Montagem</span>
+              <strong>Acoes rapidas</strong>
+              <small>Atalhos do setor, pedidos e producao.</small>
+            </div>
+
+            <div class="sector-menu-list">
+              <button id="montagem-btn-transferencia-menu" class="btn btn-primary" type="button"><span class="btn-label">Enviar para Expedicao</span></button>
+              <button id="montagem-btn-solicitar" class="btn btn-neutral" type="button"><span class="btn-label">Solicitar Pecas</span></button>
+              <button id="montagem-btn-simular" class="btn btn-secondary" type="button"><span class="btn-label">Simulacao de Montagem</span></button>
+              <button id="montagem-btn-pedidos-menu" class="btn btn-neutral" type="button"><span class="btn-label">Meus Pedidos</span><span id="montagem-badge-pedidos" class="btn-badge hidden">0</span></button>
+              <button id="montagem-btn-recebidos-menu" class="btn btn-neutral" type="button"><span class="btn-label">Pedidos da Expedicao</span><span id="montagem-badge-recebidos" class="btn-badge hidden">0</span></button>
+              <button id="montagem-btn-producao" class="btn btn-secondary" type="button"><span class="btn-label">Ver Producao</span><span id="montagem-badge-producao" class="btn-badge hidden">0</span></button>
+            </div>
           </div>
-        </section>
+        </details>
       </aside>
 
       <div class="sector-content">
@@ -510,6 +529,7 @@
     </div>
   </div>
 
+  <script src="/js/sector-menu.js"></script>
   <script src="/js/montagem.js"></script>
 </body>
 </html>

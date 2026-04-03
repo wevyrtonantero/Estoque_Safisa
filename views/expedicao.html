@@ -38,18 +38,32 @@
 
     <section class="sector-shell">
       <aside class="sector-menu">
-        <section class="content-card sector-menu-card">
-          <span class="section-pill">Menu do Setor</span>
+        <details class="sector-menu-card">
+          <summary class="sector-menu-summary">
+            <div class="sector-menu-heading">
+              <span class="section-pill">Expedicao</span>
+              <strong>Menu</strong>
+            </div>
+            <span class="sector-menu-trigger" aria-hidden="true">...</span>
+          </summary>
 
-          <div class="sector-menu-list">
-            <button id="expedicao-btn-saida-menu" class="btn btn-primary" type="button"><span class="btn-label">Baixa de Venda</span></button>
-            <button id="expedicao-btn-solicitar" class="btn btn-neutral" type="button"><span class="btn-label">Solicitar Pecas</span></button>
-            <button id="expedicao-btn-simular" class="btn btn-secondary" type="button"><span class="btn-label">Simulacao de Montagem</span></button>
-            <button id="expedicao-btn-pedidos-menu" class="btn btn-neutral" type="button"><span class="btn-label">Meus Pedidos</span><span id="expedicao-badge-pedidos" class="btn-badge hidden">0</span></button>
-            <button id="expedicao-btn-historico-menu" class="btn btn-neutral" type="button"><span class="btn-label">Historico de Saidas</span></button>
-            <button id="expedicao-btn-producao" class="btn btn-secondary" type="button"><span class="btn-label">Ver Producao</span><span id="expedicao-badge-producao" class="btn-badge hidden">0</span></button>
+          <div class="sector-menu-panel">
+            <div class="sector-menu-panel-head">
+              <span class="section-pill">Expedicao</span>
+              <strong>Acoes rapidas</strong>
+              <small>Saidas, pedidos, simulacao e apoio a producao.</small>
+            </div>
+
+            <div class="sector-menu-list">
+              <button id="expedicao-btn-saida-menu" class="btn btn-primary" type="button"><span class="btn-label">Baixa de Venda</span></button>
+              <button id="expedicao-btn-solicitar" class="btn btn-neutral" type="button"><span class="btn-label">Solicitar Pecas</span></button>
+              <button id="expedicao-btn-simular" class="btn btn-secondary" type="button"><span class="btn-label">Simulacao de Montagem</span></button>
+              <button id="expedicao-btn-pedidos-menu" class="btn btn-neutral" type="button"><span class="btn-label">Meus Pedidos</span><span id="expedicao-badge-pedidos" class="btn-badge hidden">0</span></button>
+              <button id="expedicao-btn-historico-menu" class="btn btn-neutral" type="button"><span class="btn-label">Historico de Saidas</span></button>
+              <button id="expedicao-btn-producao" class="btn btn-secondary" type="button"><span class="btn-label">Ver Producao</span><span id="expedicao-badge-producao" class="btn-badge hidden">0</span></button>
+            </div>
           </div>
-        </section>
+        </details>
       </aside>
 
       <div class="sector-content">
@@ -490,6 +504,7 @@
     </div>
   </div>
 
+  <script src="/js/sector-menu.js"></script>
   <script src="/js/expedicao.js"></script>
 </body>
 </html>

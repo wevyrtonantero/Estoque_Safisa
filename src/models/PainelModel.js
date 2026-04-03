@@ -1,5 +1,7 @@
 ﻿const { pool } = require('../../database/connection');
 
+const EstoqueModel = require('./EstoqueModel');
+
 class PainelModel {
   static async getSummary() {
     const [
@@ -11,7 +13,7 @@ class PainelModel {
       [finalizadasHojeRows],
       [solicitacoesRows],
       [byWarehouse],
-      [almoxCriticos],
+      almoxCriticos,
       [topStock],
       [lowStock],
       [topSaidas],
@@ -77,98 +79,11 @@ class PainelModel {
         GROUP BY e.id, e.nome
         ORDER BY e.id ASC
       `),
-      pool.query(`
-        SELECT
-          p.codigo,
-          p.descricao,
-          s.quantidade,
-          p.estoque_minimo,
-          p.estoque_seguranca,
-          p.consumo_mensal,
-          CASE
-            WHEN (
-              CASE
-                WHEN COALESCE(p.estoque_seguranca, 0) > 0 THEN p.estoque_seguranca
-                ELSE COALESCE(p.estoque_minimo, 0)
-              END
-            ) > 0
-            AND s.quantidade < (
-              CASE
-                WHEN COALESCE(p.estoque_seguranca, 0) > 0 THEN p.estoque_seguranca
-                ELSE COALESCE(p.estoque_minimo, 0)
-              END
-            ) THEN 'CRITICO'
-            WHEN (
-              CASE
-                WHEN COALESCE(p.estoque_seguranca, 0) > 0 THEN p.estoque_seguranca
-                ELSE COALESCE(p.estoque_minimo, 0)
-              END
-            ) > 0
-            AND s.quantidade = (
-              CASE
-                WHEN COALESCE(p.estoque_seguranca, 0) > 0 THEN p.estoque_seguranca
-                ELSE COALESCE(p.estoque_minimo, 0)
-              END
-            ) THEN 'ATENCAO'
-            ELSE 'OBSERVAR'
-          END AS alerta,
-          CASE
-            WHEN COALESCE(p.consumo_mensal, 0) > 0 THEN ROUND(s.quantidade / (p.consumo_mensal / 30), 1)
-            ELSE NULL
-          END AS dias_cobertura
-        FROM estoque_saldos s
-        INNER JOIN estoques e ON e.id = s.id_estoque
-        INNER JOIN pecas p ON p.id = s.id_peca
-        WHERE UPPER(e.nome) LIKE '%ALMOX%'
-          AND s.quantidade > 0
-          AND (
-            (
-              (CASE
-                WHEN COALESCE(p.estoque_seguranca, 0) > 0 THEN p.estoque_seguranca
-                ELSE COALESCE(p.estoque_minimo, 0)
-              END) > 0
-              AND s.quantidade <= (CASE
-                WHEN COALESCE(p.estoque_seguranca, 0) > 0 THEN p.estoque_seguranca
-                ELSE COALESCE(p.estoque_minimo, 0)
-              END)
-            )
-            OR (
-              COALESCE(p.consumo_mensal, 0) > 0
-              AND (s.quantidade / (p.consumo_mensal / 30)) <= 30
-            )
-          )
-        ORDER BY
-          CASE
-            WHEN (
-              (CASE
-                WHEN COALESCE(p.estoque_seguranca, 0) > 0 THEN p.estoque_seguranca
-                ELSE COALESCE(p.estoque_minimo, 0)
-              END) > 0
-              AND s.quantidade < (CASE
-                WHEN COALESCE(p.estoque_seguranca, 0) > 0 THEN p.estoque_seguranca
-                ELSE COALESCE(p.estoque_minimo, 0)
-              END)
-            ) THEN 0
-            WHEN (
-              (CASE
-                WHEN COALESCE(p.estoque_seguranca, 0) > 0 THEN p.estoque_seguranca
-                ELSE COALESCE(p.estoque_minimo, 0)
-              END) > 0
-              AND s.quantidade = (CASE
-                WHEN COALESCE(p.estoque_seguranca, 0) > 0 THEN p.estoque_seguranca
-                ELSE COALESCE(p.estoque_minimo, 0)
-              END)
-            ) THEN 1
-            ELSE 2
-          END ASC,
-          CASE
-            WHEN COALESCE(p.consumo_mensal, 0) > 0 THEN s.quantidade / (p.consumo_mensal / 30)
-            ELSE 999999
-          END ASC,
-          s.quantidade ASC,
-          p.codigo ASC
-        LIMIT 12
-      `),
+      EstoqueModel.findPrioridades({
+        estoque_nome: 'Almoxarifado',
+        modo: 'prioritarios',
+        limit: 12
+      }),
       pool.query(`
         SELECT
           p.codigo,

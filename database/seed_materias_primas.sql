@@ -24,25 +24,6 @@ INSERT INTO materias_primas (
   observacao
 ) VALUES
   (
-    1,
-    'MP-GENERICA',
-    'MATERIA-PRIMA GENERICA',
-    'LAMINADO',
-    'NA',
-    'NA',
-    'NA',
-    'NA',
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    0.000,
-    'KG',
-    9,
-    'Registro generico legado para pecas produzidas ainda nao mapeadas.'
-  ),
-  (
     2,
     '250FD',
     'CORPO CJ--015',
@@ -200,7 +181,6 @@ INSERT INTO materia_prima_fornecedor (
   id_fornecedor,
   observacao
 ) VALUES
-  (1, 9, 'Fornecedor principal legado para materia-prima generica'),
   (2, 6, 'Fornecedor padrao para fundidos'),
   (3, 6, 'Fornecedor padrao para fundidos'),
   (4, 6, 'Fornecedor padrao para fundidos'),

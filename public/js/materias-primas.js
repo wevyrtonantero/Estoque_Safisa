@@ -384,7 +384,7 @@ async function carregarMateriaPrimaParaEdicao(id) {
     refs.bitolaMmInput.value = formatInputDecimal(materiaPrima.bitola_mm, 3);
     refs.comprimentoInput.value = materiaPrima.comprimento_padrao_mm
       ? formatInputDecimal(Number(materiaPrima.comprimento_padrao_mm) / 1000, 2)
-      : '3';
+      : (String(materiaPrima.geometria || '').toUpperCase() === 'FITA / BOBINA' ? '' : '3');
     refs.pesoMetroInput.value = formatInputDecimal(materiaPrima.peso_por_metro, 2);
     refs.pesoUnitarioInput.value = formatInputDecimal(materiaPrima.peso_unitario_kg, 3);
 

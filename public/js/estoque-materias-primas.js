@@ -5,10 +5,12 @@ let saldosCache = [];
 let movimentacoesCache = [];
 let materiasPrimasCache = [];
 let filtroDebounceTimer = null;
+let historicoMateriaPrimaIdAtual = null;
 
 const refs = {
   mensagem: document.getElementById('estoque-mp-mensagem'),
   tabela: document.getElementById('estoque-mp-tbody'),
+  listaTitulo: document.getElementById('estoque-mp-lista-titulo'),
   total: document.getElementById('total-estoque-mp'),
   movimentacoesTabela: document.getElementById('estoque-mp-movimentacoes-tbody'),
   totalMovimentacoes: document.getElementById('total-movimentacoes-mp'),
@@ -25,13 +27,16 @@ const refs = {
   modalQuantidade: document.getElementById('movimentacao-mp-quantidade'),
   modalQuantidadeLabel: document.getElementById('movimentacao-mp-quantidade-label'),
   modalObservacao: document.getElementById('movimentacao-mp-observacao'),
+  historicoModal: document.getElementById('historico-mp-modal'),
+  historicoModalTitulo: document.getElementById('historico-mp-modal-title'),
+  historicoMensagem: document.getElementById('historico-mp-mensagem'),
   drawer: document.getElementById('app-drawer'),
   drawerScrim: document.getElementById('drawer-scrim')
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
   bindEvents();
-  await Promise.all([carregarMateriasPrimas(), carregarSaldos(), carregarMovimentacoes()]);
+  await Promise.all([carregarMateriasPrimas(), carregarSaldos()]);
 });
 
 function bindEvents() {
@@ -41,8 +46,10 @@ function bindEvents() {
 
   document.getElementById('btn-nova-entrada-mp').addEventListener('click', () => abrirModalMovimentacao('ENTRADA'));
   document.getElementById('btn-ajuste-mp').addEventListener('click', () => abrirModalMovimentacao('AJUSTE'));
+  document.getElementById('btn-historico-mp').addEventListener('click', () => abrirModalHistorico());
   document.getElementById('btn-fechar-modal-mp-estoque').addEventListener('click', fecharModalMovimentacao);
   document.getElementById('btn-cancelar-modal-mp-estoque').addEventListener('click', fecharModalMovimentacao);
+  document.getElementById('btn-fechar-modal-mp-historico').addEventListener('click', fecharModalHistorico);
   document.getElementById('movimentacao-mp-form').addEventListener('submit', handleSalvarMovimentacao);
   document.getElementById('btn-limpar-filtros-estoque-mp').addEventListener('click', limparFiltros);
   refs.filtroForm.addEventListener('submit', (event) => {
@@ -54,6 +61,7 @@ function bindEvents() {
     field.addEventListener('change', agendarFiltroAutomatico);
   });
   refs.modal.addEventListener('click', handleBackdrop);
+  refs.historicoModal.addEventListener('click', handleBackdrop);
   refs.tabela.addEventListener('click', handleTabelaActions);
   refs.modalBusca.addEventListener('input', () => {
     refs.modalMateriaPrimaId.value = '';
@@ -110,9 +118,17 @@ async function carregarSaldos() {
   }
 }
 
-async function carregarMovimentacoes() {
+async function carregarMovimentacoes(idMateriaPrima = null) {
+  const params = new URLSearchParams();
+  if (Number.isInteger(idMateriaPrima)) {
+    params.append('id_materia_prima', String(idMateriaPrima));
+  }
+
   try {
-    const response = await fetch(`${estoqueMateriaPrimaApiBaseUrl}/movimentacoes`);
+    const endpoint = params.toString()
+      ? `${estoqueMateriaPrimaApiBaseUrl}/movimentacoes?${params.toString()}`
+      : `${estoqueMateriaPrimaApiBaseUrl}/movimentacoes`;
+    const response = await fetch(endpoint);
     const result = await response.json();
 
     if (!response.ok) {
@@ -124,15 +140,20 @@ async function carregarMovimentacoes() {
   } catch (error) {
     movimentacoesCache = [];
     renderizarMovimentacoes();
-    mostrarMensagem(error.message, 'error');
+    mostrarMensagemHistorico(error.message, 'error');
   }
 }
 
 function renderizarSaldos() {
+  refs.listaTitulo.textContent = buscaIncluiMateriasSemSaldo()
+    ? 'Materias-primas Localizadas'
+    : 'Materias-primas com Saldo';
   refs.total.textContent = `${saldosCache.length} registro(s) encontrado(s)`;
 
   if (saldosCache.length === 0) {
-    refs.tabela.innerHTML = '<tr><td colspan="8" class="empty-state">Nenhum saldo de materia-prima encontrado.</td></tr>';
+    refs.tabela.innerHTML = buscaIncluiMateriasSemSaldo()
+      ? '<tr><td colspan="8" class="empty-state">Nenhuma materia-prima encontrada para a busca informada.</td></tr>'
+      : '<tr><td colspan="8" class="empty-state">Nenhum saldo de materia-prima encontrado.</td></tr>';
     return;
   }
 
@@ -149,6 +170,7 @@ function renderizarSaldos() {
         <details class="row-menu">
           <summary class="row-menu-trigger" aria-label="Abrir acoes">...</summary>
           <div class="row-menu-panel">
+            <button type="button" class="row-menu-item" data-action="historico" data-id="${item.id_materia_prima}">Ver historico</button>
             <button type="button" class="row-menu-item" data-action="ajustar" data-id="${item.id_materia_prima}">Ajustar saldo</button>
             <button type="button" class="row-menu-item" data-action="entrada" data-id="${item.id_materia_prima}">Nova entrada</button>
           </div>
@@ -162,7 +184,9 @@ function renderizarMovimentacoes() {
   refs.totalMovimentacoes.textContent = `${movimentacoesCache.length} movimentacao(oes)`;
 
   if (movimentacoesCache.length === 0) {
-    refs.movimentacoesTabela.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhuma movimentacao registrada.</td></tr>';
+    refs.movimentacoesTabela.innerHTML = historicoMateriaPrimaIdAtual
+      ? '<tr><td colspan="6" class="empty-state">Nenhuma movimentacao encontrada para esta materia-prima.</td></tr>'
+      : '<tr><td colspan="6" class="empty-state">Nenhuma movimentacao registrada.</td></tr>';
     return;
   }
 
@@ -204,6 +228,34 @@ function abrirModalMovimentacao(tipo, materiaPrimaId = null) {
   }
 
   openModal(refs.modal);
+}
+
+async function abrirModalHistorico(materiaPrimaId = null) {
+  const parsedMateriaPrimaId = materiaPrimaId === null || materiaPrimaId === undefined || materiaPrimaId === ''
+    ? null
+    : Number.parseInt(materiaPrimaId, 10);
+  historicoMateriaPrimaIdAtual = Number.isInteger(parsedMateriaPrimaId) ? parsedMateriaPrimaId : null;
+  const materiaPrima = historicoMateriaPrimaIdAtual
+    ? encontrarMateriaPrima(historicoMateriaPrimaIdAtual)
+    : null;
+
+  refs.historicoModalTitulo.textContent = materiaPrima
+    ? `Historico de ${materiaPrima.codigo}`
+    : 'Movimentacoes de Materia-prima';
+  refs.totalMovimentacoes.textContent = 'Carregando movimentacoes...';
+  refs.movimentacoesTabela.innerHTML = '<tr><td colspan="6" class="empty-state">Carregando movimentacoes...</td></tr>';
+  esconderMensagemHistorico();
+  openModal(refs.historicoModal);
+  await carregarMovimentacoes(historicoMateriaPrimaIdAtual);
+}
+
+function fecharModalHistorico() {
+  historicoMateriaPrimaIdAtual = null;
+  movimentacoesCache = [];
+  refs.totalMovimentacoes.textContent = '0 movimentacao(oes)';
+  refs.movimentacoesTabela.innerHTML = '<tr><td colspan="6" class="empty-state">Abra o historico para visualizar as movimentacoes.</td></tr>';
+  esconderMensagemHistorico();
+  closeModal(refs.historicoModal);
 }
 
 function fecharModalMovimentacao() {
@@ -311,7 +363,7 @@ async function handleSalvarMovimentacao(event) {
 
     fecharModalMovimentacao();
     mostrarMensagem(isAjuste ? 'Saldo ajustado com sucesso.' : 'Entrada registrada com sucesso.', 'success');
-    await Promise.all([carregarSaldos(), carregarMovimentacoes()]);
+    await Promise.all([carregarSaldos(), carregarMovimentacoesSeHistoricoAberto()]);
   } catch (error) {
     refs.modalMensagem.textContent = error.message;
     refs.modalMensagem.className = 'message error';
@@ -323,6 +375,10 @@ function handleTabelaActions(event) {
   const button = event.target.closest('button[data-action]');
   if (!button) {
     return;
+  }
+
+  if (button.dataset.action === 'historico') {
+    abrirModalHistorico(button.dataset.id);
   }
 
   if (button.dataset.action === 'ajustar') {
@@ -347,6 +403,10 @@ function agendarFiltroAutomatico() {
 function handleBackdrop(event) {
   if (event.target.dataset.closeModal === 'movimentacao-mp') {
     fecharModalMovimentacao();
+  }
+
+  if (event.target.dataset.closeModal === 'historico-mp') {
+    fecharModalHistorico();
   }
 }
 
@@ -389,6 +449,11 @@ function handleKeyboardShortcuts(event) {
     return;
   }
 
+  if (!refs.historicoModal.classList.contains('hidden')) {
+    fecharModalHistorico();
+    return;
+  }
+
   if (refs.drawer.classList.contains('is-open')) {
     toggleDrawer(false);
   }
@@ -426,6 +491,38 @@ function mostrarMensagem(texto, tipo) {
   refs.mensagem.textContent = texto;
   refs.mensagem.className = `message ${tipo}`;
   refs.mensagem.classList.remove('hidden');
+}
+
+function mostrarMensagemHistorico(texto, tipo) {
+  refs.historicoMensagem.textContent = texto;
+  refs.historicoMensagem.className = `message ${tipo}`;
+  refs.historicoMensagem.classList.remove('hidden');
+}
+
+function esconderMensagemHistorico() {
+  refs.historicoMensagem.className = 'message hidden';
+  refs.historicoMensagem.textContent = '';
+}
+
+async function carregarMovimentacoesSeHistoricoAberto() {
+  if (refs.historicoModal.classList.contains('hidden')) {
+    return;
+  }
+
+  await carregarMovimentacoes(historicoMateriaPrimaIdAtual);
+}
+
+function encontrarMateriaPrima(idMateriaPrima) {
+  return saldosCache.find((item) => Number(item.id_materia_prima) === Number(idMateriaPrima))
+    || materiasPrimasCache.find((item) => Number(item.id) === Number(idMateriaPrima))
+    || null;
+}
+
+function buscaIncluiMateriasSemSaldo() {
+  return Boolean(
+    document.getElementById('filtro-mp-estoque-codigo').value.trim()
+    || document.getElementById('filtro-mp-estoque-nome').value.trim()
+  );
 }
 
 function extractErrorMessage(result) {

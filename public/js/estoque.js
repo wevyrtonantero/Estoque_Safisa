@@ -1,6 +1,7 @@
 // Script principal da tela de controle de estoque.
 const estoquesApiBaseUrl = '/api/estoques';
 const estoqueSaldosApiBaseUrl = '/api/estoque/saldos';
+const estoquePrioridadesApiBaseUrl = '/api/estoque/prioridades';
 const estoqueItensApiBaseUrl = '/api/estoque/itens';
 const estoqueMovimentacoesApiBaseUrl = '/api/estoque/movimentacoes';
 const entradaInicialApiBaseUrl = '/api/estoque/entrada-inicial';
@@ -30,16 +31,6 @@ function isRegistroExpedicao(registro) {
   }
 
   return String(registro.estoque_nome || '') === expedicaoNomeCorreto;
-}
-
-function isRegistroAlmoxarifado(registro) {
-  return String(registro.estoque_nome || '').toLowerCase().includes('almox');
-}
-
-function obterLimiteAlerta(registro) {
-  const estoqueSeguranca = Number(registro.estoque_seguranca || 0);
-  const estoqueMinimo = Number(registro.estoque_minimo || 0);
-  return estoqueSeguranca > 0 ? estoqueSeguranca : estoqueMinimo;
 }
 
 const filtroForm = document.getElementById('estoque-filtro-form');
@@ -90,7 +81,7 @@ const saidaItemSugestoes = document.getElementById('saida-item-sugestoes');
 document.addEventListener('DOMContentLoaded', async () => {
   bindEvents();
   await Promise.all([carregarEstoques(), carregarItens()]);
-  await Promise.all([carregarSaldosOperacionais(), carregarSaldos()]);
+  await recarregarSaldos();
 });
 
 // Conecta filtros, modais, tabela e menu lateral.
@@ -242,14 +233,11 @@ async function carregarSaldos() {
   const params = new URLSearchParams();
   const filtros = {
     estoque: document.getElementById('filtro-estoque').value,
-    q: document.getElementById('filtro-q').value.trim(),
     codigo: document.getElementById('filtro-codigo-estoque').value.trim(),
     descricao: document.getElementById('filtro-descricao-estoque').value.trim(),
-    tipo: document.getElementById('filtro-tipo-estoque').value,
-    maquina: document.getElementById('filtro-maquina-estoque').value.trim(),
-    classificacao: document.getElementById('filtro-classificacao-estoque').value,
-    ordem_quantidade: document.getElementById('filtro-ordem-quantidade').value
+    classificacao: document.getElementById('filtro-classificacao-estoque').value
   };
+  const filtroEstado = String(document.getElementById('filtro-estado-estoque').value || '').trim().toUpperCase();
 
   Object.entries(filtros).forEach(([key, value]) => {
     if (value) {
@@ -257,20 +245,32 @@ async function carregarSaldos() {
     }
   });
 
+  if (filtroEstado === 'PRIORITARIOS') {
+    params.append('modo', 'prioritarios');
+  } else {
+    params.append('modo', 'todos');
+    if (filtroEstado) {
+      params.append('estado', filtroEstado);
+    }
+  }
+
   try {
     const endpoint = params.toString()
-      ? `${estoqueSaldosApiBaseUrl}?${params.toString()}`
-      : estoqueSaldosApiBaseUrl;
+      ? `${estoquePrioridadesApiBaseUrl}?${params.toString()}`
+      : `${estoquePrioridadesApiBaseUrl}?modo=todos`;
     const response = await fetch(endpoint);
-    const saldos = await response.json();
+    const prioridades = await response.json();
 
     if (!response.ok) {
-      throw new Error(saldos.message || 'Nao foi possivel carregar os saldos.');
+      throw new Error(prioridades.message || 'Nao foi possivel carregar os saldos.');
     }
 
-    saldosCache = saldos;
-    renderizarTabelaSaldos(saldos);
-    atualizarIndicadores(saldos);
+    const registros = montarRegistrosEstoque(Array.isArray(prioridades) ? prioridades : []);
+    const saldosFiltrados = filtrarRegistrosEstoque(registros);
+
+    saldosCache = saldosFiltrados;
+    renderizarTabelaSaldos(saldosFiltrados);
+    atualizarIndicadores(saldosFiltrados);
   } catch (error) {
     saldosCache = [];
     renderizarTabelaSaldos([]);
@@ -295,6 +295,127 @@ async function carregarSaldosOperacionais() {
   }
 }
 
+async function recarregarSaldos() {
+  await carregarSaldosOperacionais();
+  await carregarSaldos();
+}
+
+function buildSaldoKey(idEstoque, idPeca) {
+  return `${Number(idEstoque) || 0}:${Number(idPeca) || 0}`;
+}
+
+function montarRegistrosEstoque(prioridades) {
+  const itensPorId = new Map(itensCache.map((item) => [Number(item.id), item]));
+  const saldosPorChave = new Map(
+    saldosOperacionaisCache.map((item) => [buildSaldoKey(item.id_estoque, item.id_peca), item])
+  );
+
+  return prioridades.map((prioridade) => {
+    const saldoOperacional = saldosPorChave.get(buildSaldoKey(prioridade.id_estoque, prioridade.id_peca)) || null;
+    const itemBase = itensPorId.get(Number(prioridade.id_peca)) || {};
+
+    return {
+      ...prioridade,
+      id: saldoOperacional?.id ?? null,
+      id_estoque: Number(prioridade.id_estoque ?? saldoOperacional?.id_estoque ?? 0),
+      id_peca: Number(prioridade.id_peca ?? saldoOperacional?.id_peca ?? 0),
+      estoque_nome: prioridade.estoque_nome ?? saldoOperacional?.estoque_nome ?? '-',
+      codigo: prioridade.codigo ?? saldoOperacional?.codigo ?? itemBase.codigo ?? '-',
+      descricao: prioridade.descricao ?? saldoOperacional?.descricao ?? itemBase.descricao ?? '-',
+      tipo: prioridade.tipo ?? saldoOperacional?.tipo ?? itemBase.tipo ?? '-',
+      classificacao: prioridade.classificacao ?? saldoOperacional?.classificacao ?? itemBase.classificacao ?? '-',
+      maquina_nome: saldoOperacional?.maquina_nome ?? itemBase.maquina_nome ?? '-',
+      quantidade: Number(prioridade.quantidade ?? saldoOperacional?.quantidade ?? 0),
+      quantidade_saida_mes: Number(
+        prioridade.quantidade_saida_mes
+        ?? saldoOperacional?.consumo_mensal
+        ?? itemBase.consumo_mensal
+        ?? 0
+      ),
+      data_prevista_ruptura: prioridade.data_prevista_ruptura ?? null,
+      dias_cobertura: prioridade.dias_cobertura ?? null,
+      estado_necessidade: String(prioridade.estado_necessidade || 'NORMAL').toUpperCase(),
+      estoque_seguranca: Number(
+        prioridade.estoque_seguranca
+        ?? saldoOperacional?.estoque_seguranca
+        ?? itemBase.estoque_seguranca
+        ?? 0
+      ),
+      consumo_mensal: Number(
+        prioridade.quantidade_saida_mes
+        ?? saldoOperacional?.consumo_mensal
+        ?? itemBase.consumo_mensal
+        ?? 0
+      )
+    };
+  });
+}
+
+function filtrarRegistrosEstoque(registros) {
+  const filtroEstoque = document.getElementById('filtro-estoque').value.trim();
+  const filtroQ = document.getElementById('filtro-q').value.trim();
+  const filtroCodigo = document.getElementById('filtro-codigo-estoque').value.trim();
+  const filtroDescricao = document.getElementById('filtro-descricao-estoque').value.trim();
+  const filtroTipo = document.getElementById('filtro-tipo-estoque').value.trim().toUpperCase();
+  const filtroMaquina = document.getElementById('filtro-maquina-estoque').value.trim();
+  const filtroClassificacao = document.getElementById('filtro-classificacao-estoque').value.trim().toUpperCase();
+  const filtroEstado = document.getElementById('filtro-estado-estoque').value.trim().toUpperCase();
+  const ordemQuantidade = document.getElementById('filtro-ordem-quantidade').value.trim().toUpperCase();
+
+  const registrosFiltrados = registros.filter((item) => {
+    if (filtroEstoque && Number(item.id_estoque) !== Number(filtroEstoque)) {
+      return false;
+    }
+
+    if (filtroCodigo && !normalizarBusca(item.codigo).includes(normalizarBusca(filtroCodigo))) {
+      return false;
+    }
+
+    if (filtroDescricao && !normalizarBusca(item.descricao).includes(normalizarBusca(filtroDescricao))) {
+      return false;
+    }
+
+    if (filtroTipo && String(item.tipo || '').toUpperCase() !== filtroTipo) {
+      return false;
+    }
+
+    if (filtroMaquina && !normalizarBusca(item.maquina_nome).includes(normalizarBusca(filtroMaquina))) {
+      return false;
+    }
+
+    if (filtroClassificacao && String(item.classificacao || '').toUpperCase() !== filtroClassificacao) {
+      return false;
+    }
+
+    if (filtroEstado === 'PRIORITARIOS' && String(item.estado_necessidade || '').toUpperCase() === 'NORMAL') {
+      return false;
+    }
+
+    if (filtroEstado && filtroEstado !== 'PRIORITARIOS' && String(item.estado_necessidade || '').toUpperCase() !== filtroEstado) {
+      return false;
+    }
+
+    if (!filtroQ) {
+      return true;
+    }
+
+    return normalizarBusca([
+      item.codigo,
+      item.descricao,
+      item.estoque_nome,
+      item.maquina_nome
+    ].join(' ')).includes(normalizarBusca(filtroQ));
+  });
+
+  if (ordemQuantidade === 'ASC') {
+    registrosFiltrados.sort((a, b) => Number(a.quantidade || 0) - Number(b.quantidade || 0));
+  } else if (ordemQuantidade === 'DESC') {
+    registrosFiltrados.sort((a, b) => Number(b.quantidade || 0) - Number(a.quantidade || 0));
+  }
+
+  return registrosFiltrados;
+}
+
 function handleFilterSubmit(event) {
   event.preventDefault();
   carregarSaldos();
@@ -315,8 +436,10 @@ function handleSaldoActions(event) {
   const actionButton = event.target.closest('button[data-action]');
   if (!actionButton) return;
 
-  const saldoId = Number.parseInt(actionButton.dataset.saldoId, 10);
-  const saldo = saldosCache.find((item) => Number(item.id) === saldoId);
+  const saldo = saldosCache.find((item) => (
+    Number(item.id_peca) === Number(actionButton.dataset.itemId)
+    && Number(item.id_estoque) === Number(actionButton.dataset.stockId)
+  ));
 
   if (!saldo) {
     mostrarMensagemEstoque('Registro de saldo nao encontrado.', 'error');
@@ -515,7 +638,7 @@ async function handleEntradaInicial(event) {
 
     fecharModalEntrada();
     mostrarMensagemEstoque('Entrada inicial registrada com sucesso.', 'success');
-    await Promise.all([carregarSaldosOperacionais(), carregarSaldos()]);
+    await recarregarSaldos();
   } catch (error) {
     mostrarMensagemEntrada(error.message, 'error');
   }
@@ -562,7 +685,7 @@ async function handleTransferencia(event) {
 
     fecharModalTransferencia();
     mostrarMensagemEstoque('Transferencia realizada com sucesso.', 'success');
-    await Promise.all([carregarSaldosOperacionais(), carregarSaldos()]);
+    await recarregarSaldos();
   } catch (error) {
     mostrarMensagemTransferencia(error.message, 'error');
   }
@@ -952,7 +1075,7 @@ async function baixarTudoSaida() {
 
     fecharModalSaida();
     mostrarMensagemEstoque('Baixa de venda realizada com sucesso na Expedicao.', 'success');
-    await Promise.all([carregarSaldosOperacionais(), carregarSaldos()]);
+    await recarregarSaldos();
   } catch (error) {
     mostrarMensagemSaida(error.message, 'error');
   }
@@ -1036,7 +1159,7 @@ async function handleAjuste(event) {
 
     fecharModalAjuste();
     mostrarMensagemEstoque('Ajuste de saldo realizado com sucesso.', 'success');
-    await Promise.all([carregarSaldosOperacionais(), carregarSaldos()]);
+    await recarregarSaldos();
   } catch (error) {
     mostrarMensagemAjuste(error.message, 'error');
   }
@@ -1073,12 +1196,12 @@ function renderizarTabelaSaldos(saldos) {
   totalSaldosBox.textContent = `${saldos.length} registro(s) encontrado(s)`;
 
   if (saldos.length === 0) {
-    saldosTbody.innerHTML = '<tr><td colspan="10" class="empty-state">Nenhum saldo encontrado para os filtros informados.</td></tr>';
+    saldosTbody.innerHTML = '<tr><td colspan="11" class="empty-state">Nenhum saldo encontrado para os filtros informados.</td></tr>';
     return;
   }
 
   saldosTbody.innerHTML = saldos.map((saldo) => `
-    <tr>
+    <tr class="${String(saldo.estado_necessidade || '').toUpperCase() === 'CRITICO' ? 'table-row-attention' : ''}">
       <td>${escapeHtml(saldo.estoque_nome)}</td>
       <td class="table-code">${escapeHtml(saldo.codigo)}</td>
       <td class="table-description">${escapeHtml(saldo.descricao)}</td>
@@ -1086,16 +1209,21 @@ function renderizarTabelaSaldos(saldos) {
       <td>${escapeHtml(saldo.classificacao)}</td>
       <td>${escapeHtml(saldo.maquina_nome || '-')}</td>
       <td class="table-quantity">${renderizarQuantidadeEstoque(saldo)}</td>
-      <td>${renderizarAlertaEstoque(saldo)}</td>
-      <td>${escapeHtml(renderizarCoberturaConsumo(saldo))}</td>
+      <td class="table-quantity">${formatarQuantidade(saldo.quantidade_saida_mes)}</td>
+      <td>${escapeHtml(renderizarDuracaoPrioridade(saldo))}</td>
+      <td>${renderizarEstadoNecessidade(saldo.estado_necessidade)}</td>
       <td class="table-actions-cell">
         <details class="row-menu">
           <summary class="row-menu-trigger" aria-label="Abrir acoes">...</summary>
           <div class="row-menu-panel">
-            <button type="button" class="row-menu-item" data-action="history" data-saldo-id="${saldo.id}">Ver Historico</button>
-            <button type="button" class="row-menu-item" data-action="transfer" data-saldo-id="${saldo.id}">Transferir</button>
-            ${isRegistroExpedicao(saldo) ? `<button type="button" class="row-menu-item" data-action="sale" data-saldo-id="${saldo.id}">Saida de Venda</button>` : ''}
-            <button type="button" class="row-menu-item" data-action="adjust" data-saldo-id="${saldo.id}">Ajustar Saldo</button>
+            <button type="button" class="row-menu-item" data-action="history" data-item-id="${saldo.id_peca}" data-stock-id="${saldo.id_estoque}">Ver Historico</button>
+            ${Number(saldo.quantidade || 0) > 0
+              ? `<button type="button" class="row-menu-item" data-action="transfer" data-item-id="${saldo.id_peca}" data-stock-id="${saldo.id_estoque}">Transferir</button>`
+              : ''}
+            ${isRegistroExpedicao(saldo) && Number(saldo.quantidade || 0) > 0
+              ? `<button type="button" class="row-menu-item" data-action="sale" data-item-id="${saldo.id_peca}" data-stock-id="${saldo.id_estoque}">Saida de Venda</button>`
+              : ''}
+            <button type="button" class="row-menu-item" data-action="adjust" data-item-id="${saldo.id_peca}" data-stock-id="${saldo.id_estoque}">Ajustar Saldo</button>
           </div>
         </details>
       </td>
@@ -1103,64 +1231,59 @@ function renderizarTabelaSaldos(saldos) {
   `).join('');
 }
 
-function renderizarAlertaEstoque(saldo) {
-  if (!isRegistroAlmoxarifado(saldo)) {
-    return '-';
-  }
-
-  const limite = obterLimiteAlerta(saldo);
-  const quantidadeAtual = Number(saldo.quantidade || 0);
-
-  if (limite <= 0) {
-    return '-';
-  }
-
-  if (quantidadeAtual < limite) {
-    return '<span class="status-chip is-danger">Abaixo do limite</span>';
-  }
-
-  if (quantidadeAtual === limite) {
-    return '<span class="status-chip is-warning">No limite</span>';
-  }
-
-  return '-';
-}
-
 function renderizarQuantidadeEstoque(saldo) {
   const quantidade = formatarQuantidade(saldo.quantidade);
-  if (!isRegistroAlmoxarifado(saldo)) {
-    return quantidade;
-  }
+  const estado = String(saldo.estado_necessidade || '').toUpperCase();
 
-  const limite = obterLimiteAlerta(saldo);
-  const quantidadeAtual = Number(saldo.quantidade || 0);
-
-  if (limite > 0 && quantidadeAtual < limite) {
+  if (estado === 'CRITICO') {
     return `<span class="status-chip is-danger">${escapeHtml(quantidade)}</span>`;
   }
 
-  if (limite > 0 && quantidadeAtual === limite) {
+  if (estado === 'ATENCAO') {
     return `<span class="status-chip is-warning">${escapeHtml(quantidade)}</span>`;
   }
 
   return quantidade;
 }
 
-function renderizarCoberturaConsumo(saldo) {
-  if (!isRegistroAlmoxarifado(saldo)) {
+function formatarDataCurta(valor) {
+  if (!valor) {
     return '-';
   }
 
-  const consumoMensal = Number(saldo.consumo_mensal || 0);
-  if (!Number.isFinite(consumoMensal) || consumoMensal <= 0) {
+  const data = new Date(valor);
+  if (Number.isNaN(data.getTime())) {
     return '-';
   }
 
-  const dias = Math.floor((Number(saldo.quantidade || 0) / consumoMensal) * 30);
-  const dataFinal = new Date();
-  dataFinal.setDate(dataFinal.getDate() + dias);
+  return data.toLocaleDateString('pt-BR');
+}
 
-  return `${dias} dia(s) | ate ${dataFinal.toLocaleDateString('pt-BR')}`;
+function renderizarDuracaoPrioridade(saldo) {
+  const dias = Number(saldo.dias_cobertura);
+  const dataPrevista = formatarDataCurta(saldo.data_prevista_ruptura);
+
+  if (!Number.isFinite(dias) && dataPrevista === '-') {
+    return 'Sem previsao';
+  }
+
+  if (!Number.isFinite(dias)) {
+    return `ate ${dataPrevista}`;
+  }
+
+  return `${formatarQuantidade(dias)} dia(s) | ate ${dataPrevista}`;
+}
+
+function renderizarEstadoNecessidade(estado) {
+  const normalized = String(estado || '').toUpperCase();
+  let className = 'status-chip';
+
+  if (normalized === 'CRITICO') className += ' is-danger';
+  if (normalized === 'ATENCAO') className += ' is-warning';
+  if (normalized === 'OBSERVAR') className += ' is-info';
+  if (normalized === 'NORMAL') className += ' is-success';
+
+  return `<span class="${className}">${escapeHtml(normalized || '-')}</span>`;
 }
 
 function renderizarHistorico(movimentacoes) {

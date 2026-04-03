@@ -38,14 +38,28 @@
 
     <section class="sector-shell">
       <aside class="sector-menu">
-        <section class="content-card sector-menu-card">
-          <span class="section-pill">Menu do Setor</span>
+        <details class="sector-menu-card">
+          <summary class="sector-menu-summary">
+            <div class="sector-menu-heading">
+              <span class="section-pill">Tratamento</span>
+              <strong>Menu</strong>
+            </div>
+            <span class="sector-menu-trigger" aria-hidden="true">...</span>
+          </summary>
 
-          <div class="sector-menu-list">
-            <button id="btn-tratamento-historico-menu" class="btn btn-neutral" type="button"><span class="btn-label">Historico</span></button>
-            <a href="/pagina-remessas-terceiros" class="btn btn-secondary"><span class="btn-label">Remessas / NF</span></a>
+          <div class="sector-menu-panel">
+            <div class="sector-menu-panel-head">
+              <span class="section-pill">Tratamento</span>
+              <strong>Acoes rapidas</strong>
+              <small>Historico e remessas para terceiros sem ocupar a tela.</small>
+            </div>
+
+            <div class="sector-menu-list">
+              <button id="btn-tratamento-historico-menu" class="btn btn-neutral" type="button"><span class="btn-label">Historico</span></button>
+              <a href="/pagina-remessas-terceiros" class="btn btn-secondary"><span class="btn-label">Remessas / NF</span></a>
+            </div>
           </div>
-        </section>
+        </details>
       </aside>
 
       <div class="sector-content">
@@ -272,6 +286,7 @@
     </div>
   </div>
 
+  <script src="/js/sector-menu.js"></script>
   <script src="/js/tratamento-externo.js"></script>
 </body>
 </html>

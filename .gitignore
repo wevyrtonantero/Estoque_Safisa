@@ -12,6 +12,7 @@ backups/*.bundle
 dist/
 build/
 coverage/
+exports/
 .vscode/
 .idea/
 

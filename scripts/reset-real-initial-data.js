@@ -5,6 +5,7 @@ const mysql = require('mysql2/promise');
 const projectRoot = path.resolve(__dirname, '..');
 const databaseDir = path.join(projectRoot, 'database');
 const realPiecesFile = path.join(databaseDir, 'initial_real_pecas.txt');
+const pecaPackageOverrides = require('./peca-package-overrides');
 
 const schemaFiles = [
   'schema_fornecedores.sql',
@@ -105,6 +106,10 @@ const suppliers = [
   }
 ];
 
+const packageOverrideByCode = new Map(
+  pecaPackageOverrides.map((override) => [override.codigo, override])
+);
+
 function normalizeText(value) {
   return String(value || '')
     .normalize('NFD')
@@ -178,6 +183,18 @@ function parseStockQuantity(value) {
   return Number.isFinite(parsedValue) ? parsedValue : 0;
 }
 
+function getQuantidadeSaidaMesFromOverride(packageOverride, fallbackValue) {
+  if (typeof packageOverride?.quantidade_saida_mes === 'number') {
+    return packageOverride.quantidade_saida_mes;
+  }
+
+  if (typeof packageOverride?.quantidade_pacote === 'number') {
+    return packageOverride.quantidade_pacote;
+  }
+
+  return fallbackValue;
+}
+
 async function runSqlFile(connection, fileName) {
   const sql = await fs.readFile(path.join(databaseDir, fileName), 'utf8');
   await connection.query(sql);
@@ -206,6 +223,7 @@ async function loadRealPieces() {
         massa_kg,
         estoque
       ] = parts;
+      const packageOverride = packageOverrideByCode.get(codigo);
 
       return {
         codigo,
@@ -213,13 +231,18 @@ async function loadRealPieces() {
         tipo,
         classificacao,
         comprimento_mm: parseNullableNumber(comprimento_mm),
-        estoque_minimo: parseNullableNumber(estoque_minimo),
+        estoque_minimo: typeof packageOverride?.quantidade_pacote === 'number'
+          ? packageOverride.quantidade_pacote
+          : parseNullableNumber(estoque_minimo),
         estoque_seguranca: parseNullableNumber(estoque_seguranca),
-        consumo_mensal: parseNullableNumber(consumo_mensal),
+        consumo_mensal: getQuantidadeSaidaMesFromOverride(
+          packageOverride,
+          parseNullableNumber(consumo_mensal)
+        ),
         massa_kg: parseNullableNumber(massa_kg),
         estoque: parseStockQuantity(estoque),
         id_fornecedor: pickSupplierId(tipo, descricao),
-        id_materia_prima: tipo === 'PRODUZIDA' ? 1 : null,
+        id_materia_prima: null,
         id_maquina: tipo === 'PRODUZIDA' ? 1 : null
       };
     });
@@ -360,7 +383,6 @@ async function main() {
         ) VALUES ?
       `,
       [[
-        [1, 'MP-GENERICA', 'MATERIA-PRIMA GENERICA', 'LAMINADO', 'NA', 'NA', 'NA', 'NA', null, null, null, null, null, 0, 'KG', 9, 'Registro generico legado para pecas produzidas ainda nao mapeadas.'],
         [2, '250FD', 'CORPO CJ--015', 'FUNDIDO', null, 'FERRO FUNDIDO', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'UN', 6, 'Materia-prima fundida.'],
         [3, '300FD', 'CORPO MBF-040', 'FUNDIDO', null, 'FERRO FUNDIDO', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'UN', 6, 'Materia-prima fundida.'],
         [4, '350FD', 'CORPO BR-040', 'FUNDIDO', null, 'FERRO FUNDIDO', 'FUNDIDO', null, null, null, null, null, 7.2, 0, 'UN', 6, 'Materia-prima fundida.'],
@@ -381,7 +403,6 @@ async function main() {
         ) VALUES ?
       `,
       [[
-        [1, 9, 'Fornecedor principal legado para materia-prima generica'],
         [2, 6, 'Fornecedor padrao para fundidos'],
         [3, 6, 'Fornecedor padrao para fundidos'],
         [4, 6, 'Fornecedor padrao para fundidos'],

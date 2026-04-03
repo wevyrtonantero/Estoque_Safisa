@@ -3,6 +3,8 @@ const EstoqueModel = require('../models/EstoqueModel');
 
 const TIPOS_VALIDOS = ['COMPRADA', 'PRODUZIDA'];
 const CLASSIFICACOES_VALIDAS = ['ITEM', 'SUBMONTAGEM'];
+const ESTADOS_PRIORIDADE_VALIDOS = ['CRITICO', 'ATENCAO', 'OBSERVAR', 'NORMAL'];
+const MODOS_PRIORIDADE_VALIDOS = ['PRIORITARIOS', 'TODOS'];
 
 function normalizeOptionalInteger(value) {
   if (value === undefined || value === null || value === '') {
@@ -201,6 +203,7 @@ const EstoqueController = {
         estoque: Number.isInteger(estoque) ? estoque : null,
         codigo: req.query.codigo ? String(req.query.codigo).trim() : '',
         descricao: req.query.descricao ? String(req.query.descricao).trim() : '',
+        fornecedor: req.query.fornecedor ? String(req.query.fornecedor).trim() : '',
         tipo: TIPOS_VALIDOS.includes(tipo) ? tipo : '',
         maquina: req.query.maquina ? String(req.query.maquina).trim() : '',
         classificacao: CLASSIFICACOES_VALIDAS.includes(classificacao) ? classificacao : '',
@@ -212,6 +215,40 @@ const EstoqueController = {
     } catch (error) {
       console.error('Erro ao listar saldos do estoque:', error);
       return res.status(500).json({ message: 'Erro ao listar saldos do estoque.' });
+    }
+  },
+
+  // Lista prioridades de reposicao/producao com cobertura e data prevista de ruptura.
+  async getPrioridades(req, res) {
+    try {
+      const estoque = normalizeOptionalInteger(req.query.estoque);
+      const classificacao = req.query.classificacao
+        ? String(req.query.classificacao).trim().toUpperCase()
+        : '';
+      const estado = req.query.estado
+        ? String(req.query.estado).trim().toUpperCase()
+        : '';
+      const modo = req.query.modo
+        ? String(req.query.modo).trim().toUpperCase()
+        : 'PRIORITARIOS';
+      const limit = normalizeOptionalInteger(req.query.limit);
+
+      const prioridades = await EstoqueModel.findPrioridades({
+        estoque: Number.isInteger(estoque) ? estoque : null,
+        estoque_nome: req.query.estoque_nome ? String(req.query.estoque_nome).trim() : '',
+        codigo: req.query.codigo ? String(req.query.codigo).trim() : '',
+        descricao: req.query.descricao ? String(req.query.descricao).trim() : '',
+        fornecedor: req.query.fornecedor ? String(req.query.fornecedor).trim() : '',
+        classificacao: CLASSIFICACOES_VALIDAS.includes(classificacao) ? classificacao : '',
+        estado: ESTADOS_PRIORIDADE_VALIDOS.includes(estado) ? estado : '',
+        modo: MODOS_PRIORIDADE_VALIDOS.includes(modo) ? modo.toLowerCase() : 'prioritarios',
+        limit: Number.isInteger(limit) && limit > 0 ? limit : null
+      });
+
+      return res.status(200).json(prioridades);
+    } catch (error) {
+      console.error('Erro ao listar prioridades do estoque:', error);
+      return res.status(500).json({ message: 'Erro ao listar prioridades do estoque.' });
     }
   },
 

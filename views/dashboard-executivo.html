@@ -43,17 +43,30 @@
 
     <section class="sector-shell">
       <aside class="sector-menu">
-        <section class="content-card sector-menu-card">
-          <span class="section-pill">Acessos</span>
+        <details class="sector-menu-card">
+          <summary class="sector-menu-summary">
+            <div class="sector-menu-heading">
+              <span class="section-pill">Painel</span>
+              <strong>Menu</strong>
+            </div>
+            <span class="sector-menu-trigger" aria-hidden="true">...</span>
+          </summary>
 
-          <div class="sector-menu-list">
-            <button id="btn-dashboard-estoques" class="btn btn-primary" type="button"><span class="btn-label">Ver Estoques</span></button>
-            <button id="btn-dashboard-mp" class="btn btn-secondary" type="button"><span class="btn-label">Ver Estoque MP</span></button>
-            <button id="btn-dashboard-simulacao" class="btn btn-secondary" type="button"><span class="btn-label">Simulacao de Submontagem</span></button>
-            <button id="btn-dashboard-alertas" class="btn btn-warning" type="button"><span class="btn-label">Ver Alertas</span></button>
-            <button id="btn-dashboard-indicadores" class="btn btn-secondary" type="button"><span class="btn-label">Ver Indicadores</span></button>
+          <div class="sector-menu-panel">
+            <div class="sector-menu-panel-head">
+              <span class="section-pill">Acessos</span>
+              <strong>Acoes rapidas</strong>
+              <small>Estoques, simulacao, indicadores e alertas do dia.</small>
+            </div>
+
+            <div class="sector-menu-list">
+              <button id="btn-dashboard-estoques" class="btn btn-primary" type="button"><span class="btn-label">Ver Estoques</span></button>
+              <button id="btn-dashboard-mp" class="btn btn-secondary" type="button"><span class="btn-label">Ver Estoque MP</span></button>
+              <button id="btn-dashboard-simulacao" class="btn btn-secondary" type="button"><span class="btn-label">Simulacao de Submontagem</span></button>
+              <button id="btn-dashboard-indicadores" class="btn btn-secondary" type="button"><span class="btn-label">Ver Indicadores</span></button>
+            </div>
           </div>
-        </section>
+        </details>
       </aside>
 
       <div class="sector-content">
@@ -152,6 +165,23 @@
         </div>
 
         <div class="field">
+          <label for="dashboard-estoques-filtro-fornecedor">Fornecedor</label>
+          <input id="dashboard-estoques-filtro-fornecedor" type="text" placeholder="Digite parte do fornecedor">
+        </div>
+
+        <div class="field">
+          <label for="dashboard-estoques-filtro-estado">Estado</label>
+          <select id="dashboard-estoques-filtro-estado">
+            <option value="">Todos</option>
+            <option value="PRIORITARIOS">Somente prioridades</option>
+            <option value="CRITICO">Critico</option>
+            <option value="ATENCAO">Atencao</option>
+            <option value="OBSERVAR">Observar</option>
+            <option value="NORMAL">Normal</option>
+          </select>
+        </div>
+
+        <div class="field">
           <label for="dashboard-estoques-filtro-ordem">Quantidade</label>
           <select id="dashboard-estoques-filtro-ordem">
             <option value="">Padrao</option>
@@ -174,13 +204,17 @@
               <th>Estoque</th>
               <th>Codigo</th>
               <th>Descricao</th>
+              <th>Fornecedor</th>
               <th>Classificacao</th>
               <th>Quantidade</th>
+              <th>Sai no mes</th>
+              <th>Vai durar ate</th>
+              <th>Estado</th>
             </tr>
           </thead>
           <tbody id="dashboard-estoques-tbody">
             <tr>
-              <td colspan="5" class="empty-state">Carregando estoques...</td>
+              <td colspan="9" class="empty-state">Carregando estoques...</td>
             </tr>
           </tbody>
         </table>
@@ -379,62 +413,6 @@
     </div>
   </div>
 
-  <div id="dashboard-alertas-modal" class="modal hidden" aria-hidden="true">
-    <div class="modal-backdrop" data-close-modal="dashboard-alertas"></div>
-
-    <div class="modal-dialog modal-wide">
-      <div class="modal-header">
-        <div>
-          <span class="section-pill">Alertas</span>
-          <h2>Itens que pedem atencao</h2>
-          <p>Pecas criticas no Almoxarifado e pendencias que merecem acompanhamento.</p>
-        </div>
-
-        <button id="btn-fechar-modal-dashboard-alertas" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
-      </div>
-
-      <div class="view-grid">
-        <div class="view-card">
-          <span>Pedidos em aberto</span>
-          <strong id="dashboard-alerta-pedidos">0</strong>
-        </div>
-        <div class="view-card">
-          <span>Pendencias externas</span>
-          <strong id="dashboard-alerta-terceiros">0</strong>
-        </div>
-        <div class="view-card">
-          <span>Remessas sem NF</span>
-          <strong id="dashboard-alerta-sem-nf">0</strong>
-        </div>
-        <div class="view-card">
-          <span>Itens criticos</span>
-          <strong id="dashboard-alerta-criticos">0</strong>
-        </div>
-      </div>
-
-      <div class="subtle-divider"></div>
-
-      <div class="table-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th>Codigo</th>
-              <th>Descricao</th>
-              <th>Saldo</th>
-              <th>Alerta</th>
-              <th>Cobertura</th>
-            </tr>
-          </thead>
-          <tbody id="dashboard-alertas-tbody">
-            <tr>
-              <td colspan="5" class="empty-state">Carregando alertas...</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
   <div id="dashboard-indicadores-modal" class="modal hidden" aria-hidden="true">
     <div class="modal-backdrop" data-close-modal="dashboard-indicadores"></div>
 
@@ -537,6 +515,7 @@
     </div>
   </div>
 
+  <script src="/js/sector-menu.js"></script>
   <script src="/js/dashboard-executivo.js"></script>
 </body>
 </html>

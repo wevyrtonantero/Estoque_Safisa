@@ -1,5 +1,6 @@
 const estoquesApiBaseUrl = '/api/estoques';
 const estoqueSaldosApiBaseUrl = '/api/estoque/saldos';
+const estoquePrioridadesApiBaseUrl = '/api/estoque/prioridades';
 const estoqueMovimentacoesApiBaseUrl = '/api/estoque/movimentacoes';
 const solicitacoesApiBaseUrl = '/api/solicitacoes-estoque';
 const terceirizacaoApiBaseUrl = '/api/terceirizacao';
@@ -10,6 +11,7 @@ const AUTO_REFRESH_MS = 15000;
 
 let estoquesCache = [];
 let saldosAlmoxCache = [];
+let prioridadesAlmoxCache = [];
 let solicitacoesCache = [];
 let tratamentoCache = [];
 let historicoCache = [];
@@ -26,6 +28,7 @@ const refs = {
   filtroCodigo: document.getElementById('almox-filtro-codigo'),
   filtroDescricao: document.getElementById('almox-filtro-descricao'),
   filtroClassificacao: document.getElementById('almox-filtro-classificacao'),
+  filtroEstado: document.getElementById('almox-filtro-estado'),
   filtroQuantidade: document.getElementById('almox-filtro-quantidade'),
   badgePedidos: document.getElementById('almox-badge-pedidos'),
   badgeTratamento: document.getElementById('almox-badge-tratamento'),
@@ -85,6 +88,7 @@ function bindEvents() {
   refs.filtroCodigo.addEventListener('input', renderizarEstoque);
   refs.filtroDescricao.addEventListener('input', renderizarEstoque);
   refs.filtroClassificacao.addEventListener('change', renderizarEstoque);
+  refs.filtroEstado.addEventListener('change', renderizarEstoque);
   refs.filtroQuantidade.addEventListener('change', renderizarEstoque);
   document.getElementById('almox-btn-limpar-filtros').addEventListener('click', limparFiltrosEstoque);
 
@@ -148,6 +152,7 @@ async function carregarTudoInicial() {
   await carregarEstoques();
   await Promise.all([
     carregarEstoqueAlmox(),
+    carregarPrioridadesAlmox(),
     carregarSolicitacoes(),
     carregarTratamento(),
     carregarProducaoEmAndamento()
@@ -180,6 +185,24 @@ async function carregarEstoqueAlmox() {
   }
 
   saldosAlmoxCache = result;
+  renderizarEstoque();
+  atualizarIndicadores();
+}
+
+async function carregarPrioridadesAlmox() {
+  const almox = obterEstoqueAlmoxarifado();
+  if (!almox) {
+    throw new Error('Estoque do Almoxarifado nao encontrado.');
+  }
+
+  const response = await fetch(`${estoquePrioridadesApiBaseUrl}?estoque=${almox.id}`);
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || 'Nao foi possivel carregar as prioridades do Almoxarifado.');
+  }
+
+  prioridadesAlmoxCache = Array.isArray(result) ? result : [];
   renderizarEstoque();
   atualizarIndicadores();
 }
@@ -257,28 +280,30 @@ async function carregarMateriasPrimas() {
 }
 
 function renderizarEstoque() {
+  const registrosEstoque = obterRegistrosEstoqueAlmox();
   const saldosFiltrados = obterSaldosFiltrados();
   refs.estoqueTotal.textContent = `${saldosFiltrados.length} registro(s) encontrado(s)`;
 
-  if (!saldosAlmoxCache.length) {
-    refs.estoqueTbody.innerHTML = '<tr><td colspan="7" class="empty-state">Nenhum saldo no Almoxarifado.</td></tr>';
+  if (!registrosEstoque.length) {
+    refs.estoqueTbody.innerHTML = '<tr><td colspan="8" class="empty-state">Nenhum item monitorado no Almoxarifado.</td></tr>';
     return;
   }
 
   if (!saldosFiltrados.length) {
-    refs.estoqueTbody.innerHTML = '<tr><td colspan="7" class="empty-state">Nenhum item encontrado com os filtros informados.</td></tr>';
+    refs.estoqueTbody.innerHTML = '<tr><td colspan="8" class="empty-state">Nenhum item encontrado com os filtros informados.</td></tr>';
     return;
   }
 
   refs.estoqueTbody.innerHTML = saldosFiltrados.map((item) => `
-    <tr>
+    <tr class="${obterClasseLinhaPrioridade(item)}">
       <td class="table-code">${escapeHtml(item.codigo)}</td>
       <td class="table-description">${escapeHtml(item.descricao)}</td>
       <td>${escapeHtml(item.tipo)}</td>
       <td>${escapeHtml(item.classificacao)}</td>
-      <td class="table-quantity">${renderizarQuantidadeEstoque(item)}</td>
-      <td>${renderizarAlertaEstoque(item)}</td>
-      <td>${escapeHtml(renderizarCoberturaConsumo(item))}</td>
+      <td class="table-quantity">${formatDecimal(item.quantidade)}</td>
+      <td class="table-quantity">${formatDecimal(item.quantidade_saida_mes)}</td>
+      <td>${escapeHtml(formatarDuracaoPrioridade(item))}</td>
+      <td>${renderizarEstadoNecessidade(item.estado_necessidade)}</td>
     </tr>
   `).join('');
 }
@@ -407,9 +432,7 @@ function atualizarIndicadores() {
   document.getElementById('almox-card-quantidade').textContent = formatInteger(
     saldosAlmoxCache.reduce((total, item) => total + Number(item.quantidade || 0), 0)
   );
-  document.getElementById('almox-card-alertas').textContent = String(
-    saldosAlmoxCache.filter((item) => isItemEmAlerta(item)).length
-  );
+  document.getElementById('almox-card-alertas').textContent = formatInteger(obterPrioridadesOperacionaisAlmox().length);
   document.getElementById('almox-card-pedidos').textContent = String(
     solicitacoesCache.filter((item) => ['PENDENTE', 'EM_SEPARACAO', 'ATENDIDA_PARCIAL'].includes(item.status)).length
   );
@@ -434,6 +457,7 @@ async function atualizarPainelAutomaticamente() {
   try {
     await Promise.all([
       carregarEstoqueAlmox(),
+      carregarPrioridadesAlmox(),
       carregarSolicitacoes(),
       carregarTratamento(),
       carregarProducaoEmAndamento()
@@ -493,9 +517,10 @@ function obterSaldosFiltrados() {
   const filtroCodigo = normalizarBusca(refs.filtroCodigo.value.trim());
   const filtroDescricao = normalizarBusca(refs.filtroDescricao.value.trim());
   const filtroClassificacao = refs.filtroClassificacao.value.trim().toUpperCase();
+  const filtroEstado = refs.filtroEstado.value.trim().toUpperCase();
   const ordenacaoQuantidade = refs.filtroQuantidade.value;
 
-  const registros = saldosAlmoxCache.filter((item) => {
+  const registros = obterRegistrosEstoqueAlmox().filter((item) => {
     if (filtroCodigo && !normalizarBusca(item.codigo).includes(filtroCodigo)) {
       return false;
     }
@@ -505,6 +530,14 @@ function obterSaldosFiltrados() {
     }
 
     if (filtroClassificacao && String(item.classificacao || '').toUpperCase() !== filtroClassificacao) {
+      return false;
+    }
+
+    if (filtroEstado === 'PRIORITARIOS' && String(item.estado_necessidade || '').toUpperCase() === 'NORMAL') {
+      return false;
+    }
+
+    if (filtroEstado && filtroEstado !== 'PRIORITARIOS' && String(item.estado_necessidade || '').toUpperCase() !== filtroEstado) {
       return false;
     }
 
@@ -909,6 +942,7 @@ function limparFiltrosEstoque() {
   refs.filtroCodigo.value = '';
   refs.filtroDescricao.value = '';
   refs.filtroClassificacao.value = '';
+  refs.filtroEstado.value = '';
   refs.filtroQuantidade.value = '';
   renderizarEstoque();
 }
@@ -949,10 +983,50 @@ function obterEstoqueAlmoxarifado() {
   return estoquesCache.find((estoque) => normalizarBusca(estoque.nome).includes('almox')) || null;
 }
 
+function obterPrioridadesOperacionaisAlmox() {
+  return prioridadesAlmoxCache.filter((item) => String(item.estado_necessidade || '').toUpperCase() !== 'NORMAL');
+}
+
+function obterRegistrosEstoqueAlmox() {
+  const prioridadesPorPeca = new Map(
+    prioridadesAlmoxCache.map((item) => [Number(item.id_peca), item])
+  );
+  const registros = saldosAlmoxCache.map((item) => enriquecerRegistroEstoque(item, prioridadesPorPeca.get(Number(item.id_peca))));
+  const idsExistentes = new Set(registros.map((item) => Number(item.id_peca)));
+
+  obterPrioridadesOperacionaisAlmox().forEach((item) => {
+    if (idsExistentes.has(Number(item.id_peca))) {
+      return;
+    }
+
+    registros.push(enriquecerRegistroEstoque(item, item));
+  });
+
+  return registros;
+}
+
+function enriquecerRegistroEstoque(item, prioridade = null) {
+  return {
+    ...item,
+    id_peca: Number(prioridade?.id_peca ?? item.id_peca ?? 0),
+    codigo: prioridade?.codigo ?? item.codigo ?? '-',
+    descricao: prioridade?.descricao ?? item.descricao ?? '-',
+    tipo: prioridade?.tipo ?? item.tipo ?? '-',
+    classificacao: prioridade?.classificacao ?? item.classificacao ?? '-',
+    quantidade: Number(prioridade?.quantidade ?? item.quantidade ?? 0),
+    quantidade_saida_mes: Number(prioridade?.quantidade_saida_mes ?? item.consumo_mensal ?? 0),
+    dias_cobertura: prioridade?.dias_cobertura ?? null,
+    data_prevista_ruptura: prioridade?.data_prevista_ruptura ?? null,
+    estado_necessidade: String(prioridade?.estado_necessidade || (isItemEmAlerta(item) ? 'ATENCAO' : 'NORMAL')).toUpperCase()
+  };
+}
+
+function obterClasseLinhaPrioridade(item) {
+  return String(item.estado_necessidade || '').toUpperCase() === 'CRITICO' ? 'table-row-attention' : '';
+}
+
 function getLimiteAlerta(item) {
-  const estoqueSeguranca = Number(item.estoque_seguranca || 0);
-  const estoqueMinimo = Number(item.estoque_minimo || 0);
-  return estoqueSeguranca > 0 ? estoqueSeguranca : estoqueMinimo;
+  return Number(item.estoque_seguranca || 0);
 }
 
 function isItemEmAlerta(item) {
@@ -1006,6 +1080,46 @@ function renderizarCoberturaConsumo(item) {
   dataFinal.setDate(dataFinal.getDate() + dias);
 
   return `${dias} dia(s) | ate ${dataFinal.toLocaleDateString('pt-BR')}`;
+}
+
+function formatarDataCurta(value) {
+  if (!value) {
+    return '-';
+  }
+
+  const data = new Date(value);
+  if (Number.isNaN(data.getTime())) {
+    return '-';
+  }
+
+  return data.toLocaleDateString('pt-BR');
+}
+
+function formatarDuracaoPrioridade(item) {
+  const dias = Number(item.dias_cobertura);
+  const dataPrevista = formatarDataCurta(item.data_prevista_ruptura);
+
+  if (!Number.isFinite(dias) && dataPrevista === '-') {
+    return 'Sem previsao';
+  }
+
+  if (!Number.isFinite(dias)) {
+    return `ate ${dataPrevista}`;
+  }
+
+  return `${formatDecimal(dias)} dia(s) | ate ${dataPrevista}`;
+}
+
+function renderizarEstadoNecessidade(estado) {
+  const normalized = String(estado || '').toUpperCase();
+  let cssClass = 'status-chip';
+
+  if (normalized === 'CRITICO') cssClass += ' is-danger';
+  if (normalized === 'ATENCAO') cssClass += ' is-warning';
+  if (normalized === 'OBSERVAR') cssClass += ' is-info';
+  if (normalized === 'NORMAL') cssClass += ' is-success';
+
+  return `<span class="${cssClass}">${escapeHtml(normalized || '-')}</span>`;
 }
 
 function renderizarStatus(status) {
@@ -1073,6 +1187,7 @@ function handleKeyboardShortcuts(event) {
   }
 
   closeAllRowMenus();
+
   if (!refs.producaoModal.classList.contains('hidden')) fecharModalProducao();
   else if (!refs.historicoModal.classList.contains('hidden')) fecharModalHistorico();
   else if (!refs.mpModal.classList.contains('hidden')) fecharModalMateriaPrima();
@@ -1100,11 +1215,22 @@ function closeAllRowMenus(exceptMenu = null) {
 function openModal(modal) {
   modal.classList.remove('hidden');
   modal.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('has-modal');
 }
 
 function closeModal(modal) {
   modal.classList.add('hidden');
   modal.setAttribute('aria-hidden', 'true');
+  const hasModal = [
+    refs.pedidosModal,
+    refs.atendimentoModal,
+    refs.tratamentoModal,
+    refs.recebimentoModal,
+    refs.mpModal,
+    refs.historicoModal,
+    refs.producaoModal
+  ].some((item) => !item.classList.contains('hidden'));
+  document.body.classList.toggle('has-modal', hasModal);
 }
 
 function mostrarMensagem(texto, tipo) {

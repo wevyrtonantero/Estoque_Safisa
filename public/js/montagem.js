@@ -992,11 +992,12 @@ async function handleAtenderPedidoRecebido(event) {
 }
 
 function renderizarEstoque() {
+  const registrosEstoque = saldosMontagemCache;
   const saldosFiltrados = obterSaldosMontagemFiltrados();
   document.getElementById('montagem-estoque-total').textContent = `${saldosFiltrados.length} registro(s) encontrado(s)`;
 
-  if (!saldosMontagemCache.length) {
-    refs.estoqueTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhum saldo na Montagem.</td></tr>';
+  if (!registrosEstoque.length) {
+    refs.estoqueTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhum item monitorado na Montagem.</td></tr>';
     return;
   }
 
@@ -1011,7 +1012,7 @@ function renderizarEstoque() {
       <td class="table-description">${escapeHtml(item.descricao)}</td>
       <td>${escapeHtml(item.tipo)}</td>
       <td>${escapeHtml(item.classificacao)}</td>
-      <td class="table-quantity">${formatInteger(item.quantidade)}</td>
+      <td class="table-quantity">${formatDecimal(item.quantidade)}</td>
     </tr>
   `).join('');
 }
@@ -1023,6 +1024,9 @@ function atualizarIndicadores() {
   );
   document.getElementById('montagem-card-pedidos').textContent = String(
     pedidosMontagemCache.filter((item) => ['PENDENTE', 'EM_SEPARACAO', 'ATENDIDA_PARCIAL'].includes(item.status)).length
+  );
+  document.getElementById('montagem-card-recebidos').textContent = String(
+    pedidosRecebidosCache.filter((item) => ['PENDENTE', 'EM_SEPARACAO', 'ATENDIDA_PARCIAL'].includes(item.status)).length
   );
   atualizarBadgesMenu();
 }
@@ -1312,6 +1316,19 @@ function formatDate(value) {
   }
 
   return new Date(value).toLocaleString('pt-BR');
+}
+
+function formatarDataCurta(value) {
+  if (!value) {
+    return '-';
+  }
+
+  const data = new Date(value);
+  if (Number.isNaN(data.getTime())) {
+    return '-';
+  }
+
+  return data.toLocaleDateString('pt-BR');
 }
 
 function escapeHtml(value) {

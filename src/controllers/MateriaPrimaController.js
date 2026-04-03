@@ -4,7 +4,7 @@ const FornecedorModel = require('../models/FornecedorModel');
 const MateriaPrimaFornecedorModel = require('../models/MateriaPrimaFornecedorModel');
 
 const CATEGORIAS_VALIDAS = ['LAMINADO', 'FUNDIDO'];
-const GEOMETRIAS_LAMINADO = ['REDONDO', 'QUADRADO', 'SEXTAVADO'];
+const GEOMETRIAS_LAMINADO = ['REDONDO', 'QUADRADO', 'SEXTAVADO', 'FITA / BOBINA'];
 const UNIDADES_LAMINADO = ['KG'];
 const UNIDADES_FUNDIDO = ['UN'];
 
@@ -152,6 +152,7 @@ function validatePayload(payload) {
 
   if (
     payload.categoria === 'LAMINADO'
+    && payload.geometria !== 'FITA / BOBINA'
     && (!Number.isFinite(payload.comprimento_padrao_mm) || payload.comprimento_padrao_mm <= 0)
   ) {
     errors.push('Informe o comprimento da barra em metros.');

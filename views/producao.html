@@ -44,15 +44,29 @@
 
     <section class="sector-shell">
       <aside class="sector-menu">
-        <section class="content-card sector-menu-card">
-          <span class="section-pill">Menu do Setor</span>
+        <details class="sector-menu-card">
+          <summary class="sector-menu-summary">
+            <div class="sector-menu-heading">
+              <span class="section-pill">Producao</span>
+              <strong>Menu</strong>
+            </div>
+            <span class="sector-menu-trigger" aria-hidden="true">...</span>
+          </summary>
 
-          <div class="sector-menu-list">
-            <button id="btn-nova-producao" class="btn btn-primary" type="button"><span class="btn-label">Nova Producao</span></button>
-            <button id="btn-estoques-producao-menu" class="btn btn-secondary" type="button"><span class="btn-label">Ver Estoques</span></button>
-            <button id="btn-solicitacoes-producao-menu" class="btn btn-neutral" type="button"><span class="btn-label">Solicitacoes para Producao</span><span id="producao-badge-solicitacoes" class="btn-badge hidden">0</span></button>
+          <div class="sector-menu-panel">
+            <div class="sector-menu-panel-head">
+              <span class="section-pill">Producao</span>
+              <strong>Acoes rapidas</strong>
+              <small>Ordens, estoques e prioridades do Almoxarifado.</small>
+            </div>
+
+            <div class="sector-menu-list">
+              <button id="btn-nova-producao" class="btn btn-primary" type="button"><span class="btn-label">Nova Producao</span></button>
+              <button id="btn-estoques-producao-menu" class="btn btn-secondary" type="button"><span class="btn-label">Ver Estoques</span></button>
+              <button id="btn-solicitacoes-producao-menu" class="btn btn-neutral" type="button"><span class="btn-label">Solicitacoes para Producao</span><span id="producao-badge-solicitacoes" class="btn-badge hidden">0</span></button>
+            </div>
           </div>
-        </section>
+        </details>
       </aside>
 
       <div class="sector-content">
@@ -154,6 +168,23 @@
         </div>
 
         <div class="field">
+          <label for="producao-estoques-fornecedor">Fornecedor</label>
+          <input id="producao-estoques-fornecedor" type="text" placeholder="Digite parte do fornecedor">
+        </div>
+
+        <div class="field">
+          <label for="producao-estoques-estado">Estado</label>
+          <select id="producao-estoques-estado">
+            <option value="">Todos</option>
+            <option value="PRIORITARIOS">Somente prioridades</option>
+            <option value="CRITICO">Critico</option>
+            <option value="ATENCAO">Atencao</option>
+            <option value="OBSERVAR">Observar</option>
+            <option value="NORMAL">Normal</option>
+          </select>
+        </div>
+
+        <div class="field">
           <label for="producao-estoques-ordem">Quantidade em estoque</label>
           <select id="producao-estoques-ordem">
             <option value="">Padrao</option>
@@ -171,14 +202,17 @@
             <tr>
               <th>Codigo</th>
               <th>Descricao</th>
-              <th>Tipo</th>
+              <th>Fornecedor</th>
               <th>Classificacao</th>
               <th>Quantidade</th>
+              <th>Sai no mes</th>
+              <th>Vai durar ate</th>
+              <th>Estado</th>
             </tr>
           </thead>
           <tbody id="producao-estoques-tbody">
             <tr>
-              <td colspan="5" class="empty-state">Carregando estoque...</td>
+              <td colspan="8" class="empty-state">Carregando estoque...</td>
             </tr>
           </tbody>
         </table>
@@ -387,6 +421,7 @@
     </div>
   </div>
 
+  <script src="/js/sector-menu.js"></script>
   <script src="/js/producao.js"></script>
 </body>
 </html>

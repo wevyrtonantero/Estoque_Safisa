@@ -6,6 +6,7 @@ const materiasPrimasAutocompleteApiBaseUrl = '/api/materias-primas-autocomplete'
 const estoqueMateriaPrimaApiBaseUrl = '/api/estoque-materias-primas';
 const estoquesApiBaseUrl = '/api/estoques';
 const estoqueSaldosApiBaseUrl = '/api/estoque/saldos';
+const estoquePrioridadesApiBaseUrl = '/api/estoque/prioridades';
 const AUTO_REFRESH_MS = 15000;
 const ACTIVE_PRODUCTION_REQUEST_STATUSES = ['PENDENTE', 'EM_ANALISE', 'EM_PRODUCAO'];
 const CLOSED_PRODUCTION_REQUEST_STATUSES = ['CONCLUIDA', 'CANCELADA'];
@@ -17,6 +18,8 @@ let pecasCache = [];
 let materiasPrimasCache = [];
 let materiasPrimasSaldosCache = new Map();
 let estoquesSetorCache = [];
+let prioridadesAlmoxCache = [];
+let estoqueConsultaCache = [];
 let almoxStockId = null;
 let estoqueConsultaDebounceTimer = null;
 let filtroDebounceTimer = null;
@@ -42,7 +45,9 @@ const refs = {
   estoquesSetor: document.getElementById('producao-estoques-setor'),
   estoquesCodigo: document.getElementById('producao-estoques-codigo'),
   estoquesDescricao: document.getElementById('producao-estoques-descricao'),
+  estoquesFornecedor: document.getElementById('producao-estoques-fornecedor'),
   estoquesClassificacao: document.getElementById('producao-estoques-classificacao'),
+  estoquesEstado: document.getElementById('producao-estoques-estado'),
   estoquesOrdem: document.getElementById('producao-estoques-ordem'),
   solicitacoesModal: document.getElementById('producao-solicitacoes-modal'),
   modal: document.getElementById('producao-modal'),
@@ -72,7 +77,7 @@ const refs = {
 document.addEventListener('DOMContentLoaded', async () => {
   bindEvents();
   await Promise.all([carregarMaquinas(), carregarPecas(), carregarMateriasPrimas(), carregarEstoquesSetor()]);
-  await Promise.all([carregarProducoes(), carregarSolicitacoesProducao(), carregarProximaRuptura()]);
+  await Promise.all([carregarProducoes(), carregarSolicitacoesProducao(), carregarPrioridadesAlmox()]);
   iniciarAtualizacaoAutomatica();
 });
 
@@ -100,9 +105,10 @@ function bindEvents() {
     event.preventDefault();
     carregarConsultaEstoques();
   });
-  [refs.estoquesSetor, refs.estoquesCodigo, refs.estoquesDescricao, refs.estoquesClassificacao, refs.estoquesOrdem].forEach((field) => {
-    field.addEventListener('input', agendarConsultaEstoques);
-    field.addEventListener('change', agendarConsultaEstoques);
+  refs.estoquesSetor.addEventListener('change', agendarConsultaEstoques);
+  [refs.estoquesCodigo, refs.estoquesDescricao, refs.estoquesFornecedor, refs.estoquesClassificacao, refs.estoquesEstado, refs.estoquesOrdem].forEach((field) => {
+    field.addEventListener('input', renderizarConsultaEstoques);
+    field.addEventListener('change', renderizarConsultaEstoques);
   });
   refs.filtroForm.querySelectorAll('input, select').forEach((field) => {
     field.addEventListener('input', agendarFiltroAutomatico);
@@ -171,6 +177,26 @@ async function carregarSolicitacoesProducao() {
     renderizarSolicitacoesProducao();
     atualizarIndicadores();
     mostrarMensagem(error.message, 'error');
+  }
+}
+
+async function carregarPrioridadesAlmox() {
+  try {
+    const response = await fetch(`${estoquePrioridadesApiBaseUrl}?estoque_nome=Almoxarifado&modo=todos`);
+    const prioridades = await response.json();
+
+    if (!response.ok) {
+      throw new Error(prioridades.message || 'Nao foi possivel carregar os estados criticos do Almoxarifado.');
+    }
+
+    prioridadesAlmoxCache = Array.isArray(prioridades) ? prioridades : [];
+    atualizarIndicadores();
+    atualizarCardRuptura(obterPrioridadesAlmoxOperacionais()[0] || null);
+  } catch (error) {
+    prioridadesAlmoxCache = [];
+    atualizarIndicadores();
+    atualizarCardRuptura(null);
+    console.error('Falha ao carregar os estados criticos do Almoxarifado:', error);
   }
 }
 
@@ -396,73 +422,14 @@ function obterMensagemTimelineSolicitacao(filtro) {
 
 async function atualizarPainelAutomaticamente() {
   try {
-    await Promise.all([carregarProducoes(), carregarSolicitacoesProducao(), carregarProximaRuptura()]);
+    await Promise.all([carregarProducoes(), carregarSolicitacoesProducao(), carregarPrioridadesAlmox()]);
   } catch (error) {
     console.error('Falha ao atualizar a tela de Producao:', error);
   }
 }
 
 async function carregarProximaRuptura() {
-  try {
-    const stockId = await obterIdAlmoxarifado();
-    if (!stockId) {
-      atualizarCardRuptura(null);
-      return;
-    }
-
-    const response = await fetch(`${estoqueSaldosApiBaseUrl}?estoque=${stockId}&ordem_quantidade=ASC`);
-    const saldos = await response.json();
-
-    if (!response.ok) {
-      throw new Error(saldos.message || 'Nao foi possivel carregar o estoque do Almoxarifado.');
-    }
-
-    const itemCritico = obterItemRupturaMaisProxima(saldos);
-    atualizarCardRuptura(itemCritico);
-  } catch (error) {
-    console.error('Falha ao calcular a proxima ruptura do Almoxarifado:', error);
-    atualizarCardRuptura(null);
-  }
-}
-
-async function obterIdAlmoxarifado() {
-  if (almoxStockId) {
-    return almoxStockId;
-  }
-
-  await carregarEstoquesSetor();
-  return almoxStockId;
-}
-
-function obterItemRupturaMaisProxima(saldos) {
-  const candidatos = (Array.isArray(saldos) ? saldos : [])
-    .map((item) => {
-      const quantidade = Number(item.quantidade || 0);
-      const consumoMensal = Number(item.consumo_mensal || 0);
-
-      if (!Number.isFinite(quantidade) || quantidade <= 0) {
-        return null;
-      }
-
-      if (!Number.isFinite(consumoMensal) || consumoMensal <= 0) {
-        return null;
-      }
-
-      const dias = Math.floor((quantidade / consumoMensal) * 30);
-      const data = new Date();
-      data.setDate(data.getDate() + dias);
-
-      return {
-        codigo: item.codigo,
-        descricao: item.descricao,
-        dias,
-        dataPrevista: data
-      };
-    })
-    .filter(Boolean)
-    .sort((a, b) => a.dias - b.dias || String(a.codigo).localeCompare(String(b.codigo)));
-
-  return candidatos[0] || null;
+  await carregarPrioridadesAlmox();
 }
 
 function atualizarCardRuptura(item) {
@@ -472,8 +439,16 @@ function atualizarCardRuptura(item) {
     return;
   }
 
+  const dias = Number.isFinite(Number(item.dias)) ? Number(item.dias) : Number(item.dias_cobertura);
+  const dataPrevista = item.dataPrevista || item.data_prevista_ruptura || null;
+
   refs.metricRuptura.textContent = item.codigo;
-  refs.metricRupturaInfo.textContent = `${item.descricao} | ${item.dias} dia(s) | ate ${formatarDataCurta(item.dataPrevista)}`;
+  if (Number.isFinite(dias)) {
+    refs.metricRupturaInfo.textContent = `${item.descricao} | ${formatDecimal(dias)} dia(s) | ate ${formatarDataCurta(dataPrevista)}`;
+    return;
+  }
+
+  refs.metricRupturaInfo.textContent = `${item.descricao} | ate ${formatarDataCurta(dataPrevista)}`;
 }
 
 function renderizarSugestoesPeca(termo) {
@@ -792,7 +767,9 @@ function limparFiltros() {
 function limparFiltrosConsultaEstoques() {
   refs.estoquesCodigo.value = '';
   refs.estoquesDescricao.value = '';
+  refs.estoquesFornecedor.value = '';
   refs.estoquesClassificacao.value = '';
+  refs.estoquesEstado.value = '';
   refs.estoquesOrdem.value = '';
   if (almoxStockId) {
     refs.estoquesSetor.value = String(almoxStockId);
@@ -813,56 +790,104 @@ function agendarConsultaEstoques() {
 async function carregarConsultaEstoques() {
   if (!refs.estoquesSetor.value) {
     refs.estoquesTotal.textContent = '0 registro(s) encontrado(s)';
-    refs.estoquesTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Selecione um estoque para consultar.</td></tr>';
+    estoqueConsultaCache = [];
+    refs.estoquesTbody.innerHTML = '<tr><td colspan="8" class="empty-state">Selecione um estoque para consultar.</td></tr>';
     return;
   }
 
-  const params = new URLSearchParams({ estoque: refs.estoquesSetor.value });
-
-  if (refs.estoquesCodigo.value.trim()) {
-    params.append('codigo', refs.estoquesCodigo.value.trim());
-  }
-
-  if (refs.estoquesDescricao.value.trim()) {
-    params.append('descricao', refs.estoquesDescricao.value.trim());
-  }
-
-  if (refs.estoquesClassificacao.value) {
-    params.append('classificacao', refs.estoquesClassificacao.value);
-  }
-
-  if (refs.estoquesOrdem.value) {
-    params.append('ordem_quantidade', refs.estoquesOrdem.value);
-  }
+  const params = new URLSearchParams({
+    estoque: refs.estoquesSetor.value,
+    modo: 'todos'
+  });
 
   try {
-    const response = await fetch(`${estoqueSaldosApiBaseUrl}?${params.toString()}`);
+    const response = await fetch(`${estoquePrioridadesApiBaseUrl}?${params.toString()}`);
     const saldos = await response.json();
 
     if (!response.ok) {
       throw new Error(saldos.message || 'Nao foi possivel carregar o estoque selecionado.');
     }
 
-    refs.estoquesTotal.textContent = `${saldos.length} registro(s) encontrado(s)`;
+    estoqueConsultaCache = Array.isArray(saldos) ? saldos : [];
+    renderizarConsultaEstoques();
+  } catch (error) {
+    estoqueConsultaCache = [];
+    refs.estoquesTotal.textContent = '0 registro(s) encontrado(s)';
+    refs.estoquesTbody.innerHTML = `<tr><td colspan="8" class="empty-state">${escapeHtml(error.message)}</td></tr>`;
+  }
+}
 
-    if (!saldos.length) {
-      refs.estoquesTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhum saldo encontrado para os filtros informados.</td></tr>';
-      return;
+function renderizarConsultaEstoques() {
+  const saldos = obterConsultaEstoquesFiltrados();
+  refs.estoquesTotal.textContent = `${saldos.length} registro(s) encontrado(s)`;
+
+  if (!estoqueConsultaCache.length) {
+    refs.estoquesTbody.innerHTML = '<tr><td colspan="8" class="empty-state">Nenhum item monitorado para o estoque selecionado.</td></tr>';
+    return;
+  }
+
+  if (!saldos.length) {
+    refs.estoquesTbody.innerHTML = '<tr><td colspan="8" class="empty-state">Nenhum saldo encontrado para os filtros informados.</td></tr>';
+    return;
+  }
+
+  refs.estoquesTbody.innerHTML = saldos.map((item) => `
+    <tr class="${item.estado_necessidade === 'CRITICO' ? 'table-row-attention' : ''}">
+      <td class="table-code">${escapeHtml(item.codigo)}</td>
+      <td class="table-description">${escapeHtml(item.descricao)}</td>
+      <td>${escapeHtml(obterFornecedorLabel(item))}</td>
+      <td>${escapeHtml(item.classificacao)}</td>
+      <td class="table-quantity">${formatDecimal(item.quantidade)}</td>
+      <td class="table-quantity">${formatDecimal(item.quantidade_saida_mes)}</td>
+      <td>${escapeHtml(formatarDuracaoPrioridade(item))}</td>
+      <td>${renderizarEstadoNecessidade(item.estado_necessidade)}</td>
+    </tr>
+  `).join('');
+}
+
+function obterConsultaEstoquesFiltrados() {
+  const filtroCodigo = normalizarBusca(refs.estoquesCodigo.value.trim());
+  const filtroDescricao = normalizarBusca(refs.estoquesDescricao.value.trim());
+  const filtroFornecedor = normalizarBusca(refs.estoquesFornecedor.value.trim());
+  const filtroClassificacao = String(refs.estoquesClassificacao.value || '').trim().toUpperCase();
+  const filtroEstado = String(refs.estoquesEstado.value || '').trim().toUpperCase();
+  const ordem = String(refs.estoquesOrdem.value || '').trim().toLowerCase();
+
+  const registros = estoqueConsultaCache.filter((item) => {
+    if (filtroCodigo && !normalizarBusca(item.codigo).includes(filtroCodigo)) {
+      return false;
     }
 
-    refs.estoquesTbody.innerHTML = saldos.map((item) => `
-      <tr>
-        <td class="table-code">${escapeHtml(item.codigo)}</td>
-        <td class="table-description">${escapeHtml(item.descricao)}</td>
-        <td>${escapeHtml(item.tipo)}</td>
-        <td>${escapeHtml(item.classificacao)}</td>
-        <td class="table-quantity">${formatInteger(item.quantidade)}</td>
-      </tr>
-    `).join('');
-  } catch (error) {
-    refs.estoquesTotal.textContent = '0 registro(s) encontrado(s)';
-    refs.estoquesTbody.innerHTML = `<tr><td colspan="5" class="empty-state">${escapeHtml(error.message)}</td></tr>`;
+    if (filtroDescricao && !normalizarBusca(item.descricao).includes(filtroDescricao)) {
+      return false;
+    }
+
+    if (filtroFornecedor && !normalizarBusca(obterFornecedorLabel(item)).includes(filtroFornecedor)) {
+      return false;
+    }
+
+    if (filtroClassificacao && String(item.classificacao || '').toUpperCase() !== filtroClassificacao) {
+      return false;
+    }
+
+    if (filtroEstado === 'PRIORITARIOS' && String(item.estado_necessidade || '').toUpperCase() === 'NORMAL') {
+      return false;
+    }
+
+    if (filtroEstado && filtroEstado !== 'PRIORITARIOS' && String(item.estado_necessidade || '').toUpperCase() !== filtroEstado) {
+      return false;
+    }
+
+    return true;
+  });
+
+  if (ordem === 'asc') {
+    registros.sort((a, b) => Number(a.quantidade || 0) - Number(b.quantidade || 0));
+  } else if (ordem === 'desc') {
+    registros.sort((a, b) => Number(b.quantidade || 0) - Number(a.quantidade || 0));
   }
+
+  return registros;
 }
 
 function handleGlobalClick(event) {
@@ -1314,11 +1339,47 @@ function formatInputDecimal(value) {
 }
 
 function formatarDataCurta(data) {
-  if (!(data instanceof Date) || Number.isNaN(data.getTime())) {
+  const dataNormalizada = data instanceof Date ? data : new Date(data);
+  if (!(dataNormalizada instanceof Date) || Number.isNaN(dataNormalizada.getTime())) {
     return '-';
   }
 
-  return data.toLocaleDateString('pt-BR');
+  return dataNormalizada.toLocaleDateString('pt-BR');
+}
+
+function formatarDuracaoPrioridade(item) {
+  const dias = Number(item.dias_cobertura);
+  const dataPrevista = formatarDataCurta(item.data_prevista_ruptura);
+
+  if (!Number.isFinite(dias) && dataPrevista === '-') {
+    return 'Sem previsao';
+  }
+
+  if (!Number.isFinite(dias)) {
+    return `ate ${dataPrevista}`;
+  }
+
+  return `${formatDecimal(dias)} dia(s) | ate ${dataPrevista}`;
+}
+
+function renderizarEstadoNecessidade(estado) {
+  const normalized = String(estado || '').toUpperCase();
+  let cssClass = 'status-chip';
+
+  if (normalized === 'CRITICO') cssClass += ' is-danger';
+  if (normalized === 'ATENCAO') cssClass += ' is-warning';
+  if (normalized === 'OBSERVAR') cssClass += ' is-info';
+  if (normalized === 'NORMAL') cssClass += ' is-success';
+
+  return `<span class="${cssClass}">${escapeHtml(normalized || '-')}</span>`;
+}
+
+function obterPrioridadesAlmoxOperacionais() {
+  return prioridadesAlmoxCache.filter((item) => String(item.estado_necessidade || '').toUpperCase() !== 'NORMAL');
+}
+
+function obterFornecedorLabel(item) {
+  return String(item?.fornecedores_nomes || item?.fornecedor_nome || '-').trim() || '-';
 }
 
 function formatarConsumo(producao) {

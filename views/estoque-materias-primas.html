@@ -57,6 +57,7 @@
 
       <div class="topbar-actions">
         <a href="/pagina-producao" class="btn btn-neutral">Producao</a>
+        <button id="btn-historico-mp" type="button" class="btn btn-neutral">Historico</button>
         <button id="btn-nova-entrada-mp" type="button" class="btn btn-success">Nova Entrada</button>
         <button id="btn-ajuste-mp" type="button" class="btn btn-primary">Ajuste Manual</button>
       </div>
@@ -64,17 +65,17 @@
 
     <section class="summary-row">
       <article class="summary-card">
-        <span>Materiais com Saldo</span>
+        <span>Materiais Listados</span>
         <strong id="metric-mp-com-saldo">0</strong>
       </article>
 
       <article class="summary-card">
-        <span>Laminados com Saldo</span>
+        <span>Laminados Listados</span>
         <strong id="metric-mp-laminados">0</strong>
       </article>
 
       <article class="summary-card">
-        <span>Fundidos com Saldo</span>
+        <span>Fundidos Listados</span>
         <strong id="metric-mp-fundidos">0</strong>
       </article>
     </section>
@@ -85,7 +86,7 @@
       <div class="card-top">
         <div>
           <span class="section-pill">Saldo</span>
-          <h2>Materias-primas com Saldo</h2>
+          <h2 id="estoque-mp-lista-titulo">Materias-primas com Saldo</h2>
           <p id="total-estoque-mp">0 registro(s) encontrado(s)</p>
         </div>
       </div>
@@ -118,6 +119,7 @@
             <option value="QUADRADO">QUADRADO</option>
             <option value="SEXTAVADO">SEXTAVADO</option>
             <option value="FUNDIDO">FUNDIDO</option>
+            <option value="FITA / BOBINA">FITA / BOBINA</option>
           </select>
         </div>
 
@@ -143,36 +145,6 @@
           <tbody id="estoque-mp-tbody">
             <tr>
               <td colspan="8" class="empty-state">Carregando estoque de materia-prima...</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <section class="content-card">
-      <div class="card-top">
-        <div>
-          <span class="section-pill">Historico</span>
-          <h2>Movimentacoes Recentes</h2>
-          <p id="total-movimentacoes-mp">0 movimentacao(oes)</p>
-        </div>
-      </div>
-
-      <div class="table-wrapper">
-        <table class="history-table">
-          <thead>
-            <tr>
-              <th>Data</th>
-              <th>Tipo</th>
-              <th>Materia-prima</th>
-              <th>Quantidade</th>
-              <th>Saldo Resultante</th>
-              <th>Observacao</th>
-            </tr>
-          </thead>
-          <tbody id="estoque-mp-movimentacoes-tbody">
-            <tr>
-              <td colspan="6" class="empty-state">Carregando movimentacoes...</td>
             </tr>
           </tbody>
         </table>
@@ -225,6 +197,44 @@
           <button id="btn-salvar-modal-mp-estoque" class="btn btn-primary" type="submit">Salvar</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <div id="historico-mp-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="historico-mp"></div>
+
+    <div class="modal-dialog modal-dialog-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Historico</span>
+          <h2 id="historico-mp-modal-title">Movimentacoes de Materia-prima</h2>
+          <p id="total-movimentacoes-mp">0 movimentacao(oes)</p>
+        </div>
+
+        <button id="btn-fechar-modal-mp-historico" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="historico-mp-mensagem" class="message hidden"></div>
+
+      <div class="table-wrapper">
+        <table class="history-table">
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Tipo</th>
+              <th>Materia-prima</th>
+              <th>Quantidade</th>
+              <th>Saldo Resultante</th>
+              <th>Observacao</th>
+            </tr>
+          </thead>
+          <tbody id="estoque-mp-movimentacoes-tbody">
+            <tr>
+              <td colspan="6" class="empty-state">Abra o historico para visualizar as movimentacoes.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 

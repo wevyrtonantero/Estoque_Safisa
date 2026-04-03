@@ -1,11 +1,14 @@
 const painelApiBaseUrl = '/api/painel/resumo';
 const estoqueApiBaseUrl = '/api/estoque/saldos';
+const estoquePrioridadesApiBaseUrl = '/api/estoque/prioridades';
 const estoqueMateriaPrimaApiBaseUrl = '/api/estoque-materias-primas/saldos';
 const submontagensApiBaseUrl = '/api/submontagens';
 const AUTO_REFRESH_MS = 15000;
 
 let painelCache = null;
 let estoquesDetalhadosCache = [];
+let estoquesPrioridadesCache = [];
+let alertasAlmoxCache = [];
 let materiasPrimasCache = [];
 let submontagensCache = [];
 let autoRefreshHandle = null;
@@ -25,6 +28,8 @@ const refs = {
   estoquesFiltroCodigo: document.getElementById('dashboard-estoques-filtro-codigo'),
   estoquesFiltroDescricao: document.getElementById('dashboard-estoques-filtro-descricao'),
   estoquesFiltroClassificacao: document.getElementById('dashboard-estoques-filtro-classificacao'),
+  estoquesFiltroFornecedor: document.getElementById('dashboard-estoques-filtro-fornecedor'),
+  estoquesFiltroEstado: document.getElementById('dashboard-estoques-filtro-estado'),
   estoquesFiltroOrdem: document.getElementById('dashboard-estoques-filtro-ordem'),
   estoquesTbody: document.getElementById('dashboard-estoques-tbody'),
   mpFiltroForm: document.getElementById('dashboard-mp-filtro-form'),
@@ -56,12 +61,6 @@ const refs = {
   simulacaoSubtitulo: document.getElementById('dashboard-simulacao-subtitulo'),
   simulacaoResumo: document.getElementById('dashboard-simulacao-resumo'),
   simulacaoTbody: document.getElementById('dashboard-simulacao-tbody'),
-  alertasModal: document.getElementById('dashboard-alertas-modal'),
-  alertasTbody: document.getElementById('dashboard-alertas-tbody'),
-  alertaPedidos: document.getElementById('dashboard-alerta-pedidos'),
-  alertaTerceiros: document.getElementById('dashboard-alerta-terceiros'),
-  alertaSemNf: document.getElementById('dashboard-alerta-sem-nf'),
-  alertaCriticos: document.getElementById('dashboard-alerta-criticos'),
   indicadoresModal: document.getElementById('dashboard-indicadores-modal'),
   saidasTbody: document.getElementById('dashboard-saidas-tbody'),
   maquinasTbody: document.getElementById('dashboard-maquinas-tbody'),
@@ -76,7 +75,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   bindEvents();
 
   try {
-    await Promise.all([carregarDashboard(), carregarEstoquesDetalhados(), carregarMateriasPrimas(), carregarSubmontagens()]);
+    await Promise.all([
+      carregarDashboard(),
+      carregarEstoquesDetalhados(),
+      carregarAlertasAlmox(),
+      carregarMateriasPrimas(),
+      carregarSubmontagens()
+    ]);
     iniciarAtualizacaoAutomatica();
   } catch (error) {
     mostrarMensagem(error.message, 'error');
@@ -87,13 +92,11 @@ function bindEvents() {
   document.getElementById('btn-dashboard-estoques').addEventListener('click', () => openModal(refs.estoquesModal));
   document.getElementById('btn-dashboard-mp').addEventListener('click', () => openModal(refs.mpModal));
   document.getElementById('btn-dashboard-simulacao').addEventListener('click', () => openModal(refs.simulacaoModal));
-  document.getElementById('btn-dashboard-alertas').addEventListener('click', () => openModal(refs.alertasModal));
   document.getElementById('btn-dashboard-indicadores').addEventListener('click', () => openModal(refs.indicadoresModal));
 
   document.getElementById('btn-fechar-modal-dashboard-estoques').addEventListener('click', () => closeModal(refs.estoquesModal));
   document.getElementById('btn-fechar-modal-dashboard-mp').addEventListener('click', () => closeModal(refs.mpModal));
   document.getElementById('btn-fechar-modal-dashboard-simulacao').addEventListener('click', () => closeModal(refs.simulacaoModal));
-  document.getElementById('btn-fechar-modal-dashboard-alertas').addEventListener('click', () => closeModal(refs.alertasModal));
   document.getElementById('btn-fechar-modal-dashboard-indicadores').addEventListener('click', () => closeModal(refs.indicadoresModal));
   document.getElementById('btn-limpar-modal-dashboard-estoques').addEventListener('click', limparFiltrosEstoque);
   document.getElementById('btn-limpar-modal-dashboard-mp').addEventListener('click', limparFiltrosMp);
@@ -116,7 +119,7 @@ function bindEvents() {
   refs.simulacaoSubmontagemBusca.addEventListener('focus', () => renderizarSugestoesSubmontagem(refs.simulacaoSubmontagemBusca.value.trim()));
   refs.simulacaoSugestoes.addEventListener('click', handleSugestaoSubmontagemClick);
 
-  [refs.estoquesModal, refs.mpModal, refs.simulacaoModal, refs.alertasModal, refs.indicadoresModal].forEach((modal) => {
+  [refs.estoquesModal, refs.mpModal, refs.simulacaoModal, refs.indicadoresModal].forEach((modal) => {
     modal.addEventListener('click', handleBackdrop);
   });
 
@@ -145,6 +148,23 @@ async function carregarEstoquesDetalhados() {
   }
 
   estoquesDetalhadosCache = Array.isArray(result) ? result : [];
+  preencherFiltroEstoques();
+  renderizarTabelaEstoquesDetalhados();
+  if (painelCache) {
+    renderizarPainel();
+  }
+}
+
+async function carregarAlertasAlmox() {
+  const response = await fetch(`${estoquePrioridadesApiBaseUrl}?modo=todos`);
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || 'Nao foi possivel carregar as prioridades de estoque.');
+  }
+
+  estoquesPrioridadesCache = Array.isArray(result) ? result : [];
+  alertasAlmoxCache = estoquesPrioridadesCache.filter((item) => normalizarBusca(item.estoque_nome).includes('almox'));
   preencherFiltroEstoques();
   renderizarTabelaEstoquesDetalhados();
   if (painelCache) {
@@ -181,7 +201,6 @@ async function carregarSubmontagens() {
 function renderizarPainel() {
   const producaoEmAndamento = Array.isArray(painelCache?.producao_em_andamento) ? painelCache.producao_em_andamento : [];
   const estoquePorDeposito = Array.isArray(painelCache?.estoque_por_deposito) ? painelCache.estoque_por_deposito : [];
-  const almoxCriticos = Array.isArray(painelCache?.almox_criticos) ? painelCache.almox_criticos : [];
   const estoqueMaiores = Array.isArray(painelCache?.estoque_maiores) ? painelCache.estoque_maiores : [];
   const estoqueMenores = Array.isArray(painelCache?.estoque_menores) ? painelCache.estoque_menores : [];
   const saidasTop = Array.isArray(painelCache?.saidas_top) ? painelCache.saidas_top : [];
@@ -189,7 +208,7 @@ function renderizarPainel() {
 
   refs.cardAndamento.textContent = formatInteger(producaoEmAndamento.length);
   refs.cardFinalizadasHoje.textContent = formatInteger(painelCache?.indicadores?.producao_hoje?.ordens_finalizadas_hoje || 0);
-  refs.cardCriticos.textContent = formatInteger(almoxCriticos.length);
+  refs.cardCriticos.textContent = formatInteger(obterAlertasAlmoxOperacionais().length);
   refs.cardSemNf.textContent = formatInteger(painelCache?.indicadores?.remessas_sem_nf?.total || 0);
 
   refs.producaoTotal.textContent = `${formatInteger(producaoEmAndamento.length)} ordem(ns) em andamento`;
@@ -210,12 +229,6 @@ function renderizarPainel() {
   refs.mpTotalFundidos.textContent = formatInteger(materiasPrimasFundidas);
   renderizarTabelaEstoquesDetalhados();
   renderizarTabelaMateriaPrima();
-
-  refs.alertaPedidos.textContent = formatInteger(painelCache?.indicadores?.solicitacoes?.abertas || 0);
-  refs.alertaTerceiros.textContent = formatInteger(painelCache?.indicadores?.terceirizacao?.itens_pendentes || 0);
-  refs.alertaSemNf.textContent = formatInteger(painelCache?.indicadores?.remessas_sem_nf?.total || 0);
-  refs.alertaCriticos.textContent = formatInteger(almoxCriticos.length);
-  renderizarTabelaAlertas(almoxCriticos);
 
   refs.indicadorProduzido.textContent = formatInteger(painelCache?.indicadores?.producao?.total_produzido || 0);
   refs.indicadorRefugo.textContent = formatInteger(painelCache?.indicadores?.producao?.total_refugo || 0);
@@ -244,7 +257,8 @@ function renderizarTabelaProducao(items) {
 }
 
 function preencherFiltroEstoques() {
-  const options = Array.from(new Set(estoquesDetalhadosCache.map((item) => String(item.estoque_nome || '').trim()).filter(Boolean)));
+  const base = estoquesPrioridadesCache.length ? estoquesPrioridadesCache : estoquesDetalhadosCache;
+  const options = Array.from(new Set(base.map((item) => String(item.estoque_nome || '').trim()).filter(Boolean)));
   refs.estoquesFiltroEstoque.innerHTML = `
     <option value="">Todos</option>
     ${options.map((item) => `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`).join('')}
@@ -255,17 +269,21 @@ function renderizarTabelaEstoquesDetalhados() {
   const items = obterEstoquesDetalhadosFiltrados();
 
   if (!items.length) {
-    refs.estoquesTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhum item encontrado com os filtros informados.</td></tr>';
+    refs.estoquesTbody.innerHTML = '<tr><td colspan="9" class="empty-state">Nenhum item encontrado com os filtros informados.</td></tr>';
     return;
   }
 
   refs.estoquesTbody.innerHTML = items.map((item) => `
-    <tr>
+    <tr class="${item.estado_necessidade === 'CRITICO' ? 'table-row-attention' : ''}">
       <td>${escapeHtml(item.estoque_nome)}</td>
       <td class="table-code">${escapeHtml(item.codigo)}</td>
       <td class="table-description">${escapeHtml(item.descricao)}</td>
+      <td>${escapeHtml(obterFornecedorLabel(item))}</td>
       <td>${escapeHtml(item.classificacao)}</td>
-      <td class="table-quantity">${formatInteger(item.quantidade)}</td>
+      <td class="table-quantity">${formatDecimal(item.quantidade)}</td>
+      <td class="table-quantity">${formatDecimal(item.quantidade_saida_mes)}</td>
+      <td>${escapeHtml(formatarDuracaoPrioridade(item))}</td>
+      <td>${renderizarEstadoNecessidade(item.estado_necessidade)}</td>
     </tr>
   `).join('');
 }
@@ -286,23 +304,6 @@ function renderizarTabelaMateriaPrima() {
       <td>${escapeHtml(item.geometria || '-')}</td>
       <td>${escapeHtml(buildBitolaLabel(item))}</td>
       <td class="table-quantity">${formatMpQuantity(item.quantidade, item.unidade_controle)}</td>
-    </tr>
-  `).join('');
-}
-
-function renderizarTabelaAlertas(items) {
-  if (!items.length) {
-    refs.alertasTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhum item critico encontrado no Almoxarifado.</td></tr>';
-    return;
-  }
-
-  refs.alertasTbody.innerHTML = items.map((item) => `
-    <tr>
-      <td class="table-code">${escapeHtml(item.codigo)}</td>
-      <td class="table-description">${escapeHtml(item.descricao)}</td>
-      <td class="table-quantity">${formatInteger(item.quantidade)}</td>
-      <td>${renderizarAlerta(item.alerta)}</td>
-      <td>${escapeHtml(formatarCobertura(item.dias_cobertura))}</td>
     </tr>
   `).join('');
 }
@@ -485,7 +486,12 @@ function iniciarAtualizacaoAutomatica() {
     }
 
   try {
-      await Promise.all([carregarDashboard(), carregarEstoquesDetalhados(), carregarMateriasPrimas()]);
+      await Promise.all([
+        carregarDashboard(),
+        carregarEstoquesDetalhados(),
+        carregarAlertasAlmox(),
+        carregarMateriasPrimas()
+      ]);
     } catch (error) {
       console.error('Falha ao atualizar o dashboard:', error);
     }
@@ -503,9 +509,6 @@ function handleBackdrop(event) {
   if (modalName === 'dashboard-simulacao') {
     closeModal(refs.simulacaoModal);
   }
-  if (modalName === 'dashboard-alertas') {
-    closeModal(refs.alertasModal);
-  }
   if (modalName === 'dashboard-indicadores') {
     closeModal(refs.indicadoresModal);
   }
@@ -518,11 +521,6 @@ function handleKeyboardShortcuts(event) {
 
   if (!refs.indicadoresModal.classList.contains('hidden')) {
     closeModal(refs.indicadoresModal);
-    return;
-  }
-
-  if (!refs.alertasModal.classList.contains('hidden')) {
-    closeModal(refs.alertasModal);
     return;
   }
 
@@ -550,7 +548,7 @@ function openModal(modal) {
 function closeModal(modal) {
   modal.classList.add('hidden');
   modal.setAttribute('aria-hidden', 'true');
-  const hasModal = [refs.estoquesModal, refs.mpModal, refs.simulacaoModal, refs.alertasModal, refs.indicadoresModal]
+  const hasModal = [refs.estoquesModal, refs.mpModal, refs.simulacaoModal, refs.indicadoresModal]
     .some((entry) => !entry.classList.contains('hidden'));
   document.body.classList.toggle('has-modal', hasModal);
 }
@@ -566,9 +564,11 @@ function obterEstoquesDetalhadosFiltrados() {
   const filtroCodigo = normalizarBusca(refs.estoquesFiltroCodigo.value.trim());
   const filtroDescricao = normalizarBusca(refs.estoquesFiltroDescricao.value.trim());
   const filtroClassificacao = String(refs.estoquesFiltroClassificacao.value || '').trim().toUpperCase();
+  const filtroFornecedor = normalizarBusca(refs.estoquesFiltroFornecedor.value.trim());
+  const filtroEstado = String(refs.estoquesFiltroEstado.value || '').trim().toUpperCase();
   const ordem = refs.estoquesFiltroOrdem.value;
 
-  const registros = estoquesDetalhadosCache.filter((item) => {
+  const registros = estoquesPrioridadesCache.filter((item) => {
     if (filtroEstoque && normalizarBusca(item.estoque_nome) !== filtroEstoque) {
       return false;
     }
@@ -582,6 +582,18 @@ function obterEstoquesDetalhadosFiltrados() {
     }
 
     if (filtroClassificacao && String(item.classificacao || '').toUpperCase() !== filtroClassificacao) {
+      return false;
+    }
+
+    if (filtroFornecedor && !normalizarBusca(obterFornecedorLabel(item)).includes(filtroFornecedor)) {
+      return false;
+    }
+
+    if (filtroEstado === 'PRIORITARIOS' && String(item.estado_necessidade || '').toUpperCase() === 'NORMAL') {
+      return false;
+    }
+
+    if (filtroEstado && filtroEstado !== 'PRIORITARIOS' && String(item.estado_necessidade || '').toUpperCase() !== filtroEstado) {
       return false;
     }
 
@@ -633,28 +645,49 @@ function obterMateriasPrimasFiltradas() {
   return registros;
 }
 
-function renderizarAlerta(alerta) {
-  const normalized = String(alerta || '').toUpperCase();
+function renderizarEstadoNecessidade(estado) {
+  const normalized = String(estado || '').toUpperCase();
   let cssClass = 'status-chip';
 
   if (normalized === 'CRITICO') {
     cssClass += ' is-danger';
   } else if (normalized === 'ATENCAO') {
     cssClass += ' is-warning';
+  } else if (normalized === 'OBSERVAR') {
+    cssClass += ' is-info';
+  } else if (normalized === 'NORMAL') {
+    cssClass += ' is-success';
   }
 
-  return `<span class="${cssClass}">${escapeHtml(alerta || '-')}</span>`;
+  return `<span class="${cssClass}">${escapeHtml(normalized || '-')}</span>`;
 }
 
-function formatarCobertura(dias) {
-  const valor = Number(dias);
-  if (!Number.isFinite(valor) || valor <= 0) {
+function formatarDataCurta(value) {
+  if (!value) {
+    return '-';
+  }
+
+  const data = new Date(value);
+  if (Number.isNaN(data.getTime())) {
+    return '-';
+  }
+
+  return data.toLocaleDateString('pt-BR');
+}
+
+function formatarDuracaoPrioridade(item) {
+  const dias = Number(item.dias_cobertura);
+  const dataPrevista = formatarDataCurta(item.data_prevista_ruptura);
+
+  if (!Number.isFinite(dias) && dataPrevista === '-') {
     return 'Sem previsao';
   }
 
-  const data = new Date();
-  data.setDate(data.getDate() + Math.floor(valor));
-  return `${valor.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 1 })} dia(s) | ate ${data.toLocaleDateString('pt-BR')}`;
+  if (!Number.isFinite(dias)) {
+    return `ate ${dataPrevista}`;
+  }
+
+  return `${formatDecimal(dias)} dia(s) | ate ${dataPrevista}`;
 }
 
 function getStockQuantity(item, key) {
@@ -683,6 +716,14 @@ function limparFiltrosEstoque() {
 function limparFiltrosMp() {
   refs.mpFiltroForm.reset();
   renderizarTabelaMateriaPrima();
+}
+
+function obterAlertasAlmoxOperacionais() {
+  return alertasAlmoxCache.filter((item) => String(item.estado_necessidade || '').toUpperCase() !== 'NORMAL');
+}
+
+function obterFornecedorLabel(item) {
+  return String(item?.fornecedores_nomes || item?.fornecedor_nome || '-').trim() || '-';
 }
 
 function buildBitolaLabel(item) {

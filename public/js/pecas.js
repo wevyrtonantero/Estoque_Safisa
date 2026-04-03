@@ -518,7 +518,7 @@ function renderizarFornecedoresSelecionados() {
 function renderizarTabela(pecas) {
   totalRegistros.textContent = `${pecas.length} registro(s) encontrado(s)`;
   if (pecas.length === 0) {
-    tabelaBody.innerHTML = '<tr><td colspan="3" class="empty-state">Nenhuma peca encontrada para os filtros informados.</td></tr>';
+    tabelaBody.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhuma peca encontrada para os filtros informados.</td></tr>';
     return;
   }
 
@@ -526,6 +526,8 @@ function renderizarTabela(pecas) {
     <tr>
       <td class="table-code">${escapeHtml(peca.codigo)}</td>
       <td class="table-description">${escapeHtml(peca.descricao)}</td>
+      <td>${formatMetricValue(peca.estoque_minimo)}</td>
+      <td>${formatMetricValue(peca.consumo_mensal)}</td>
       <td class="table-actions-cell">
         <details class="row-menu">
           <summary class="row-menu-trigger" aria-label="Abrir acoes">...</summary>
@@ -607,6 +609,17 @@ function parseOptionalNumber(value) {
 
 function formatOptionalNumber(value) {
   return value === null || value === undefined ? '' : Number(value);
+}
+
+function formatMetricValue(value) {
+  if (value === null || value === undefined || value === '') {
+    return '-';
+  }
+
+  return Number(value).toLocaleString('pt-BR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2
+  });
 }
 
 function escapeHtml(value) {

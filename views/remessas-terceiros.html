@@ -38,17 +38,31 @@
 
     <section class="sector-shell">
       <aside class="sector-menu">
-        <section class="content-card sector-menu-card">
-          <span class="section-pill">Menu do Setor</span>
+        <details class="sector-menu-card">
+          <summary class="sector-menu-summary">
+            <div class="sector-menu-heading">
+              <span class="section-pill">Remessas</span>
+              <strong>Menu</strong>
+            </div>
+            <span class="sector-menu-trigger" aria-hidden="true">...</span>
+          </summary>
 
-          <div class="sector-menu-list">
-            <button id="remessas-btn-ativas" class="btn btn-primary" type="button"><span class="btn-label">Ativas</span></button>
-            <button id="remessas-btn-pendentes-nf" class="btn btn-warning" type="button"><span class="btn-label">Pendentes de NF</span></button>
-            <button id="remessas-btn-retorno-parcial" class="btn btn-neutral" type="button"><span class="btn-label">Retorno parcial</span></button>
-            <button id="remessas-btn-encerradas" class="btn btn-secondary" type="button"><span class="btn-label">Encerradas</span></button>
-            <a href="/pagina-tratamento-externo" class="btn btn-secondary"><span class="btn-label">Tratamento Externo</span></a>
+          <div class="sector-menu-panel">
+            <div class="sector-menu-panel-head">
+              <span class="section-pill">Remessas</span>
+              <strong>Acoes rapidas</strong>
+              <small>Filtre pendencias, retornos e acesso ao tratamento externo.</small>
+            </div>
+
+            <div class="sector-menu-list">
+              <button id="remessas-btn-ativas" class="btn btn-primary" type="button"><span class="btn-label">Ativas</span></button>
+              <button id="remessas-btn-pendentes-nf" class="btn btn-warning" type="button"><span class="btn-label">Pendentes de NF</span></button>
+              <button id="remessas-btn-retorno-parcial" class="btn btn-neutral" type="button"><span class="btn-label">Retorno parcial</span></button>
+              <button id="remessas-btn-encerradas" class="btn btn-secondary" type="button"><span class="btn-label">Encerradas</span></button>
+              <a href="/pagina-tratamento-externo" class="btn btn-secondary"><span class="btn-label">Tratamento Externo</span></a>
+            </div>
           </div>
-        </section>
+        </details>
       </aside>
 
       <div class="sector-content">
@@ -301,6 +315,7 @@
     </div>
   </div>
 
+  <script src="/js/sector-menu.js"></script>
   <script src="/js/remessas-terceiros.js"></script>
 </body>
 </html>

@@ -2,6 +2,16 @@
 const { pool } = require('../../database/connection');
 
 class EstoqueModel {
+  static supplierSummarySubquery() {
+    return `
+      SELECT
+        pf.id_peca,
+        GROUP_CONCAT(DISTINCT f.nome ORDER BY f.nome SEPARATOR ', ') AS fornecedores_nomes
+      FROM peca_fornecedor pf
+      INNER JOIN fornecedores f ON f.id = pf.id_fornecedor
+      GROUP BY pf.id_peca
+    `;
+  }
   static EXPEDICAO_NOME = 'Expedição';
 
   // Cria um erro de negocio padronizado para as validacoes do fluxo.
@@ -9,6 +19,78 @@ class EstoqueModel {
     const error = new Error(message);
     error.statusCode = 400;
     return error;
+  }
+
+  static buildPrioridadeExpressions() {
+    const quantidadeExpression = 'COALESCE(s.quantidade, 0)';
+    const estoqueSegurancaExpression = 'COALESCE(p.estoque_seguranca, 0)';
+    const consumoMensalExpression = 'COALESCE(p.consumo_mensal, 0)';
+    const diasCoberturaBrutoExpression = `(
+      ${quantidadeExpression} / NULLIF(${consumoMensalExpression} / 30, 0)
+    )`;
+
+    const diasCoberturaExpression = `
+      CASE
+        WHEN ${consumoMensalExpression} > 0 THEN ROUND(${diasCoberturaBrutoExpression}, 1)
+        ELSE NULL
+      END
+    `;
+
+    const dataPrevistaRupturaExpression = `
+      CASE
+        WHEN ${consumoMensalExpression} > 0 THEN DATE_ADD(
+          CURDATE(),
+          INTERVAL GREATEST(0, CEIL(${diasCoberturaBrutoExpression})) DAY
+        )
+        ELSE NULL
+      END
+    `;
+
+    const estadoExpression = `
+      CASE
+        WHEN (
+          (${consumoMensalExpression} > 0 AND ${quantidadeExpression} <= 0)
+          OR (${estoqueSegurancaExpression} > 0 AND ${quantidadeExpression} < ${estoqueSegurancaExpression})
+          OR (${consumoMensalExpression} > 0 AND ${diasCoberturaBrutoExpression} <= 7)
+        ) THEN 'CRITICO'
+        WHEN (
+          (${estoqueSegurancaExpression} > 0 AND ${quantidadeExpression} = ${estoqueSegurancaExpression})
+          OR (${consumoMensalExpression} > 0 AND ${diasCoberturaBrutoExpression} <= 15)
+        ) THEN 'ATENCAO'
+        WHEN (
+          ${consumoMensalExpression} > 0 AND ${diasCoberturaBrutoExpression} <= 30
+        ) THEN 'OBSERVAR'
+        ELSE 'NORMAL'
+      END
+    `;
+
+    const prioridadeExpression = `
+      CASE
+        WHEN (
+          (${consumoMensalExpression} > 0 AND ${quantidadeExpression} <= 0)
+          OR (${estoqueSegurancaExpression} > 0 AND ${quantidadeExpression} < ${estoqueSegurancaExpression})
+          OR (${consumoMensalExpression} > 0 AND ${diasCoberturaBrutoExpression} <= 7)
+        ) THEN 1
+        WHEN (
+          (${estoqueSegurancaExpression} > 0 AND ${quantidadeExpression} = ${estoqueSegurancaExpression})
+          OR (${consumoMensalExpression} > 0 AND ${diasCoberturaBrutoExpression} <= 15)
+        ) THEN 2
+        WHEN (
+          ${consumoMensalExpression} > 0 AND ${diasCoberturaBrutoExpression} <= 30
+        ) THEN 3
+        ELSE 4
+      END
+    `;
+
+    return {
+      quantidadeExpression,
+      estoqueSegurancaExpression,
+      consumoMensalExpression,
+      diasCoberturaExpression,
+      dataPrevistaRupturaExpression,
+      estadoExpression,
+      prioridadeExpression
+    };
   }
 
   // Lista os estoques ativos para popular filtros e selects.
@@ -114,6 +196,11 @@ class EstoqueModel {
       values.push(filters.classificacao);
     }
 
+    if (filters.fornecedor) {
+      conditions.push("COALESCE(fs.fornecedores_nomes, f.nome, '') LIKE ?");
+      values.push(`%${filters.fornecedor}%`);
+    }
+
     if (filters.q) {
       conditions.push(`
         (
@@ -145,13 +232,130 @@ class EstoqueModel {
           p.estoque_seguranca,
           p.consumo_mensal,
           p.id_maquina,
-          COALESCE(m.nome, '-') AS maquina_nome
+          COALESCE(m.nome, '-') AS maquina_nome,
+          p.id_fornecedor,
+          f.nome AS fornecedor_nome,
+          COALESCE(fs.fornecedores_nomes, f.nome, '') AS fornecedores_nomes
         FROM estoque_saldos s
         INNER JOIN estoques e ON e.id = s.id_estoque
         INNER JOIN pecas p ON p.id = s.id_peca
         LEFT JOIN maquinas m ON m.id = p.id_maquina
+        LEFT JOIN fornecedores f ON f.id = p.id_fornecedor
+        LEFT JOIN (${this.supplierSummarySubquery()}) fs ON fs.id_peca = p.id
         WHERE ${conditions.join(' AND ')}
         ORDER BY ${orderBy}
+      `,
+      values
+    );
+
+    return rows;
+  }
+
+  // Lista itens por prioridade de reposicao/producao, incluindo saldo zerado.
+  static async findPrioridades(filters = {}) {
+    const values = [];
+    const baseConditions = [
+      'e.ativo = 1',
+      "p.classificacao IN ('ITEM', 'SUBMONTAGEM')"
+    ];
+    const outerConditions = [
+      '(quantidade > 0 OR quantidade_saida_mes > 0 OR estoque_seguranca > 0)'
+    ];
+    const {
+      diasCoberturaExpression,
+      dataPrevistaRupturaExpression,
+      estadoExpression,
+      prioridadeExpression
+    } = this.buildPrioridadeExpressions();
+
+    if (filters.estoque) {
+      baseConditions.push('e.id = ?');
+      values.push(filters.estoque);
+    }
+
+    if (filters.estoque_nome) {
+      baseConditions.push('UPPER(e.nome) LIKE ?');
+      values.push(`%${String(filters.estoque_nome).trim().toUpperCase()}%`);
+    }
+
+    if (filters.codigo) {
+      outerConditions.push('codigo LIKE ?');
+      values.push(`%${filters.codigo}%`);
+    }
+
+    if (filters.descricao) {
+      outerConditions.push('descricao LIKE ?');
+      values.push(`%${filters.descricao}%`);
+    }
+
+    if (filters.classificacao) {
+      outerConditions.push('classificacao = ?');
+      values.push(filters.classificacao);
+    }
+
+    if (filters.estado) {
+      outerConditions.push('estado_necessidade = ?');
+      values.push(filters.estado);
+    }
+
+    if (filters.fornecedor) {
+      outerConditions.push("COALESCE(fornecedores_nomes, fornecedor_nome, '') LIKE ?");
+      values.push(`%${filters.fornecedor}%`);
+    }
+
+    if (filters.modo === 'prioritarios') {
+      outerConditions.push("estado_necessidade <> 'NORMAL'");
+    }
+
+    const limit = Number.isInteger(filters.limit) && filters.limit > 0
+      ? `LIMIT ${filters.limit}`
+      : '';
+
+    const [rows] = await pool.query(
+      `
+        SELECT *
+        FROM (
+          SELECT
+            e.id AS id_estoque,
+            e.nome AS estoque_nome,
+            e.descricao AS estoque_descricao,
+            p.id AS id_peca,
+            p.codigo,
+            p.descricao,
+            COALESCE(p.tipo, '-') AS tipo,
+            p.classificacao,
+            COALESCE(s.quantidade, 0) AS quantidade,
+            COALESCE(s.quantidade, 0) AS quantidade_atual,
+            p.estoque_minimo AS quantidade_pacote,
+            p.estoque_minimo,
+            p.estoque_seguranca,
+            p.id_fornecedor,
+            f.nome AS fornecedor_nome,
+            COALESCE(fs.fornecedores_nomes, f.nome, '') AS fornecedores_nomes,
+            COALESCE(p.consumo_mensal, 0) AS quantidade_saida_mes,
+            p.consumo_mensal,
+            ${diasCoberturaExpression} AS dias_cobertura,
+            ${dataPrevistaRupturaExpression} AS data_prevista_ruptura,
+            ${estadoExpression} AS estado_necessidade,
+            ${prioridadeExpression} AS prioridade_necessidade
+          FROM estoques e
+          CROSS JOIN pecas p
+          LEFT JOIN estoque_saldos s
+            ON s.id_estoque = e.id
+            AND s.id_peca = p.id
+          LEFT JOIN fornecedores f ON f.id = p.id_fornecedor
+          LEFT JOIN (${this.supplierSummarySubquery()}) fs ON fs.id_peca = p.id
+          WHERE ${baseConditions.join(' AND ')}
+        ) prioridades
+        WHERE ${outerConditions.join(' AND ')}
+        ORDER BY
+          prioridade_necessidade ASC,
+          CASE WHEN data_prevista_ruptura IS NULL THEN 1 ELSE 0 END ASC,
+          data_prevista_ruptura ASC,
+          quantidade ASC,
+          quantidade_saida_mes DESC,
+          codigo ASC
+        ${limit}
       `,
       values
     );
@@ -179,11 +383,16 @@ class EstoqueModel {
           p.estoque_seguranca,
           p.consumo_mensal,
           p.id_maquina,
-          COALESCE(m.nome, '-') AS maquina_nome
+          COALESCE(m.nome, '-') AS maquina_nome,
+          p.id_fornecedor,
+          f.nome AS fornecedor_nome,
+          COALESCE(fs.fornecedores_nomes, f.nome, '') AS fornecedores_nomes
         FROM estoque_saldos s
         INNER JOIN estoques e ON e.id = s.id_estoque
         INNER JOIN pecas p ON p.id = s.id_peca
         LEFT JOIN maquinas m ON m.id = p.id_maquina
+        LEFT JOIN fornecedores f ON f.id = p.id_fornecedor
+        LEFT JOIN (${this.supplierSummarySubquery()}) fs ON fs.id_peca = p.id
         WHERE s.id = ?
       `,
       [id]

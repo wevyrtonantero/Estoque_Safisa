@@ -43,17 +43,31 @@
 
     <section class="sector-shell">
       <aside class="sector-menu">
-        <section class="content-card sector-menu-card">
-          <span class="section-pill">Menu do Setor</span>
+        <details class="sector-menu-card">
+          <summary class="sector-menu-summary">
+            <div class="sector-menu-heading">
+              <span class="section-pill">Almox</span>
+              <strong>Menu</strong>
+            </div>
+            <span class="sector-menu-trigger" aria-hidden="true">...</span>
+          </summary>
 
-          <div class="sector-menu-list">
-            <button id="almox-btn-pedidos" class="btn btn-primary" type="button"><span class="btn-label">Solicitacoes Recebidas</span><span id="almox-badge-pedidos" class="btn-badge hidden">0</span></button>
-            <button id="almox-btn-tratamento" class="btn btn-neutral" type="button"><span class="btn-label">Entrada do Tratamento Externo</span><span id="almox-badge-tratamento" class="btn-badge hidden">0</span></button>
-            <button id="almox-btn-mp" class="btn btn-secondary" type="button"><span class="btn-label">Entrada de Materia-prima</span></button>
-            <button id="almox-btn-historico" class="btn btn-neutral" type="button"><span class="btn-label">Historico de Movimentacoes</span></button>
-            <button id="almox-btn-producao" class="btn btn-secondary" type="button"><span class="btn-label">Ver Producao</span><span id="almox-badge-producao" class="btn-badge hidden">0</span></button>
+          <div class="sector-menu-panel">
+            <div class="sector-menu-panel-head">
+              <span class="section-pill">Almoxarifado</span>
+              <strong>Acoes rapidas</strong>
+              <small>Solicitacoes, entradas e visao completa do estoque.</small>
+            </div>
+
+            <div class="sector-menu-list">
+              <button id="almox-btn-pedidos" class="btn btn-primary" type="button"><span class="btn-label">Solicitacoes Recebidas</span><span id="almox-badge-pedidos" class="btn-badge hidden">0</span></button>
+              <button id="almox-btn-tratamento" class="btn btn-neutral" type="button"><span class="btn-label">Entrada do Tratamento Externo</span><span id="almox-badge-tratamento" class="btn-badge hidden">0</span></button>
+              <button id="almox-btn-mp" class="btn btn-secondary" type="button"><span class="btn-label">Entrada de Materia-prima</span></button>
+              <button id="almox-btn-historico" class="btn btn-neutral" type="button"><span class="btn-label">Historico de Movimentacoes</span></button>
+              <button id="almox-btn-producao" class="btn btn-secondary" type="button"><span class="btn-label">Ver Producao</span><span id="almox-badge-producao" class="btn-badge hidden">0</span></button>
+            </div>
           </div>
-        </section>
+        </details>
       </aside>
 
       <div class="sector-content">
@@ -87,6 +101,18 @@
             </div>
 
             <div class="field">
+              <label for="almox-filtro-estado">Estado</label>
+              <select id="almox-filtro-estado">
+                <option value="">Todos</option>
+                <option value="PRIORITARIOS">Somente prioridades</option>
+                <option value="CRITICO">Critico</option>
+                <option value="ATENCAO">Atencao</option>
+                <option value="OBSERVAR">Observar</option>
+                <option value="NORMAL">Normal</option>
+              </select>
+            </div>
+
+            <div class="field">
               <label for="almox-filtro-quantidade">Quantidade em estoque</label>
               <select id="almox-filtro-quantidade">
                 <option value="">Padrao</option>
@@ -111,13 +137,14 @@
                   <th>Tipo</th>
                   <th>Classificacao</th>
                   <th>Quantidade</th>
-                  <th>Alerta</th>
-                  <th>Cobertura</th>
+                  <th>Sai no mes</th>
+                  <th>Vai durar ate</th>
+                  <th>Estado</th>
                 </tr>
               </thead>
               <tbody id="almox-estoque-tbody">
                 <tr>
-                  <td colspan="7" class="empty-state">Carregando estoque...</td>
+                  <td colspan="8" class="empty-state">Carregando estoque...</td>
                 </tr>
               </tbody>
             </table>
@@ -463,6 +490,7 @@
     </div>
   </div>
 
+  <script src="/js/sector-menu.js"></script>
   <script src="/js/dashboard.js"></script>
 </body>
 </html>

@@ -142,6 +142,18 @@
         </div>
 
         <div class="field">
+          <label for="filtro-estado-estoque">Estado</label>
+          <select id="filtro-estado-estoque">
+            <option value="">Todos</option>
+            <option value="PRIORITARIOS">Somente prioridades</option>
+            <option value="CRITICO">Critico</option>
+            <option value="ATENCAO">Atencao</option>
+            <option value="OBSERVAR">Observar</option>
+            <option value="NORMAL">Normal</option>
+          </select>
+        </div>
+
+        <div class="field">
           <label for="filtro-ordem-quantidade">Ordenar quantidade</label>
           <select id="filtro-ordem-quantidade">
             <option value="">Padrao</option>
@@ -169,14 +181,15 @@
               <th>Classificacao</th>
               <th>Maquina</th>
               <th>Quantidade</th>
-              <th>Alerta Almox</th>
-              <th>Cobertura</th>
+              <th>Sai no mes</th>
+              <th>Vai durar ate</th>
+              <th>Estado</th>
               <th>Acoes</th>
             </tr>
           </thead>
           <tbody id="estoque-saldos-tbody">
             <tr>
-              <td colspan="10" class="empty-state">Carregando saldos de estoque...</td>
+              <td colspan="11" class="empty-state">Carregando saldos de estoque...</td>
             </tr>
           </tbody>
         </table>

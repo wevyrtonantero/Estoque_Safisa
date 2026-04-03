@@ -216,24 +216,127 @@ textarea {
 
 .sector-shell {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 18px;
   align-items: start;
 }
 
 .sector-menu {
-  position: sticky;
-  top: 18px;
+  display: flex;
+  justify-content: flex-end;
+  position: static;
 }
 
 .sector-menu-card {
-  padding: 18px;
+  position: relative;
+  width: auto;
+  max-width: 100%;
+  padding: 0;
+  overflow: visible;
+  border-radius: 999px;
+  box-shadow: none;
+  background: transparent;
 }
 
-.sector-menu-copy {
-  margin: 0 0 16px;
+.sector-menu-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: fit-content;
+  margin-left: auto;
+  padding: 8px 10px 8px 12px;
+  border: 1px solid rgba(211, 223, 235, 0.92);
+  border-radius: 999px;
+  cursor: pointer;
+  list-style: none;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow-sm);
+  transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition);
+}
+
+.sector-menu-summary::-webkit-details-marker {
+  display: none;
+}
+
+.sector-menu-summary:hover {
+  transform: translateY(-1px);
+  border-color: rgba(148, 173, 198, 0.92);
+  box-shadow: 0 16px 26px rgba(10, 35, 64, 0.1);
+}
+
+.sector-menu-card[open] .sector-menu-summary {
+  border-color: rgba(46, 116, 181, 0.24);
+  box-shadow: 0 18px 30px rgba(10, 35, 64, 0.12);
+}
+
+.sector-menu-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.sector-menu-heading strong {
+  color: var(--primary-900);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.sector-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  color: var(--primary-900);
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  background: rgba(18, 66, 118, 0.08);
+  transition: background var(--transition), color var(--transition), transform var(--transition);
+}
+
+.sector-menu-card[open] .sector-menu-trigger {
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--primary-700), var(--primary-900));
+  transform: scale(1.02);
+}
+
+.sector-menu-panel {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(340px, calc(100vw - 28px));
+  padding: 16px;
+  border: 1px solid rgba(211, 223, 235, 0.96);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 24px 40px rgba(10, 35, 64, 0.16);
+}
+
+.sector-menu-panel-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px 2px 6px;
+}
+
+.sector-menu-panel-head strong {
+  color: var(--primary-900);
+  font-size: 0.98rem;
+}
+
+.sector-menu-panel-head small {
   color: var(--text-soft);
-  line-height: 1.55;
+  font-size: 0.83rem;
 }
 
 .sector-menu-list {
@@ -244,6 +347,8 @@ textarea {
 
 .sector-menu-list .btn {
   width: 100%;
+  min-width: 0;
+  flex: 1 1 auto;
   justify-content: space-between;
   gap: 12px;
   text-align: left;
@@ -279,6 +384,8 @@ textarea {
 }
 
 .sector-content {
+  display: grid;
+  gap: 18px;
   min-width: 0;
 }
 
@@ -1235,6 +1342,33 @@ tbody tr:hover {
 
   .sector-menu {
     position: static;
+  }
+
+  .sector-menu-card {
+    width: 100%;
+    border-radius: 24px;
+  }
+
+  .sector-menu-panel {
+    width: 100%;
+    right: auto;
+    left: 0;
+  }
+
+  .sector-menu-summary {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .sector-menu-heading {
+    flex: 1;
+    justify-content: space-between;
+  }
+
+  .sector-menu-list .btn {
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 auto;
   }
 
   .toolbar-form {

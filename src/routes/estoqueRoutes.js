@@ -14,6 +14,9 @@ router.get('/estoque/itens', EstoqueController.getItems);
 // Rota para listar os saldos com filtros dinamicos.
 router.get('/estoque/saldos', EstoqueController.getSaldos);
 
+// Rota para listar prioridades de reposicao/producao por estoque.
+router.get('/estoque/prioridades', EstoqueController.getPrioridades);
+
 // Rota opcional para buscar um saldo especifico.
 router.get('/estoque/saldos/:id', EstoqueController.getSaldoById);
 

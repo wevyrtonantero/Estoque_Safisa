@@ -109,8 +109,13 @@ class EstoqueMateriaPrimaModel {
   }
 
   static async findSaldos(filters = {}) {
-    const conditions = ['COALESCE(s.quantidade, 0) > 0'];
+    const includeZeroBySearch = Boolean(filters.codigo || filters.nome);
+    const conditions = [];
     const values = [];
+
+    if (!includeZeroBySearch) {
+      conditions.push('COALESCE(s.quantidade, 0) > 0');
+    }
 
     if (filters.codigo) {
       conditions.push('mp.codigo LIKE ?');
@@ -162,7 +167,7 @@ class EstoqueMateriaPrimaModel {
         LEFT JOIN estoque_materias_primas_saldos s ON s.id_materia_prima = mp.id
         LEFT JOIN fornecedores fp ON fp.id = mp.id_fornecedor_principal
         LEFT JOIN (${this.supplierSummarySubquery()}) fs ON fs.id_materia_prima = mp.id
-        WHERE ${conditions.join(' AND ')}
+        WHERE ${conditions.length > 0 ? conditions.join(' AND ') : '1 = 1'}
         ORDER BY mp.codigo ASC
       `,
       values

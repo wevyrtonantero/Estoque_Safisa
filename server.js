@@ -20,11 +20,35 @@ const { testConnection } = require('./database/connection');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const NO_CACHE_HEADERS = {
+  'Cache-Control': 'no-store, no-cache, must-revalidate, private',
+  Pragma: 'no-cache',
+  Expires: '0'
+};
+
+app.disable('etag');
+
+function sendView(res, fileName) {
+  res.sendFile(path.join(__dirname, 'views', fileName), {
+    headers: NO_CACHE_HEADERS
+  });
+}
 
 // Middleware para JSON, formularios simples e arquivos publicos.
+app.use((req, res, next) => {
+  Object.entries(NO_CACHE_HEADERS).forEach(([key, value]) => res.set(key, value));
+  next();
+});
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+  etag: false,
+  lastModified: false,
+  maxAge: 0,
+  setHeaders(res) {
+    Object.entries(NO_CACHE_HEADERS).forEach(([key, value]) => res.set(key, value));
+  }
+}));
 
 // Rotas HTML das paginas administrativas.
 app.get('/', (req, res) => {
@@ -32,27 +56,27 @@ app.get('/', (req, res) => {
 });
 
 app.get('/pagina-inicial', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'portal-inicial.html'));
+  sendView(res, 'portal-inicial.html');
 });
 
 app.get('/pagina-acesso', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'portal-acesso.html'));
+  sendView(res, 'portal-acesso.html');
 });
 
 app.get('/pagina-operacao', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'portal-operacao.html'));
+  sendView(res, 'portal-operacao.html');
 });
 
 app.get('/pagina-adm', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'portal-adm.html'));
+  sendView(res, 'portal-adm.html');
 });
 
 app.get('/pagina-pecas', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'pecas.html'));
+  sendView(res, 'pecas.html');
 });
 
 app.get('/pagina-dashboard', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'dashboard-executivo.html'));
+  sendView(res, 'dashboard-executivo.html');
 });
 
 app.get('/pagina-diretoria', (req, res) => {
@@ -60,7 +84,7 @@ app.get('/pagina-diretoria', (req, res) => {
 });
 
 app.get('/pagina-almoxarifado', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'dashboard.html'));
+  sendView(res, 'dashboard.html');
 });
 
 app.get('/pagina-relatorios', (req, res) => {
@@ -68,51 +92,51 @@ app.get('/pagina-relatorios', (req, res) => {
 });
 
 app.get('/pagina-simulacao-montagem', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'simulacao-montagem.html'));
+  sendView(res, 'simulacao-montagem.html');
 });
 
 app.get('/pagina-montagem', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'montagem.html'));
+  sendView(res, 'montagem.html');
 });
 
 app.get('/pagina-expedicao', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'expedicao.html'));
+  sendView(res, 'expedicao.html');
 });
 
 app.get('/pagina-submontagens', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'submontagens.html'));
+  sendView(res, 'submontagens.html');
 });
 
 app.get('/pagina-fornecedores', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'fornecedores.html'));
+  sendView(res, 'fornecedores.html');
 });
 
 app.get('/pagina-maquinas', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'maquinas.html'));
+  sendView(res, 'maquinas.html');
 });
 
 app.get('/pagina-materias-primas', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'materias-primas.html'));
+  sendView(res, 'materias-primas.html');
 });
 
 app.get('/pagina-estoque', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'estoque.html'));
+  sendView(res, 'estoque.html');
 });
 
 app.get('/pagina-producao', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'producao.html'));
+  sendView(res, 'producao.html');
 });
 
 app.get('/pagina-estoque-materias-primas', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'estoque-materias-primas.html'));
+  sendView(res, 'estoque-materias-primas.html');
 });
 
 app.get('/pagina-tratamento-externo', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'tratamento-externo.html'));
+  sendView(res, 'tratamento-externo.html');
 });
 
 app.get('/pagina-remessas-terceiros', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'remessas-terceiros.html'));
+  sendView(res, 'remessas-terceiros.html');
 });
 
 // Rotas REST dos modulos administrativos.
