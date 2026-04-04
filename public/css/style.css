@@ -404,6 +404,14 @@ textarea {
   box-shadow: var(--shadow-md);
 }
 
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .topbar-main {
   display: flex;
   align-items: center;
@@ -433,6 +441,60 @@ textarea {
   color: var(--text-soft);
   font-size: 0.96rem;
   line-height: 1.55;
+}
+
+.session-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  padding: 8px 12px;
+  border: 1px solid rgba(169, 215, 184, 0.72);
+  border-radius: 999px;
+  color: var(--primary-900);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(12px);
+}
+
+.session-indicator-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #2cb86f;
+  box-shadow: 0 0 0 4px rgba(44, 184, 111, 0.14);
+  flex-shrink: 0;
+}
+
+.session-indicator-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.session-indicator-label {
+  color: var(--text-soft);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1.1;
+}
+
+.session-indicator-name {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.session-indicator-role {
+  color: var(--text-soft);
+  font-size: 0.76rem;
+  line-height: 1.2;
 }
 
 .summary-row {
@@ -1483,6 +1545,13 @@ tbody tr:hover {
   z-index: 1;
 }
 
+.portal-shell .session-indicator {
+  position: absolute;
+  top: 18px;
+  right: 0;
+  z-index: 2;
+}
+
 .portal-shell-hero {
   align-items: center;
   text-align: center;
@@ -1501,6 +1570,7 @@ tbody tr:hover {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  padding-right: 220px;
 }
 
 .portal-hero-card,
@@ -1678,6 +1748,7 @@ tbody tr:hover {
 .portal-actions {
   display: flex;
   justify-content: center;
+  gap: 12px;
 }
 
 .portal-actions .btn-neutral {
@@ -1691,6 +1762,42 @@ tbody tr:hover {
   background: linear-gradient(180deg, rgba(18, 43, 76, 0.94), rgba(10, 28, 52, 0.96));
   border-color: rgba(210, 228, 247, 0.36);
   box-shadow: 0 18px 28px rgba(4, 12, 23, 0.24);
+}
+
+@media (max-width: 860px) {
+  .portal-shell .session-indicator {
+    position: static;
+    align-self: flex-end;
+    margin-bottom: 8px;
+  }
+
+  .portal-header {
+    padding-right: 0;
+  }
+}
+
+.portal-auth-card {
+  width: min(540px, 100%);
+}
+
+.portal-auth-form {
+  width: 100%;
+  margin-top: 6px;
+}
+
+.portal-auth-form .message {
+  margin-bottom: 0;
+}
+
+.portal-auth-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.portal-auth-actions .btn {
+  min-width: 140px;
 }
 
 @keyframes portalButtonPulse {

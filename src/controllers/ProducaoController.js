@@ -1,4 +1,5 @@
 const ProducaoModel = require('../models/ProducaoModel');
+const { recordAuditLog } = require('../audit/auditLogger');
 
 function normalizeOptionalInteger(value) {
   if (value === undefined || value === null || value === '') {
@@ -140,6 +141,14 @@ const ProducaoController = {
       }
 
       const producao = await ProducaoModel.create(payload);
+      await recordAuditLog(req, {
+        modulo: 'PRODUCAO',
+        acao: 'CREATE',
+        entidade_tipo: 'ORDEM_PRODUCAO',
+        entidade_id: producao.id,
+        descricao: `Ordem de producao ${producao.id} iniciada.`,
+        depois: producao
+      });
       return res.status(201).json(producao);
     } catch (error) {
       const response = extractErrorResponse(error, 'Erro ao iniciar producao.');
@@ -156,7 +165,17 @@ const ProducaoController = {
         return res.status(400).json({ message: 'Dados invalidos.', errors });
       }
 
+      const producaoAnterior = await ProducaoModel.findById(req.params.id);
       const producao = await ProducaoModel.finish(req.params.id, payload);
+      await recordAuditLog(req, {
+        modulo: 'PRODUCAO',
+        acao: 'FINALIZAR',
+        entidade_tipo: 'ORDEM_PRODUCAO',
+        entidade_id: producao.id,
+        descricao: `Ordem de producao ${producao.id} finalizada.`,
+        antes: producaoAnterior,
+        depois: producao
+      });
       return res.status(200).json(producao);
     } catch (error) {
       const response = extractErrorResponse(error, 'Erro ao finalizar producao.');
@@ -166,7 +185,19 @@ const ProducaoController = {
 
   async delete(req, res) {
     try {
+      const producaoAnterior = await ProducaoModel.findById(req.params.id);
       const producao = await ProducaoModel.delete(req.params.id);
+      await recordAuditLog(req, {
+        modulo: 'PRODUCAO',
+        acao: 'DELETE',
+        entidade_tipo: 'ORDEM_PRODUCAO',
+        entidade_id: producaoAnterior?.id ?? req.params.id,
+        descricao: producaoAnterior
+          ? `Ordem de producao ${producaoAnterior.id} excluida.`
+          : 'Ordem de producao excluida.',
+        antes: producaoAnterior,
+        depois: producao
+      });
       return res.status(200).json(producao);
     } catch (error) {
       const response = extractErrorResponse(error, 'Erro ao excluir producao.');

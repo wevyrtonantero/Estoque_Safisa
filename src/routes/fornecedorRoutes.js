@@ -2,25 +2,27 @@
 const express = require('express');
 
 const FornecedorController = require('../controllers/FornecedorController');
+const { requireApiRoles } = require('../middleware/authMiddleware');
+const { ADMIN_READ_ROLES, ADMIN_WRITE_ROLES, ADMIN_DELETE_ROLES } = require('../security/roles');
 
 const router = express.Router();
 
 // Rota para listar fornecedores.
-router.get('/fornecedores', FornecedorController.getAll);
+router.get('/fornecedores', requireApiRoles(ADMIN_READ_ROLES), FornecedorController.getAll);
 
 // Rota para autocomplete de fornecedores.
-router.get('/fornecedores-autocomplete', FornecedorController.getAutocomplete);
+router.get('/fornecedores-autocomplete', requireApiRoles(ADMIN_READ_ROLES), FornecedorController.getAutocomplete);
 
 // Rota para buscar um fornecedor por ID.
-router.get('/fornecedores/:id', FornecedorController.getById);
+router.get('/fornecedores/:id', requireApiRoles(ADMIN_READ_ROLES), FornecedorController.getById);
 
 // Rota para cadastrar fornecedor.
-router.post('/fornecedores', FornecedorController.create);
+router.post('/fornecedores', requireApiRoles(ADMIN_WRITE_ROLES), FornecedorController.create);
 
 // Rota para atualizar fornecedor.
-router.put('/fornecedores/:id', FornecedorController.update);
+router.put('/fornecedores/:id', requireApiRoles(ADMIN_WRITE_ROLES), FornecedorController.update);
 
 // Rota para excluir fornecedor.
-router.delete('/fornecedores/:id', FornecedorController.delete);
+router.delete('/fornecedores/:id', requireApiRoles(ADMIN_DELETE_ROLES), FornecedorController.delete);
 
 module.exports = router;

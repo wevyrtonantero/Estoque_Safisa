@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="/img/icon-safisa.ico" type="image/x-icon">
+  <title>SAFISA | Login</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="portal-page">
+  <main class="portal-shell portal-shell-hero">
+    <div class="portal-stage">
+      <section class="portal-hero-card portal-auth-card">
+        <p class="portal-kicker">Acesso protegido</p>
+        <h1 class="portal-title">Entrar no sistema</h1>
+        <p class="portal-subtitle">Informe seu login e sua senha para acessar os modulos da SAFISA com as permissoes do seu usuario.</p>
+
+        <div id="login-message" class="message hidden"></div>
+
+        <form id="login-form" class="form-grid portal-auth-form">
+          <input id="login-next" type="hidden" value="/pagina-acesso">
+
+          <div class="field span-12">
+            <label for="login-username">Login</label>
+            <input id="login-username" type="text" autocomplete="username" placeholder="Digite seu login" required>
+          </div>
+
+          <div class="field span-12">
+            <label for="login-password">Senha</label>
+            <input id="login-password" type="password" autocomplete="current-password" placeholder="Digite sua senha" required>
+          </div>
+
+          <div class="span-12 portal-auth-actions">
+            <a class="btn btn-neutral" href="/pagina-inicial">Voltar</a>
+            <button id="login-submit" class="btn btn-primary" type="submit">Entrar</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  </main>
+
+  <script src="/js/login.js"></script>
+</body>
+</html>

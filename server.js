@@ -1,6 +1,8 @@
 // Servidor principal do modulo administrativo SAFISA.
 const express = require('express');
 const path = require('path');
+const crypto = require('crypto');
+const session = require('express-session');
 
 const pecaRoutes = require('./src/routes/pecaRoutes');
 const submontagemRoutes = require('./src/routes/submontagemRoutes');
@@ -16,11 +18,20 @@ const tratamentoExternoRoutes = require('./src/routes/tratamentoExternoRoutes');
 const solicitacaoEstoqueRoutes = require('./src/routes/solicitacaoEstoqueRoutes');
 const solicitacaoProducaoRoutes = require('./src/routes/solicitacaoProducaoRoutes');
 const painelRoutes = require('./src/routes/painelRoutes');
+const usuarioRoutes = require('./src/routes/usuarioRoutes');
+const auditLogRoutes = require('./src/routes/auditLogRoutes');
+const authRoutes = require('./src/routes/authRoutes');
+const AuthController = require('./src/controllers/AuthController');
+const UsuarioModel = require('./src/models/UsuarioModel');
+const AuditLogModel = require('./src/models/AuditLogModel');
+const { attachAuthContext, requirePageRoles } = require('./src/middleware/authMiddleware');
+const { ALL_ROLES, ADMIN_READ_ROLES, OPERATION_READ_ROLES, SUPERADMIN_ONLY_ROLES } = require('./src/security/roles');
 const { testConnection } = require('./database/connection');
 const { appConfig } = require('./database/config');
 
 const app = express();
 const PORT = appConfig.port;
+const SESSION_SECRET = appConfig.sessionSecret || crypto.randomBytes(32).toString('hex');
 const NO_CACHE_HEADERS = {
   'Cache-Control': 'no-store, no-cache, must-revalidate, private',
   Pragma: 'no-cache',
@@ -42,6 +53,19 @@ app.use((req, res, next) => {
 });
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(session({
+  name: appConfig.sessionCookieName,
+  secret: SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  rolling: true,
+  cookie: {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: false,
+    maxAge: 1000 * 60 * 60 * 12
+  }
+}));
 app.use(express.static(path.join(__dirname, 'public'), {
   etag: false,
   lastModified: false,
@@ -50,8 +74,9 @@ app.use(express.static(path.join(__dirname, 'public'), {
     Object.entries(NO_CACHE_HEADERS).forEach(([key, value]) => res.set(key, value));
   }
 }));
+app.use(attachAuthContext);
 
-// Rotas HTML das paginas administrativas.
+// Rotas HTML das paginas do sistema.
 app.get('/', (req, res) => {
   res.redirect('/pagina-inicial');
 });
@@ -60,87 +85,107 @@ app.get('/pagina-inicial', (req, res) => {
   sendView(res, 'portal-inicial.html');
 });
 
-app.get('/pagina-acesso', (req, res) => {
+app.get('/pagina-login', (req, res) => {
+  if (!req.authEnabled || req.currentUser) {
+    res.redirect('/pagina-acesso');
+    return;
+  }
+
+  sendView(res, 'login.html');
+});
+
+app.get('/sair', AuthController.logoutRedirect);
+
+app.get('/pagina-acesso', requirePageRoles(ALL_ROLES), (req, res) => {
   sendView(res, 'portal-acesso.html');
 });
 
-app.get('/pagina-operacao', (req, res) => {
+app.get('/pagina-operacao', requirePageRoles(OPERATION_READ_ROLES), (req, res) => {
   sendView(res, 'portal-operacao.html');
 });
 
-app.get('/pagina-adm', (req, res) => {
+app.get('/pagina-adm', requirePageRoles(ADMIN_READ_ROLES), (req, res) => {
   sendView(res, 'portal-adm.html');
 });
 
-app.get('/pagina-pecas', (req, res) => {
+app.get('/pagina-pecas', requirePageRoles(ADMIN_READ_ROLES), (req, res) => {
   sendView(res, 'pecas.html');
 });
 
-app.get('/pagina-dashboard', (req, res) => {
+app.get('/pagina-dashboard', requirePageRoles(ADMIN_READ_ROLES), (req, res) => {
   sendView(res, 'dashboard-executivo.html');
 });
 
-app.get('/pagina-diretoria', (req, res) => {
+app.get('/pagina-auditoria', requirePageRoles(ADMIN_READ_ROLES), (req, res) => {
+  sendView(res, 'auditoria.html');
+});
+
+app.get('/pagina-diretoria', requirePageRoles(ADMIN_READ_ROLES), (req, res) => {
   res.redirect('/pagina-dashboard');
 });
 
-app.get('/pagina-almoxarifado', (req, res) => {
+app.get('/pagina-almoxarifado', requirePageRoles(OPERATION_READ_ROLES), (req, res) => {
   sendView(res, 'dashboard.html');
 });
 
-app.get('/pagina-relatorios', (req, res) => {
+app.get('/pagina-relatorios', requirePageRoles(ADMIN_READ_ROLES), (req, res) => {
   res.redirect('/pagina-dashboard');
 });
 
-app.get('/pagina-simulacao-montagem', (req, res) => {
+app.get('/pagina-simulacao-montagem', requirePageRoles(OPERATION_READ_ROLES), (req, res) => {
   sendView(res, 'simulacao-montagem.html');
 });
 
-app.get('/pagina-montagem', (req, res) => {
+app.get('/pagina-montagem', requirePageRoles(OPERATION_READ_ROLES), (req, res) => {
   sendView(res, 'montagem.html');
 });
 
-app.get('/pagina-expedicao', (req, res) => {
+app.get('/pagina-expedicao', requirePageRoles(OPERATION_READ_ROLES), (req, res) => {
   sendView(res, 'expedicao.html');
 });
 
-app.get('/pagina-submontagens', (req, res) => {
+app.get('/pagina-submontagens', requirePageRoles(ADMIN_READ_ROLES), (req, res) => {
   sendView(res, 'submontagens.html');
 });
 
-app.get('/pagina-fornecedores', (req, res) => {
+app.get('/pagina-fornecedores', requirePageRoles(ADMIN_READ_ROLES), (req, res) => {
   sendView(res, 'fornecedores.html');
 });
 
-app.get('/pagina-maquinas', (req, res) => {
+app.get('/pagina-maquinas', requirePageRoles(ADMIN_READ_ROLES), (req, res) => {
   sendView(res, 'maquinas.html');
 });
 
-app.get('/pagina-materias-primas', (req, res) => {
+app.get('/pagina-usuarios', requirePageRoles(SUPERADMIN_ONLY_ROLES), (req, res) => {
+  sendView(res, 'usuarios.html');
+});
+
+app.get('/pagina-materias-primas', requirePageRoles(ADMIN_READ_ROLES), (req, res) => {
   sendView(res, 'materias-primas.html');
 });
 
-app.get('/pagina-estoque', (req, res) => {
+app.get('/pagina-estoque', requirePageRoles(ADMIN_READ_ROLES), (req, res) => {
   sendView(res, 'estoque.html');
 });
 
-app.get('/pagina-producao', (req, res) => {
+app.get('/pagina-producao', requirePageRoles(OPERATION_READ_ROLES), (req, res) => {
   sendView(res, 'producao.html');
 });
 
-app.get('/pagina-estoque-materias-primas', (req, res) => {
+app.get('/pagina-estoque-materias-primas', requirePageRoles(ADMIN_READ_ROLES), (req, res) => {
   sendView(res, 'estoque-materias-primas.html');
 });
 
-app.get('/pagina-tratamento-externo', (req, res) => {
+app.get('/pagina-tratamento-externo', requirePageRoles(OPERATION_READ_ROLES), (req, res) => {
   sendView(res, 'tratamento-externo.html');
 });
 
-app.get('/pagina-remessas-terceiros', (req, res) => {
+app.get('/pagina-remessas-terceiros', requirePageRoles(ADMIN_READ_ROLES), (req, res) => {
   sendView(res, 'remessas-terceiros.html');
 });
 
-// Rotas REST dos modulos administrativos.
+// Rotas REST do sistema.
+app.use('/api', authRoutes);
 app.use('/api', pecaRoutes);
 app.use('/api', submontagemRoutes);
 app.use('/api', cadastroApoioRoutes);
@@ -155,6 +200,8 @@ app.use('/api', tratamentoExternoRoutes);
 app.use('/api', solicitacaoEstoqueRoutes);
 app.use('/api', solicitacaoProducaoRoutes);
 app.use('/api', painelRoutes);
+app.use('/api', usuarioRoutes);
+app.use('/api', auditLogRoutes);
 
 // Resposta padrao para qualquer rota nao mapeada.
 app.use((req, res) => {
@@ -172,6 +219,8 @@ app.listen(PORT, async () => {
 
   try {
     await testConnection();
+    await UsuarioModel.ensureSchema();
+    await AuditLogModel.ensureSchema();
   } catch (error) {
     console.error('Nao foi possivel validar a conexao com o MySQL:', error.message);
   }

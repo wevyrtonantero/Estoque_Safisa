@@ -1,4 +1,5 @@
 const TerceirizacaoRemessaModel = require('../models/TerceirizacaoRemessaModel');
+const { recordAuditLog } = require('../audit/auditLogger');
 
 function normalizeOptionalInteger(value) {
   if (value === undefined || value === null || value === '') {
@@ -150,6 +151,17 @@ const TerceirizacaoRemessaController = {
       }
 
       const result = await TerceirizacaoRemessaModel.createOrAppendDispatch(payload);
+      await recordAuditLog(req, {
+        modulo: 'TERCEIRIZACAO',
+        acao: 'ENCAMINHAR',
+        entidade_tipo: 'REMESSA',
+        entidade_id: result?.remessa?.id ?? null,
+        descricao: `Peca encaminhada para terceiro na remessa ${result?.remessa?.id ?? '-'}.`,
+        depois: {
+          payload,
+          resultado: result
+        }
+      });
       return res.status(201).json(result);
     } catch (error) {
       const response = extractErrorResponse(error, 'Erro ao encaminhar peca para terceiro.');
@@ -159,7 +171,17 @@ const TerceirizacaoRemessaController = {
 
   async updateNf(req, res) {
     try {
+      const remessaAnterior = await TerceirizacaoRemessaModel.findById(req.params.id);
       const result = await TerceirizacaoRemessaModel.updateNf(req.params.id, buildUpdateNfPayload(req.body));
+      await recordAuditLog(req, {
+        modulo: 'TERCEIRIZACAO',
+        acao: 'ATUALIZAR_NF',
+        entidade_tipo: 'REMESSA',
+        entidade_id: req.params.id,
+        descricao: `NF da remessa ${req.params.id} atualizada.`,
+        antes: remessaAnterior,
+        depois: result
+      });
       return res.status(200).json(result);
     } catch (error) {
       const response = extractErrorResponse(error, 'Erro ao atualizar a NF da remessa.');
@@ -184,6 +206,17 @@ const TerceirizacaoRemessaController = {
       }
 
       const result = await TerceirizacaoRemessaModel.registerReturn(payload);
+      await recordAuditLog(req, {
+        modulo: 'TERCEIRIZACAO',
+        acao: 'RETORNO',
+        entidade_tipo: 'REMESSA',
+        entidade_id: payload.id_item,
+        descricao: `Retorno de terceirizacao registrado para o item ${payload.id_item}.`,
+        depois: {
+          payload,
+          resultado: result
+        }
+      });
       return res.status(200).json(result);
     } catch (error) {
       const response = extractErrorResponse(error, 'Erro ao registrar o retorno da terceirizacao.');
@@ -204,6 +237,17 @@ const TerceirizacaoRemessaController = {
       }
 
       const result = await TerceirizacaoRemessaModel.finalizePendingItem(payload);
+      await recordAuditLog(req, {
+        modulo: 'TERCEIRIZACAO',
+        acao: 'FINALIZAR_PENDENCIA',
+        entidade_tipo: 'REMESSA',
+        entidade_id: payload.id_item,
+        descricao: `Pendencia da remessa encerrada manualmente para o item ${payload.id_item}.`,
+        depois: {
+          payload,
+          resultado: result
+        }
+      });
       return res.status(200).json(result);
     } catch (error) {
       const response = extractErrorResponse(error, 'Erro ao finalizar a pendencia da remessa.');

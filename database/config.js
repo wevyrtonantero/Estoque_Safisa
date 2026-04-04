@@ -34,7 +34,9 @@ function createPoolConfig(overrides = {}) {
 
 const appConfig = {
   port: toInteger(process.env.PORT, 3000),
-  nodeEnv: process.env.NODE_ENV || 'development'
+  nodeEnv: process.env.NODE_ENV || 'development',
+  sessionSecret: String(process.env.SESSION_SECRET || '').trim(),
+  sessionCookieName: String(process.env.SESSION_COOKIE_NAME || 'safisa.sid').trim() || 'safisa.sid'
 };
 
 module.exports = {

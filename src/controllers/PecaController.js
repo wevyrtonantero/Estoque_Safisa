@@ -2,6 +2,7 @@
 const PecaModel = require('../models/PecaModel');
 const FornecedorModel = require('../models/FornecedorModel');
 const PecaFornecedorModel = require('../models/PecaFornecedorModel');
+const { recordAuditLog } = require('../audit/auditLogger');
 
 const TIPOS_VALIDOS = ['COMPRADA', 'PRODUZIDA'];
 
@@ -232,6 +233,14 @@ const PecaController = {
       const createdPeca = await PecaModel.create(payload);
       await syncSuppliers(createdPeca.id, payload.fornecedor_ids);
       const pecaAtualizada = await PecaModel.findById(createdPeca.id);
+      await recordAuditLog(req, {
+        modulo: 'PECAS',
+        acao: 'CREATE',
+        entidade_tipo: 'PECA',
+        entidade_id: pecaAtualizada.id,
+        descricao: `Peca ${pecaAtualizada.codigo} criada.`,
+        depois: pecaAtualizada
+      });
       return res.status(201).json(pecaAtualizada);
     } catch (error) {
       console.error('Erro ao criar peca:', error);
@@ -254,6 +263,7 @@ const PecaController = {
         return res.status(400).json({ message: 'Um ou mais fornecedores nao foram encontrados.' });
       }
 
+      const pecaAnterior = await PecaModel.findById(req.params.id);
       const updatedPeca = await PecaModel.update(req.params.id, payload);
 
       if (!updatedPeca) {
@@ -262,6 +272,15 @@ const PecaController = {
 
       await syncSuppliers(updatedPeca.id, payload.fornecedor_ids);
       const pecaAtualizada = await PecaModel.findById(updatedPeca.id);
+      await recordAuditLog(req, {
+        modulo: 'PECAS',
+        acao: 'UPDATE',
+        entidade_tipo: 'PECA',
+        entidade_id: pecaAtualizada.id,
+        descricao: `Peca ${pecaAtualizada.codigo} atualizada.`,
+        antes: pecaAnterior,
+        depois: pecaAtualizada
+      });
       return res.status(200).json(pecaAtualizada);
     } catch (error) {
       console.error('Erro ao atualizar peca:', error);
@@ -272,11 +291,21 @@ const PecaController = {
   // Rota para excluir pecas.
   async delete(req, res) {
     try {
+      const pecaAnterior = await PecaModel.findById(req.params.id);
       const deleted = await PecaModel.delete(req.params.id);
 
       if (!deleted) {
         return res.status(404).json({ message: 'Peca nao encontrada.' });
       }
+
+      await recordAuditLog(req, {
+        modulo: 'PECAS',
+        acao: 'DELETE',
+        entidade_tipo: 'PECA',
+        entidade_id: pecaAnterior?.id ?? req.params.id,
+        descricao: pecaAnterior ? `Peca ${pecaAnterior.codigo} excluida.` : 'Peca excluida.',
+        antes: pecaAnterior
+      });
 
       return res.status(200).json({ message: 'Peca excluida com sucesso.' });
     } catch (error) {

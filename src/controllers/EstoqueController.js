@@ -1,5 +1,6 @@
 // Controller do modulo de estoque de pecas e submontagens.
 const EstoqueModel = require('../models/EstoqueModel');
+const { recordAuditLog } = require('../audit/auditLogger');
 
 const TIPOS_VALIDOS = ['COMPRADA', 'PRODUZIDA'];
 const CLASSIFICACOES_VALIDAS = ['ITEM', 'SUBMONTAGEM'];
@@ -279,6 +280,17 @@ const EstoqueController = {
       }
 
       const result = await EstoqueModel.processEntradaInicial(payload);
+      await recordAuditLog(req, {
+        modulo: 'ESTOQUE',
+        acao: 'ENTRADA_INICIAL',
+        entidade_tipo: 'MOVIMENTACAO_ESTOQUE',
+        entidade_id: result?.movimentacao?.id ?? payload.id_peca,
+        descricao: 'Entrada inicial registrada no estoque.',
+        depois: {
+          payload,
+          resultado: result
+        }
+      });
       return res.status(201).json(result);
     } catch (error) {
       const response = extractErrorResponse(error, 'Erro ao registrar entrada inicial no estoque.');
@@ -297,6 +309,17 @@ const EstoqueController = {
       }
 
       const result = await EstoqueModel.processTransferencia(payload);
+      await recordAuditLog(req, {
+        modulo: 'ESTOQUE',
+        acao: 'TRANSFERENCIA',
+        entidade_tipo: 'MOVIMENTACAO_ESTOQUE',
+        entidade_id: result?.movimentacao?.id ?? payload.id_peca,
+        descricao: 'Transferencia registrada entre estoques.',
+        depois: {
+          payload,
+          resultado: result
+        }
+      });
       return res.status(201).json(result);
     } catch (error) {
       const response = extractErrorResponse(error, 'Erro ao transferir item entre estoques.');
@@ -315,6 +338,17 @@ const EstoqueController = {
       }
 
       const result = await EstoqueModel.processAjuste(payload);
+      await recordAuditLog(req, {
+        modulo: 'ESTOQUE',
+        acao: 'AJUSTE',
+        entidade_tipo: 'MOVIMENTACAO_ESTOQUE',
+        entidade_id: result?.movimentacao?.id ?? payload.id_peca,
+        descricao: 'Ajuste manual de estoque registrado.',
+        depois: {
+          payload,
+          resultado: result
+        }
+      });
       return res.status(201).json(result);
     } catch (error) {
       const response = extractErrorResponse(error, 'Erro ao ajustar saldo do estoque.');
@@ -333,6 +367,17 @@ const EstoqueController = {
       }
 
       const result = await EstoqueModel.processSaidaLote(payload);
+      await recordAuditLog(req, {
+        modulo: 'ESTOQUE',
+        acao: 'SAIDA',
+        entidade_tipo: 'MOVIMENTACAO_ESTOQUE',
+        entidade_id: payload.itens?.[0]?.id_peca ?? null,
+        descricao: 'Baixa de venda registrada na expedicao.',
+        depois: {
+          payload,
+          resultado: result
+        }
+      });
       return res.status(201).json(result);
     } catch (error) {
       const response = extractErrorResponse(error, 'Erro ao registrar baixa de venda na Expedição.');

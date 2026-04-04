@@ -2,6 +2,7 @@
 const MateriaPrimaModel = require('../models/MateriaPrimaModel');
 const FornecedorModel = require('../models/FornecedorModel');
 const MateriaPrimaFornecedorModel = require('../models/MateriaPrimaFornecedorModel');
+const { recordAuditLog } = require('../audit/auditLogger');
 
 const CATEGORIAS_VALIDAS = ['LAMINADO', 'FUNDIDO'];
 const GEOMETRIAS_LAMINADO = ['REDONDO', 'QUADRADO', 'SEXTAVADO', 'FITA / BOBINA'];
@@ -264,6 +265,14 @@ const MateriaPrimaController = {
       const materiaPrima = await MateriaPrimaModel.create(payload);
       await syncSuppliers(materiaPrima.id, payload.fornecedor_ids);
       const materiaPrimaAtualizada = await MateriaPrimaModel.findById(materiaPrima.id);
+      await recordAuditLog(req, {
+        modulo: 'MATERIAS_PRIMAS',
+        acao: 'CREATE',
+        entidade_tipo: 'MATERIA_PRIMA',
+        entidade_id: materiaPrimaAtualizada.id,
+        descricao: `Materia-prima ${materiaPrimaAtualizada.codigo} criada.`,
+        depois: materiaPrimaAtualizada
+      });
       return res.status(201).json(materiaPrimaAtualizada);
     } catch (error) {
       console.error('Erro ao criar materia-prima:', error);
@@ -289,6 +298,7 @@ const MateriaPrimaController = {
         return res.status(400).json({ message: 'Um ou mais fornecedores nao foram encontrados.' });
       }
 
+      const materiaPrimaAnterior = await MateriaPrimaModel.findById(req.params.id);
       const materiaPrima = await MateriaPrimaModel.update(req.params.id, payload);
 
       if (!materiaPrima) {
@@ -297,6 +307,15 @@ const MateriaPrimaController = {
 
       await syncSuppliers(materiaPrima.id, payload.fornecedor_ids);
       const materiaPrimaAtualizada = await MateriaPrimaModel.findById(materiaPrima.id);
+      await recordAuditLog(req, {
+        modulo: 'MATERIAS_PRIMAS',
+        acao: 'UPDATE',
+        entidade_tipo: 'MATERIA_PRIMA',
+        entidade_id: materiaPrimaAtualizada.id,
+        descricao: `Materia-prima ${materiaPrimaAtualizada.codigo} atualizada.`,
+        antes: materiaPrimaAnterior,
+        depois: materiaPrimaAtualizada
+      });
       return res.status(200).json(materiaPrimaAtualizada);
     } catch (error) {
       console.error('Erro ao atualizar materia-prima:', error);
@@ -310,11 +329,23 @@ const MateriaPrimaController = {
   // Rota para excluir materia-prima.
   async delete(req, res) {
     try {
+      const materiaPrimaAnterior = await MateriaPrimaModel.findById(req.params.id);
       const deleted = await MateriaPrimaModel.delete(req.params.id);
 
       if (!deleted) {
         return res.status(404).json({ message: 'Materia-prima nao encontrada.' });
       }
+
+      await recordAuditLog(req, {
+        modulo: 'MATERIAS_PRIMAS',
+        acao: 'DELETE',
+        entidade_tipo: 'MATERIA_PRIMA',
+        entidade_id: materiaPrimaAnterior?.id ?? req.params.id,
+        descricao: materiaPrimaAnterior
+          ? `Materia-prima ${materiaPrimaAnterior.codigo} excluida.`
+          : 'Materia-prima excluida.',
+        antes: materiaPrimaAnterior
+      });
 
       return res.status(200).json({ message: 'Materia-prima excluida com sucesso.' });
     } catch (error) {
