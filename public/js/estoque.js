@@ -212,7 +212,6 @@ async function carregarItens() {
     }
 
     itensCache = itens;
-    await preCarregarEstruturasSubmontagem();
   } catch (error) {
     mostrarMensagemEstoque(error.message, 'error');
   }
@@ -244,27 +243,6 @@ async function carregarComposicoesVenda() {
   } catch (error) {
     mostrarMensagemEstoque(error.message, 'error');
   }
-}
-
-async function preCarregarEstruturasSubmontagem() {
-  const submontagens = itensCache.filter((item) => item.classificacao === 'SUBMONTAGEM');
-
-  await Promise.all(submontagens.map(async (submontagem) => {
-    if (estruturasSubmontagemCache.has(submontagem.id)) {
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/submontagens/${submontagem.id}/componentes`);
-      const componentes = await response.json();
-
-      if (response.ok) {
-        estruturasSubmontagemCache.set(submontagem.id, componentes);
-      }
-    } catch (_) {
-      // Mantem a busca resiliente mesmo se alguma estrutura falhar.
-    }
-  }));
 }
 
 // Lista os saldos da tela principal com filtros dinamicos.

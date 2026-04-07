@@ -305,7 +305,6 @@ async function carregarItens() {
   }
 
   itensCache = result;
-  await preCarregarEstruturasSubmontagem();
 }
 
 async function carregarSubmontagens() {
@@ -356,27 +355,6 @@ async function carregarSubmontagensExpedicaoDisponiveis() {
   }
 
   submontagensExpedicaoCache = Array.isArray(result) ? result : [];
-}
-
-async function preCarregarEstruturasSubmontagem() {
-  const submontagens = itensCache.filter((item) => item.classificacao === 'SUBMONTAGEM');
-
-  await Promise.all(submontagens.map(async (item) => {
-    if (estruturasSubmontagemCache.has(item.id)) {
-      return;
-    }
-
-    try {
-      const response = await fetch(`/api/submontagens/${item.id}/componentes`);
-      const result = await response.json();
-
-      if (response.ok) {
-        estruturasSubmontagemCache.set(item.id, result);
-      }
-    } catch (_) {
-      // Mantem a tela resiliente se alguma estrutura falhar.
-    }
-  }));
 }
 
 async function carregarEstoqueExpedicao() {
