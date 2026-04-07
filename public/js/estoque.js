@@ -8,12 +8,14 @@ const entradaInicialApiBaseUrl = '/api/estoque/entrada-inicial';
 const transferenciaApiBaseUrl = '/api/estoque/transferencia';
 const ajusteApiBaseUrl = '/api/estoque/ajuste';
 const saidaApiBaseUrl = '/api/estoque/saida';
+const composicoesVendaApiBaseUrl = '/api/composicoes-venda';
 let estoquesCache = [];
 let itensCache = [];
 let saldosCache = [];
 let saldosOperacionaisCache = [];
 let saidaLista = [];
 let estruturasSubmontagemCache = new Map();
+let composicoesVendaCache = new Map();
 let filtroDebounceTimer = null;
 const expedicaoNomeCorreto = 'Expedi\u00e7\u00e3o';
 
@@ -43,17 +45,20 @@ const transferenciaModal = document.getElementById('transferencia-modal');
 const saidaModal = document.getElementById('saida-modal');
 const ajusteModal = document.getElementById('ajuste-modal');
 const historicoModal = document.getElementById('historico-modal');
+const desmembrarModal = document.getElementById('desmembrar-modal');
 
 const entradaMensagemBox = document.getElementById('entrada-mensagem');
 const transferenciaMensagemBox = document.getElementById('transferencia-mensagem');
 const saidaMensagemBox = document.getElementById('saida-mensagem');
 const ajusteMensagemBox = document.getElementById('ajuste-mensagem');
 const historicoMensagemBox = document.getElementById('historico-mensagem');
+const desmembrarMensagemBox = document.getElementById('desmembrar-mensagem');
 
 const entradaForm = document.getElementById('entrada-form');
 const transferenciaForm = document.getElementById('transferencia-form');
 const saidaForm = document.getElementById('saida-form');
 const ajusteForm = document.getElementById('ajuste-form');
+const desmembrarForm = document.getElementById('desmembrar-form');
 
 const btnNovaEntrada = document.getElementById('btn-nova-entrada');
 const btnNovaTransferencia = document.getElementById('btn-nova-transferencia');
@@ -80,7 +85,7 @@ const saidaItemSugestoes = document.getElementById('saida-item-sugestoes');
 
 document.addEventListener('DOMContentLoaded', async () => {
   bindEvents();
-  await Promise.all([carregarEstoques(), carregarItens()]);
+  await Promise.all([carregarEstoques(), carregarItens(), carregarComposicoesVenda()]);
   await recarregarSaldos();
 });
 
@@ -101,6 +106,7 @@ function bindEvents() {
   transferenciaForm.addEventListener('submit', handleTransferencia);
   saidaForm.addEventListener('submit', (event) => event.preventDefault());
   ajusteForm.addEventListener('submit', handleAjuste);
+  desmembrarForm.addEventListener('submit', handleDesmembrar);
   saldosTbody.addEventListener('click', handleSaldoActions);
   document.getElementById('saida-tbody').addEventListener('click', handleSaidaListActions);
 
@@ -118,15 +124,20 @@ function bindEvents() {
   document.getElementById('btn-cancelar-modal-ajuste').addEventListener('click', fecharModalAjuste);
   document.getElementById('btn-fechar-modal-ajuste').addEventListener('click', fecharModalAjuste);
   document.getElementById('btn-fechar-modal-historico').addEventListener('click', fecharModalHistorico);
+  document.getElementById('btn-cancelar-modal-desmembrar').addEventListener('click', fecharModalDesmembrar);
+  document.getElementById('btn-fechar-modal-desmembrar').addEventListener('click', fecharModalDesmembrar);
   document.getElementById('entrada-quantidade').addEventListener('input', atualizarPainelEntradaSubmontagem);
   document.getElementById('entrada-estoque').addEventListener('change', atualizarPainelEntradaSubmontagem);
   entradaEstoqueOrigemComponentesSelect.addEventListener('change', atualizarPainelEntradaSubmontagem);
+  document.getElementById('desmembrar-quantidade').addEventListener('input', atualizarPreviewDesmembrar);
+  document.getElementById('desmembrar-estoque-destino').addEventListener('change', atualizarPreviewDesmembrar);
 
   entradaModal.addEventListener('click', handleModalBackdrop);
   transferenciaModal.addEventListener('click', handleModalBackdrop);
   saidaModal.addEventListener('click', handleModalBackdrop);
   ajusteModal.addEventListener('click', handleModalBackdrop);
   historicoModal.addEventListener('click', handleModalBackdrop);
+  desmembrarModal.addEventListener('click', handleModalBackdrop);
 
   menuToggleButton.addEventListener('click', abrirDrawer);
   drawerCloseButton.addEventListener('click', fecharDrawer);
@@ -202,6 +213,34 @@ async function carregarItens() {
 
     itensCache = itens;
     await preCarregarEstruturasSubmontagem();
+  } catch (error) {
+    mostrarMensagemEstoque(error.message, 'error');
+  }
+}
+
+async function carregarComposicoesVenda() {
+  try {
+    const response = await fetch(composicoesVendaApiBaseUrl);
+    const composicoes = await response.json();
+
+    if (!response.ok) {
+      throw new Error(composicoes.message || 'Nao foi possivel carregar as composicoes de venda.');
+    }
+
+    composicoesVendaCache = new Map();
+    (Array.isArray(composicoes) ? composicoes : []).forEach((linha) => {
+      const idItemVenda = Number(linha.id_item_venda);
+
+      if (!composicoesVendaCache.has(idItemVenda)) {
+        composicoesVendaCache.set(idItemVenda, []);
+      }
+
+      composicoesVendaCache.get(idItemVenda).push({
+        ...linha,
+        id_item_atende: Number(linha.id_item_atende),
+        quantidade: Number(linha.quantidade || 0)
+      });
+    });
   } catch (error) {
     mostrarMensagemEstoque(error.message, 'error');
   }
@@ -461,6 +500,10 @@ function handleSaldoActions(event) {
   if (actionButton.dataset.action === 'adjust') {
     abrirModalAjuste(saldo);
   }
+
+  if (actionButton.dataset.action === 'disassemble') {
+    abrirModalDesmembrar(saldo);
+  }
 }
 
 function bindAutocompleteEvents() {
@@ -500,11 +543,7 @@ function renderizarSugestoesItem(tipo, termo) {
   const config = getItemAutocompleteConfig(tipo);
   const filtro = termo.toLowerCase();
   const itensFiltrados = itensCache.filter((item) => {
-    if (
-      tipo === 'saida'
-      && item.classificacao !== 'SUBMONTAGEM'
-      && obterSaldoExpedicao(item.id) <= 0
-    ) {
+    if (tipo === 'saida' && obterDisponibilidadeVendaItem(item) <= 0) {
       return false;
     }
 
@@ -525,9 +564,7 @@ function renderizarSugestoesItem(tipo, termo) {
   }
 
   config.panel.innerHTML = itensFiltrados.map((item) => {
-    const disponivelSaida = item.classificacao === 'SUBMONTAGEM'
-      ? calcularDisponibilidadeTotalSubmontagem(item.id, estruturasSubmontagemCache.get(item.id) || [])
-      : obterSaldoExpedicao(item.id);
+    const disponivelSaida = obterDisponibilidadeVendaItem(item);
     const subtitulo = tipo === 'saida'
       ? `${item.classificacao} | ${item.tipo} | Disponivel ${expedicaoNomeCorreto}: ${formatarQuantidade(disponivelSaida)}`
       : `${item.classificacao} | ${item.tipo} | Maquina: ${item.maquina_nome || '-'}`;
@@ -864,19 +901,49 @@ function calcularDisponibilidadeSubmontagem(componentes) {
   }, Number.POSITIVE_INFINITY);
 }
 
+function calcularDisponibilidadeComposicaoVenda(itemId) {
+  const composicao = composicoesVendaCache.get(Number(itemId)) || [];
+
+  if (!composicao.length) {
+    return 0;
+  }
+
+  const capacidades = composicao.map((linha) => {
+    const quantidadeBase = Number(linha.quantidade || 0);
+    if (quantidadeBase <= 0) {
+      return 0;
+    }
+
+    return Math.floor(obterSaldoExpedicao(linha.id_item_atende) / quantidadeBase);
+  });
+
+  return capacidades.length ? Math.max(0, Math.min(...capacidades)) : 0;
+}
+
 function calcularDisponibilidadeTotalSubmontagem(submontagemId, componentes) {
   const saldoPronto = obterSaldoExpedicao(submontagemId);
+  const disponibilidadeComposicaoVenda = calcularDisponibilidadeComposicaoVenda(submontagemId);
   const disponibilidadeComponentes = calcularDisponibilidadeSubmontagem(componentes);
-  return Number((saldoPronto + disponibilidadeComponentes).toFixed(2));
+  return Number((saldoPronto + disponibilidadeComposicaoVenda + disponibilidadeComponentes).toFixed(2));
+}
+
+function obterDisponibilidadeVendaItem(item) {
+  const saldoPronto = obterSaldoExpedicao(item.id);
+  const disponibilidadeComposicaoVenda = calcularDisponibilidadeComposicaoVenda(item.id);
+
+  if (item.classificacao !== 'SUBMONTAGEM') {
+    return Number((saldoPronto + disponibilidadeComposicaoVenda).toFixed(2));
+  }
+
+  const componentes = estruturasSubmontagemCache.get(item.id) || [];
+  return calcularDisponibilidadeTotalSubmontagem(item.id, componentes);
 }
 
 function obterSaldoDisponivelRegistroSaida(registro) {
-  if (registro.classificacao !== 'SUBMONTAGEM') {
-    return obterSaldoExpedicao(registro.id_peca);
-  }
-
-  const componentes = estruturasSubmontagemCache.get(registro.id_peca) || [];
-  return calcularDisponibilidadeTotalSubmontagem(registro.id_peca, componentes);
+  return obterDisponibilidadeVendaItem({
+    id: registro.id_peca,
+    classificacao: registro.classificacao
+  });
 }
 
 async function obterItemSelecionadoSaida() {
@@ -889,23 +956,10 @@ async function obterItemSelecionadoSaida() {
   }
 
   if (item.classificacao === 'SUBMONTAGEM') {
-    const componentes = await carregarEstruturaSubmontagem(item.id);
-    const saldoPronto = obterSaldoExpedicao(item.id);
-    const saldoDisponivel = calcularDisponibilidadeTotalSubmontagem(item.id, componentes);
-
-    if (saldoDisponivel <= 0) {
-      mostrarMensagemSaida(`A submontagem ${item.codigo} nao possui saldo pronto nem componentes suficientes na Expedicao.`, 'error');
-      return null;
-    }
-
-    return {
-      ...item,
-      saldo_disponivel: saldoDisponivel,
-      saldo_pronto: saldoPronto
-    };
+    await carregarEstruturaSubmontagem(item.id);
   }
 
-  const saldoDisponivel = obterSaldoExpedicao(item.id);
+  const saldoDisponivel = obterDisponibilidadeVendaItem(item);
   if (saldoDisponivel <= 0) {
     mostrarMensagemSaida(`O item ${item.codigo} nao possui saldo disponivel na Expedicao.`, 'error');
     return null;
@@ -932,9 +986,9 @@ async function atualizarSaldoDisponivelSaida() {
 
   if (item.classificacao === 'SUBMONTAGEM') {
     try {
-      const componentes = await carregarEstruturaSubmontagem(item.id);
+      await carregarEstruturaSubmontagem(item.id);
       document.getElementById('saida-saldo-disponivel').value = formatarQuantidade(
-        calcularDisponibilidadeTotalSubmontagem(item.id, componentes)
+        obterDisponibilidadeVendaItem(item)
       );
     } catch (error) {
       document.getElementById('saida-saldo-disponivel').value = '0';
@@ -943,7 +997,9 @@ async function atualizarSaldoDisponivelSaida() {
     return;
   }
 
-  document.getElementById('saida-saldo-disponivel').value = formatarQuantidade(obterSaldoExpedicao(item.id));
+  document.getElementById('saida-saldo-disponivel').value = formatarQuantidade(
+    obterDisponibilidadeVendaItem(item)
+  );
 }
 
 async function adicionarItemNaListaSaida() {
@@ -1165,6 +1221,132 @@ async function handleAjuste(event) {
   }
 }
 
+function abrirModalDesmembrar(saldo) {
+  resetDesmembrarForm();
+  document.getElementById('desmembrar-item-id').value = saldo.id_peca;
+  document.getElementById('desmembrar-estoque-origem-id').value = saldo.id_estoque;
+  document.getElementById('desmembrar-item-titulo').textContent = `${saldo.codigo} - ${saldo.descricao}`;
+  document.getElementById('desmembrar-item-subtitulo').textContent = `${saldo.classificacao} | ${saldo.tipo} | Estoque atual: ${saldo.estoque_nome}`;
+  document.getElementById('desmembrar-estoque-chip').textContent = `Origem: ${saldo.estoque_nome}`;
+  document.getElementById('desmembrar-saldo-chip').textContent = `Pronto atual: ${formatarQuantidade(saldo.quantidade)}`;
+  document.getElementById('desmembrar-quantidade').value = '1';
+  preencherSelectEstoques(document.getElementById('desmembrar-estoque-destino'), 'Selecione');
+  document.getElementById('desmembrar-estoque-destino').value = String(saldo.id_estoque);
+  atualizarPreviewDesmembrar();
+  abrirModal(desmembrarModal);
+}
+
+function fecharModalDesmembrar() {
+  resetDesmembrarForm();
+  fecharModal(desmembrarModal);
+}
+
+function resetDesmembrarForm() {
+  desmembrarForm.reset();
+  document.getElementById('desmembrar-item-id').value = '';
+  document.getElementById('desmembrar-estoque-origem-id').value = '';
+  document.getElementById('desmembrar-item-titulo').textContent = 'Nenhuma submontagem selecionada';
+  document.getElementById('desmembrar-item-subtitulo').textContent = 'Escolha uma submontagem com saldo para desmembrar.';
+  document.getElementById('desmembrar-estoque-chip').textContent = 'Origem: -';
+  document.getElementById('desmembrar-saldo-chip').textContent = 'Pronto atual: 0';
+  document.getElementById('desmembrar-preview-tbody').innerHTML = '<tr><td colspan="4" class="empty-state">Escolha uma submontagem da tabela para visualizar o retorno.</td></tr>';
+  document.getElementById('desmembrar-preview-status-chip').textContent = 'Status: aguardando selecao';
+  document.getElementById('btn-confirmar-modal-desmembrar').disabled = true;
+  esconderMensagemDesmembrar();
+}
+
+async function atualizarPreviewDesmembrar() {
+  const itemId = Number.parseInt(document.getElementById('desmembrar-item-id').value, 10);
+  const estoqueOrigemId = Number.parseInt(document.getElementById('desmembrar-estoque-origem-id').value, 10);
+  const estoqueDestinoId = Number.parseInt(document.getElementById('desmembrar-estoque-destino').value, 10);
+  const quantidadeInformada = Number.parseFloat(document.getElementById('desmembrar-quantidade').value);
+  const quantidade = Number.isFinite(quantidadeInformada) && quantidadeInformada > 0 ? quantidadeInformada : 0;
+
+  if (!Number.isInteger(itemId) || !Number.isInteger(estoqueOrigemId)) {
+    document.getElementById('desmembrar-preview-tbody').innerHTML = '<tr><td colspan="4" class="empty-state">Escolha uma submontagem da tabela para visualizar o retorno.</td></tr>';
+    document.getElementById('desmembrar-preview-status-chip').textContent = 'Status: aguardando selecao';
+    document.getElementById('btn-confirmar-modal-desmembrar').disabled = true;
+    return;
+  }
+
+  const saldo = saldosCache.find((item) => (
+    Number(item.id_peca) === itemId
+    && Number(item.id_estoque) === estoqueOrigemId
+  ));
+  const estoqueDestino = estoquesCache.find((estoque) => Number(estoque.id) === estoqueDestinoId) || null;
+
+  if (!saldo) {
+    document.getElementById('desmembrar-preview-tbody').innerHTML = '<tr><td colspan="4" class="empty-state">Saldo da submontagem nao encontrado.</td></tr>';
+    document.getElementById('desmembrar-preview-status-chip').textContent = 'Status: sem saldo';
+    document.getElementById('btn-confirmar-modal-desmembrar').disabled = true;
+    return;
+  }
+
+  try {
+    const componentes = await carregarEstruturaSubmontagem(saldo.id_peca);
+
+    if (!componentes.length) {
+      document.getElementById('desmembrar-preview-tbody').innerHTML = '<tr><td colspan="4" class="empty-state">Esta submontagem nao possui componentes cadastrados.</td></tr>';
+      document.getElementById('desmembrar-preview-status-chip').textContent = 'Status: sem estrutura';
+      document.getElementById('btn-confirmar-modal-desmembrar').disabled = true;
+      return;
+    }
+
+    document.getElementById('desmembrar-preview-tbody').innerHTML = componentes.map((componente) => `
+      <tr>
+        <td class="table-code">${escapeHtml(componente.codigo_componente || componente.codigo)}</td>
+        <td class="table-description">${escapeHtml(componente.descricao_componente || componente.descricao)}</td>
+        <td class="table-quantity">${formatarQuantidade(componente.quantidade)}</td>
+        <td class="table-quantity">${formatarQuantidade(Number(componente.quantidade || 0) * quantidade)}</td>
+      </tr>
+    `).join('');
+    document.getElementById('desmembrar-preview-status-chip').textContent = quantidade > 0 && estoqueDestino
+      ? `Status: devolver para ${estoqueDestino.nome}`
+      : 'Status: escolha destino e quantidade';
+    document.getElementById('btn-confirmar-modal-desmembrar').disabled = !(quantidade > 0 && estoqueDestino);
+  } catch (error) {
+    document.getElementById('desmembrar-preview-tbody').innerHTML = `<tr><td colspan="4" class="empty-state">${escapeHtml(error.message)}</td></tr>`;
+    document.getElementById('desmembrar-preview-status-chip').textContent = 'Status: erro';
+    document.getElementById('btn-confirmar-modal-desmembrar').disabled = true;
+  }
+}
+
+async function handleDesmembrar(event) {
+  event.preventDefault();
+
+  try {
+    const itemId = document.getElementById('desmembrar-item-id').value;
+    const estoqueOrigemId = document.getElementById('desmembrar-estoque-origem-id').value;
+    const estoqueDestinoId = document.getElementById('desmembrar-estoque-destino').value;
+
+    if (!itemId || !estoqueOrigemId || !estoqueDestinoId) {
+      throw new Error('Selecione a submontagem, a origem e o destino do desmembramento.');
+    }
+
+    const response = await fetch(`/api/submontagens/${itemId}/desmembrar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id_estoque_origem: estoqueOrigemId,
+        id_estoque_destino: estoqueDestinoId,
+        quantidade: document.getElementById('desmembrar-quantidade').value,
+        observacao: document.getElementById('desmembrar-observacao').value.trim()
+      })
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(extractErrorMessage(result));
+    }
+
+    fecharModalDesmembrar();
+    mostrarMensagemEstoque('Desmembramento realizado com sucesso.', 'success');
+    await recarregarSaldos();
+  } catch (error) {
+    mostrarMensagemDesmembrar(error.message, 'error');
+  }
+}
+
 // Modal de historico do item selecionado.
 async function abrirModalHistorico(saldo) {
   try {
@@ -1219,6 +1401,9 @@ function renderizarTabelaSaldos(saldos) {
             <button type="button" class="row-menu-item" data-action="history" data-item-id="${saldo.id_peca}" data-stock-id="${saldo.id_estoque}">Ver Historico</button>
             ${Number(saldo.quantidade || 0) > 0
               ? `<button type="button" class="row-menu-item" data-action="transfer" data-item-id="${saldo.id_peca}" data-stock-id="${saldo.id_estoque}">Transferir</button>`
+              : ''}
+            ${Number(saldo.quantidade || 0) > 0 && String(saldo.classificacao || '').toUpperCase() === 'SUBMONTAGEM'
+              ? `<button type="button" class="row-menu-item" data-action="disassemble" data-item-id="${saldo.id_peca}" data-stock-id="${saldo.id_estoque}">Desmembrar</button>`
               : ''}
             ${isRegistroExpedicao(saldo) && Number(saldo.quantidade || 0) > 0
               ? `<button type="button" class="row-menu-item" data-action="sale" data-item-id="${saldo.id_peca}" data-stock-id="${saldo.id_estoque}">Saida de Venda</button>`
@@ -1366,7 +1551,7 @@ function fecharModal(modalElement) {
 }
 
 function syncBodyModalState() {
-  const existeModalAberto = [entradaModal, transferenciaModal, saidaModal, ajusteModal, historicoModal]
+  const existeModalAberto = [entradaModal, transferenciaModal, saidaModal, ajusteModal, historicoModal, desmembrarModal]
     .some((modal) => !modal.classList.contains('hidden'));
   document.body.classList.toggle('has-modal', existeModalAberto);
 }
@@ -1377,6 +1562,7 @@ function handleModalBackdrop(event) {
   if (event.target.dataset.closeModal === 'saida') fecharModalSaida();
   if (event.target.dataset.closeModal === 'ajuste') fecharModalAjuste();
   if (event.target.dataset.closeModal === 'historico') fecharModalHistorico();
+  if (event.target.dataset.closeModal === 'desmembrar') fecharModalDesmembrar();
 }
 
 function abrirDrawer() {
@@ -1398,6 +1584,7 @@ function handleKeyboardShortcuts(event) {
   closeAllRowMenus();
 
   if (!historicoModal.classList.contains('hidden')) return fecharModalHistorico();
+  if (!desmembrarModal.classList.contains('hidden')) return fecharModalDesmembrar();
   if (!saidaModal.classList.contains('hidden')) return fecharModalSaida();
   if (!ajusteModal.classList.contains('hidden')) return fecharModalAjuste();
   if (!transferenciaModal.classList.contains('hidden')) return fecharModalTransferencia();
@@ -1464,6 +1651,17 @@ function mostrarMensagemHistorico(texto, tipo) {
 function esconderMensagemHistorico() {
   historicoMensagemBox.className = 'message hidden';
   historicoMensagemBox.textContent = '';
+}
+
+function mostrarMensagemDesmembrar(texto, tipo) {
+  desmembrarMensagemBox.textContent = texto;
+  desmembrarMensagemBox.className = `message ${tipo}`;
+  desmembrarMensagemBox.classList.remove('hidden');
+}
+
+function esconderMensagemDesmembrar() {
+  desmembrarMensagemBox.className = 'message hidden';
+  desmembrarMensagemBox.textContent = '';
 }
 
 function extractErrorMessage(result) {

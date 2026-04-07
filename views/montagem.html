@@ -62,6 +62,7 @@
             <div class="sector-menu-list">
               <button id="montagem-btn-transferencia-menu" class="btn btn-primary" type="button"><span class="btn-label">Enviar para Expedicao</span></button>
               <button id="montagem-btn-solicitar" class="btn btn-neutral" type="button"><span class="btn-label">Solicitar Pecas</span></button>
+              <button id="montagem-btn-efetuar" class="btn btn-success" type="button"><span class="btn-label">Efetuar Montagem</span></button>
               <button id="montagem-btn-simular" class="btn btn-secondary" type="button"><span class="btn-label">Simulacao de Montagem</span></button>
               <button id="montagem-btn-pedidos-menu" class="btn btn-neutral" type="button"><span class="btn-label">Meus Pedidos</span><span id="montagem-badge-pedidos" class="btn-badge hidden">0</span></button>
               <button id="montagem-btn-recebidos-menu" class="btn btn-neutral" type="button"><span class="btn-label">Pedidos da Expedicao</span><span id="montagem-badge-recebidos" class="btn-badge hidden">0</span></button>
@@ -380,6 +381,88 @@
         <div class="span-12 modal-actions">
           <button id="btn-cancelar-modal-montagem-solicitacao" class="btn btn-neutral" type="button">Cancelar</button>
           <button class="btn btn-primary" type="submit">Enviar solicitacao</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="montagem-efetuar-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="montagem-efetuar"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Montagem</span>
+          <h2>Efetuar montagem</h2>
+          <p>Consuma as pecas do estoque da Montagem e gere a submontagem pronta sem duplicar a baixa depois.</p>
+        </div>
+
+        <button id="btn-fechar-modal-montagem-efetuar" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="montagem-efetuar-mensagem" class="message hidden"></div>
+
+      <form id="montagem-efetuar-form" class="form-grid">
+        <input type="hidden" id="montagem-efetuar-submontagem-id">
+
+        <div class="field span-8">
+          <label for="montagem-efetuar-submontagem-busca">Submontagem</label>
+          <div class="autocomplete">
+            <input id="montagem-efetuar-submontagem-busca" type="text" placeholder="Digite codigo ou descricao da submontagem">
+            <div id="montagem-efetuar-submontagem-sugestoes" class="autocomplete-panel hidden"></div>
+          </div>
+        </div>
+
+        <div class="field span-4">
+          <label for="montagem-efetuar-quantidade">Quantidade a montar</label>
+          <input id="montagem-efetuar-quantidade" type="number" min="1" step="1" value="1" required>
+        </div>
+
+        <div id="montagem-efetuar-preview" class="span-12 embedded-section">
+          <div class="structure-highlight">
+            <div>
+              <p class="page-kicker">Montagem da Submontagem</p>
+              <h3 id="montagem-efetuar-preview-titulo">Selecione uma submontagem</h3>
+              <p id="montagem-efetuar-preview-subtitulo">A Montagem vai consumir os componentes do proprio estoque e gerar o item pronto no mesmo setor.</p>
+            </div>
+
+            <div class="structure-kpis">
+              <span id="montagem-efetuar-preview-pronto-chip" class="mini-chip">Pronto atual: 0</span>
+              <span id="montagem-efetuar-preview-componentes-chip" class="mini-chip">Componentes: 0</span>
+              <span id="montagem-efetuar-preview-status-chip" class="mini-chip">Status: aguardando selecao</span>
+            </div>
+          </div>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Codigo</th>
+                  <th>Descricao</th>
+                  <th>Qtd. Estrutura</th>
+                  <th>Qtd. Necessaria</th>
+                  <th>Disponivel na Montagem</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="montagem-efetuar-preview-tbody">
+                <tr>
+                  <td colspan="6" class="empty-state">Selecione a submontagem para visualizar o consumo.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="field span-12">
+          <label for="montagem-efetuar-observacao">Observacao</label>
+          <input id="montagem-efetuar-observacao" type="text" maxlength="255" placeholder="Opcional">
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button id="btn-montagem-efetuar-solicitar-faltantes" class="btn btn-neutral" type="button">Solicitar faltantes ao Almox</button>
+          <button id="btn-cancelar-modal-montagem-efetuar" class="btn btn-neutral" type="button">Cancelar</button>
+          <button id="btn-confirmar-modal-montagem-efetuar" class="btn btn-success" type="submit">Confirmar montagem</button>
         </div>
       </form>
     </div>

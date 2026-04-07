@@ -21,9 +21,11 @@ const painelRoutes = require('./src/routes/painelRoutes');
 const usuarioRoutes = require('./src/routes/usuarioRoutes');
 const auditLogRoutes = require('./src/routes/auditLogRoutes');
 const authRoutes = require('./src/routes/authRoutes');
+const composicaoVendaRoutes = require('./src/routes/composicaoVendaRoutes');
 const AuthController = require('./src/controllers/AuthController');
 const UsuarioModel = require('./src/models/UsuarioModel');
 const AuditLogModel = require('./src/models/AuditLogModel');
+const ComposicaoVendaModel = require('./src/models/ComposicaoVendaModel');
 const { attachAuthContext, requirePageRoles } = require('./src/middleware/authMiddleware');
 const { ALL_ROLES, ADMIN_READ_ROLES, OPERATION_READ_ROLES, SUPERADMIN_ONLY_ROLES } = require('./src/security/roles');
 const { testConnection } = require('./database/connection');
@@ -202,6 +204,7 @@ app.use('/api', solicitacaoProducaoRoutes);
 app.use('/api', painelRoutes);
 app.use('/api', usuarioRoutes);
 app.use('/api', auditLogRoutes);
+app.use('/api', composicaoVendaRoutes);
 
 // Resposta padrao para qualquer rota nao mapeada.
 app.use((req, res) => {
@@ -221,6 +224,7 @@ app.listen(PORT, async () => {
     await testConnection();
     await UsuarioModel.ensureSchema();
     await AuditLogModel.ensureSchema();
+    await ComposicaoVendaModel.ensureSchema();
   } catch (error) {
     console.error('Nao foi possivel validar a conexao com o MySQL:', error.message);
   }

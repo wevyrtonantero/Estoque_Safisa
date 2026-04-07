@@ -9,6 +9,7 @@ backups/*.bundle
 .env
 .env.*
 !.env.example
+auth-cookie.txt
 
 dist/
 build/

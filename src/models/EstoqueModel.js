@@ -1,5 +1,6 @@
 // Model principal do controle de estoque de pecas e submontagens.
 const { pool } = require('../../database/connection');
+const ComposicaoVendaModel = require('./ComposicaoVendaModel');
 
 class EstoqueModel {
   static supplierSummarySubquery() {
@@ -686,6 +687,97 @@ class EstoqueModel {
     };
   }
 
+  static normalizePlannedQuantity(value) {
+    return Number((Number(value || 0)).toFixed(2));
+  }
+
+  static async planComposicaoVendaConsumo(
+    connection,
+    item,
+    quantidadeDesejada,
+    idEstoqueOrigem,
+    reservasPorItem,
+    observacaoBase,
+    movimentosPlanejados
+  ) {
+    const composicao = await ComposicaoVendaModel.findByItemVenda(item.id, connection);
+
+    if (!composicao.length || Number(quantidadeDesejada) <= 0) {
+      return {
+        possui_composicao: composicao.length > 0,
+        quantidade_atendida: 0,
+        itens_consumidos: []
+      };
+    }
+
+    const capacidades = [];
+
+    for (const linha of composicao) {
+      const disponibilidade = await this.getAvailableQuantity(
+        connection,
+        idEstoqueOrigem,
+        linha.id_item_atende,
+        reservasPorItem
+      );
+
+      const quantidadeLinha = Number(linha.quantidade);
+      const capacidadeLinha = quantidadeLinha > 0
+        ? Number((Math.max(0, disponibilidade.quantidadeDisponivel) / quantidadeLinha).toFixed(2))
+        : 0;
+
+      capacidades.push({
+        linha,
+        capacidade: capacidadeLinha
+      });
+    }
+
+    const quantidadeAtendida = this.normalizePlannedQuantity(
+      Math.min(
+        Number(quantidadeDesejada),
+        ...capacidades.map((capacidade) => capacidade.capacidade)
+      )
+    );
+
+    if (quantidadeAtendida <= 0) {
+      return {
+        possui_composicao: true,
+        quantidade_atendida: 0,
+        itens_consumidos: []
+      };
+    }
+
+    const itensConsumidos = [];
+
+    for (const capacidade of capacidades) {
+      const quantidadeConsumida = this.normalizePlannedQuantity(
+        Number(capacidade.linha.quantidade) * quantidadeAtendida
+      );
+
+      if (quantidadeConsumida <= 0) {
+        continue;
+      }
+
+      this.addReservedQuantity(reservasPorItem, capacidade.linha.id_item_atende, quantidadeConsumida);
+      movimentosPlanejados.push({
+        id_peca: capacidade.linha.id_item_atende,
+        quantidade: quantidadeConsumida,
+        observacao: `${observacaoBase || 'Baixa de venda pela Expedicao.'} Atendimento alternativo de ${item.codigo} via ${capacidade.linha.item_atende_codigo}.`.slice(0, 255)
+      });
+      itensConsumidos.push({
+        id_peca: capacidade.linha.id_item_atende,
+        codigo: capacidade.linha.item_atende_codigo,
+        descricao: capacidade.linha.item_atende_descricao,
+        quantidade_baixada: quantidadeConsumida
+      });
+    }
+
+    return {
+      possui_composicao: true,
+      quantidade_atendida: quantidadeAtendida,
+      itens_consumidos: itensConsumidos
+    };
+  }
+
   // Persiste o novo saldo removendo a linha quando a quantidade chega a zero.
   static async persistSaldo(connection, idEstoque, idPeca, novaQuantidade, saldoAtual = null) {
     if (novaQuantidade < 0) {
@@ -956,6 +1048,89 @@ class EstoqueModel {
     }
   }
 
+  // Desmembra uma submontagem pronta e devolve seus componentes para outro estoque.
+  static async processDesmembramentoSubmontagem(data) {
+    const connection = await pool.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      const submontagem = await this.findItemById(data.id_submontagem, connection);
+      if (!submontagem || submontagem.classificacao !== 'SUBMONTAGEM') {
+        throw this.createBusinessError('A submontagem informada para desmembrar nao foi encontrada.');
+      }
+
+      const estoqueOrigem = await this.findStockById(data.id_estoque_origem, connection);
+      const estoqueDestino = await this.findStockById(data.id_estoque_destino, connection);
+
+      if (!estoqueOrigem || Number(estoqueOrigem.ativo) !== 1) {
+        throw this.createBusinessError('Estoque de origem nao encontrado ou inativo.');
+      }
+
+      if (!estoqueDestino || Number(estoqueDestino.ativo) !== 1) {
+        throw this.createBusinessError('Estoque de destino nao encontrado ou inativo.');
+      }
+
+      const saldoOrigem = await this.findSaldoForUpdate(
+        connection,
+        data.id_estoque_origem,
+        data.id_submontagem
+      );
+      const quantidadeOrigem = saldoOrigem ? Number(saldoOrigem.quantidade) : 0;
+      const quantidadeDesmembrada = Number(data.quantidade);
+
+      if (quantidadeDesmembrada > quantidadeOrigem) {
+        throw this.createBusinessError(
+          `A submontagem ${submontagem.codigo} nao possui saldo pronto suficiente para desmembrar.`
+        );
+      }
+
+      const novoSaldoOrigem = Number((quantidadeOrigem - quantidadeDesmembrada).toFixed(2));
+
+      await this.persistSaldo(
+        connection,
+        data.id_estoque_origem,
+        data.id_submontagem,
+        novoSaldoOrigem,
+        saldoOrigem
+      );
+
+      await this.createMovimentacao(connection, {
+        id_peca: data.id_submontagem,
+        id_estoque_origem: data.id_estoque_origem,
+        id_estoque_destino: null,
+        tipo_movimentacao: 'SAIDA',
+        quantidade: quantidadeDesmembrada,
+        observacao: `${data.observacao || 'Desmembramento de submontagem.'} Saida da submontagem ${submontagem.codigo} para retorno dos componentes.`.slice(0, 255)
+      });
+
+      const componentesRetornados = await this.expandSubmontagemIntoStock(
+        connection,
+        submontagem,
+        quantidadeDesmembrada,
+        data.id_estoque_destino,
+        data.observacao || 'Desmembramento de submontagem.',
+        'TRANSFERENCIA',
+        data.id_estoque_origem
+      );
+
+      await connection.commit();
+
+      return {
+        item: submontagem,
+        estoque_origem: estoqueOrigem,
+        estoque_destino: estoqueDestino,
+        saldo_origem_atual: novoSaldoOrigem,
+        componentes_retornados: componentesRetornados
+      };
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }
+
   // Ajusta o saldo final do estoque a partir de um novo valor informado no modal.
   static async processAjuste(data) {
     const connection = await pool.getConnection();
@@ -1054,95 +1229,122 @@ class EstoqueModel {
           quantidade_solicitada: quantidadeSolicitada
         });
 
-        if (item.classificacao === 'SUBMONTAGEM') {
-          const disponibilidadeSubmontagem = await this.getAvailableQuantity(
-            connection,
-            expedicao.id,
-            idPeca,
-            reservasPorItem
-          );
-          const quantidadeProntaConsumida = Math.min(
-            quantidadeSolicitada,
-            Math.max(0, disponibilidadeSubmontagem.quantidadeDisponivel)
-          );
-          const quantidadePendente = Number(
-            (quantidadeSolicitada - quantidadeProntaConsumida).toFixed(2)
-          );
-          const componentes = quantidadePendente > 0
-            ? await this.findSubmontagemComponents(idPeca, connection)
-            : [];
-
-          if (quantidadeProntaConsumida > 0) {
-            this.addReservedQuantity(reservasPorItem, idPeca, quantidadeProntaConsumida);
-            movimentosPlanejados.push({
-              id_peca: idPeca,
-              quantidade: quantidadeProntaConsumida,
-              observacao: `${data.observacao || 'Baixa de venda pela Expedicao.'} Saida da submontagem pronta ${item.codigo}.`.slice(0, 255)
-            });
-          }
-
-          if (quantidadePendente > 0) {
-            if (componentes.length === 0) {
-              throw this.createBusinessError(`A submontagem ${item.codigo} nao possui componentes cadastrados para complementar a baixa.`);
-            }
-
-            for (const component of componentes) {
-              const idComponente = Number(component.id_item_componente);
-              const quantidadeComponente = Number(
-                (Number(component.quantidade) * quantidadePendente).toFixed(2)
-              );
-              const disponibilidadeComponente = await this.getAvailableQuantity(
-                connection,
-                expedicao.id,
-                idComponente,
-                reservasPorItem
-              );
-
-              if (quantidadeComponente > disponibilidadeComponente.quantidadeDisponivel) {
-                throw this.createBusinessError(
-                  `A submontagem ${item.codigo} nao possui saldo suficiente pronto nem nos componentes da Expedicao.`
-                );
-              }
-            }
-
-            for (const component of componentes) {
-              const idComponente = Number(component.id_item_componente);
-              const quantidadeComponente = Number(
-                (Number(component.quantidade) * quantidadePendente).toFixed(2)
-              );
-
-              this.addReservedQuantity(reservasPorItem, idComponente, quantidadeComponente);
-              movimentosPlanejados.push({
-                id_peca: idComponente,
-                quantidade: quantidadeComponente,
-                observacao: `${data.observacao || 'Baixa de venda pela Expedicao.'} Complemento da submontagem ${item.codigo}.`.slice(0, 255)
-              });
-            }
-          }
-
-          solicitacoes[solicitacoes.length - 1].quantidade_submontagem_pronta = quantidadeProntaConsumida;
-          solicitacoes[solicitacoes.length - 1].quantidade_componentes = quantidadePendente;
-
-          continue;
-        }
-
-        const disponibilidadeItem = await this.getAvailableQuantity(
+        const disponibilidadeItemPronto = await this.getAvailableQuantity(
           connection,
           expedicao.id,
           idPeca,
           reservasPorItem
         );
 
-        if (quantidadeSolicitada > disponibilidadeItem.quantidadeDisponivel) {
+        const quantidadeProntaConsumida = Math.min(
+          quantidadeSolicitada,
+          Math.max(0, disponibilidadeItemPronto.quantidadeDisponivel)
+        );
+
+        if (quantidadeProntaConsumida > 0) {
+          this.addReservedQuantity(reservasPorItem, idPeca, quantidadeProntaConsumida);
+          movimentosPlanejados.push({
+            id_peca: idPeca,
+            quantidade: quantidadeProntaConsumida,
+            observacao: `${data.observacao || 'Baixa de venda pela Expedicao.'} Saida do item pronto ${item.codigo}.`.slice(0, 255)
+          });
+        }
+
+        let quantidadePendente = this.normalizePlannedQuantity(
+          quantidadeSolicitada - quantidadeProntaConsumida
+        );
+
+        const composicaoVenda = quantidadePendente > 0
+          ? await this.planComposicaoVendaConsumo(
+            connection,
+            item,
+            quantidadePendente,
+            expedicao.id,
+            reservasPorItem,
+            data.observacao,
+            movimentosPlanejados
+          )
+          : {
+            possui_composicao: false,
+            quantidade_atendida: 0,
+            itens_consumidos: []
+          };
+
+        quantidadePendente = this.normalizePlannedQuantity(
+          quantidadePendente - composicaoVenda.quantidade_atendida
+        );
+
+        let quantidadeViaComponentes = 0;
+
+        if (quantidadePendente > 0 && item.classificacao === 'SUBMONTAGEM') {
+          const componentes = await this.findSubmontagemComponents(idPeca, connection);
+
+          if (componentes.length === 0) {
+            if (composicaoVenda.possui_composicao) {
+              throw this.createBusinessError(
+                `A submontagem ${item.codigo} nao possui saldo suficiente pronta nem na composicao configurada da Expedicao.`
+              );
+            }
+
+            throw this.createBusinessError(
+              `A submontagem ${item.codigo} nao possui componentes cadastrados para complementar a baixa.`
+            );
+          }
+
+          for (const component of componentes) {
+            const idComponente = Number(component.id_item_componente);
+            const quantidadeComponente = this.normalizePlannedQuantity(
+              Number(component.quantidade) * quantidadePendente
+            );
+            const disponibilidadeComponente = await this.getAvailableQuantity(
+              connection,
+              expedicao.id,
+              idComponente,
+              reservasPorItem
+            );
+
+            if (quantidadeComponente > disponibilidadeComponente.quantidadeDisponivel) {
+              throw this.createBusinessError(
+                `A submontagem ${item.codigo} nao possui saldo suficiente pronta${composicaoVenda.possui_composicao ? ', na composicao configurada' : ''} nem nos componentes da Expedicao.`
+              );
+            }
+          }
+
+          for (const component of componentes) {
+            const idComponente = Number(component.id_item_componente);
+            const quantidadeComponente = this.normalizePlannedQuantity(
+              Number(component.quantidade) * quantidadePendente
+            );
+
+            this.addReservedQuantity(reservasPorItem, idComponente, quantidadeComponente);
+            movimentosPlanejados.push({
+              id_peca: idComponente,
+              quantidade: quantidadeComponente,
+              observacao: `${data.observacao || 'Baixa de venda pela Expedicao.'} Complemento da submontagem ${item.codigo}.`.slice(0, 255)
+            });
+          }
+
+          quantidadeViaComponentes = quantidadePendente;
+          quantidadePendente = 0;
+        }
+
+        if (quantidadePendente > 0) {
+          if (composicaoVenda.possui_composicao) {
+            throw this.createBusinessError(
+              `O item ${item.codigo} nao possui saldo suficiente pronto nem pela composicao configurada na Expedicao.`
+            );
+          }
+
           throw this.createBusinessError(`Saldo insuficiente na Expedição para ${item.codigo}.`);
         }
 
-        this.addReservedQuantity(reservasPorItem, idPeca, quantidadeSolicitada);
-        movimentosPlanejados.push({
-          id_peca: idPeca,
-          quantidade: quantidadeSolicitada,
-          observacao: `${data.observacao || 'Baixa de venda pela Expedicao.'} Item ${item.codigo}.`.slice(0, 255)
-        });
+
+        solicitacoes[solicitacoes.length - 1].quantidade_submontagem_pronta = quantidadeProntaConsumida;
+        solicitacoes[solicitacoes.length - 1].quantidade_composicao_venda = composicaoVenda.quantidade_atendida;
+        solicitacoes[solicitacoes.length - 1].itens_composicao_venda = composicaoVenda.itens_consumidos;
+        solicitacoes[solicitacoes.length - 1].quantidade_componentes = quantidadeViaComponentes;
+
+
       }
 
       const resultados = [];

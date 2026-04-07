@@ -504,6 +504,86 @@
     </div>
   </div>
 
+  <!-- Modal de desmembramento de submontagem -->
+  <div id="desmembrar-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="desmembrar"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Desmembramento</span>
+          <h2>Desmembrar Submontagem</h2>
+          <p>Baixa o item pronto e devolve os componentes para qualquer estoque, inclusive o proprio.</p>
+        </div>
+
+        <button id="btn-fechar-modal-desmembrar" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="desmembrar-mensagem" class="message hidden"></div>
+
+      <div class="structure-highlight">
+        <div>
+          <p class="page-kicker">Submontagem Selecionada</p>
+          <h3 id="desmembrar-item-titulo">Nenhuma submontagem selecionada</h3>
+          <p id="desmembrar-item-subtitulo">Escolha uma submontagem com saldo para desmembrar.</p>
+        </div>
+
+        <div class="structure-kpis">
+          <span id="desmembrar-estoque-chip" class="mini-chip">Origem: -</span>
+          <span id="desmembrar-saldo-chip" class="mini-chip">Pronto atual: 0</span>
+          <span id="desmembrar-preview-status-chip" class="mini-chip">Status: aguardando selecao</span>
+        </div>
+      </div>
+
+      <form id="desmembrar-form" class="form-grid">
+        <input type="hidden" id="desmembrar-item-id">
+        <input type="hidden" id="desmembrar-estoque-origem-id">
+
+        <div class="field span-4">
+          <label for="desmembrar-estoque-destino">Estoque de destino</label>
+          <select id="desmembrar-estoque-destino" required>
+            <option value="">Selecione</option>
+          </select>
+        </div>
+
+        <div class="field span-4">
+          <label for="desmembrar-quantidade">Quantidade</label>
+          <input id="desmembrar-quantidade" type="number" min="1" step="1" value="1" required>
+        </div>
+
+        <div class="field span-4">
+          <label for="desmembrar-observacao">Observacao</label>
+          <input id="desmembrar-observacao" type="text" maxlength="255" placeholder="Opcional">
+        </div>
+
+        <div class="span-12 embedded-section">
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Codigo</th>
+                  <th>Descricao</th>
+                  <th>Qtd base</th>
+                  <th>Qtd retorno</th>
+                </tr>
+              </thead>
+              <tbody id="desmembrar-preview-tbody">
+                <tr>
+                  <td colspan="4" class="empty-state">Escolha uma submontagem da tabela para visualizar o retorno.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button id="btn-cancelar-modal-desmembrar" class="btn btn-neutral" type="button">Cancelar</button>
+          <button id="btn-confirmar-modal-desmembrar" class="btn btn-primary" type="submit">Confirmar Desmembramento</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Modal do historico de movimentacoes -->
   <div id="historico-modal" class="modal hidden" aria-hidden="true">
     <div class="modal-backdrop" data-close-modal="historico"></div>

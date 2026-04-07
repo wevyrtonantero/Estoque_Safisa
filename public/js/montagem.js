@@ -13,11 +13,14 @@ const CLOSED_REQUEST_STATUSES = ['ATENDIDA', 'CANCELADA'];
 let estoquesCache = [];
 let itensCache = [];
 let submontagensCache = [];
+let submontagensMontagemCache = [];
 let saldosMontagemCache = [];
 let pedidosMontagemCache = [];
 let pedidosRecebidosCache = [];
 let producaoEmAndamentoCache = [];
 let autoRefreshHandle = null;
+let estruturasSubmontagemCache = new Map();
+let efetuarFaltantesCache = [];
 
 const refs = {
   mensagem: document.getElementById('montagem-mensagem'),
@@ -56,6 +59,22 @@ const refs = {
   solicitacaoResumo: document.getElementById('montagem-solicitacao-item-resumo'),
   solicitacaoQuantidade: document.getElementById('montagem-solicitacao-quantidade'),
   solicitacaoObservacao: document.getElementById('montagem-solicitacao-observacao'),
+  efetuarModal: document.getElementById('montagem-efetuar-modal'),
+  efetuarMensagem: document.getElementById('montagem-efetuar-mensagem'),
+  efetuarForm: document.getElementById('montagem-efetuar-form'),
+  efetuarSubmontagemId: document.getElementById('montagem-efetuar-submontagem-id'),
+  efetuarBusca: document.getElementById('montagem-efetuar-submontagem-busca'),
+  efetuarSugestoes: document.getElementById('montagem-efetuar-submontagem-sugestoes'),
+  efetuarQuantidade: document.getElementById('montagem-efetuar-quantidade'),
+  efetuarObservacao: document.getElementById('montagem-efetuar-observacao'),
+  efetuarPreviewTitulo: document.getElementById('montagem-efetuar-preview-titulo'),
+  efetuarPreviewSubtitulo: document.getElementById('montagem-efetuar-preview-subtitulo'),
+  efetuarPreviewProntoChip: document.getElementById('montagem-efetuar-preview-pronto-chip'),
+  efetuarPreviewComponentesChip: document.getElementById('montagem-efetuar-preview-componentes-chip'),
+  efetuarPreviewStatusChip: document.getElementById('montagem-efetuar-preview-status-chip'),
+  efetuarPreviewTbody: document.getElementById('montagem-efetuar-preview-tbody'),
+  efetuarSolicitarFaltantes: document.getElementById('btn-montagem-efetuar-solicitar-faltantes'),
+  efetuarSubmit: document.getElementById('btn-confirmar-modal-montagem-efetuar'),
   simulacaoModal: document.getElementById('montagem-simulacao-modal'),
   simulacaoMensagem: document.getElementById('montagem-simulacao-mensagem'),
   simulacaoForm: document.getElementById('montagem-simulacao-form'),
@@ -117,12 +136,14 @@ function bindEvents() {
     if (!event.target.closest('.autocomplete')) {
       esconderSugestoes();
       esconderSugestoesSolicitacao();
+      esconderSugestoesEfetuarMontagem();
       esconderSugestoesSubmontagem();
     }
   });
   document.getElementById('montagem-btn-transferencia-menu').addEventListener('click', abrirModalTransferencia);
   document.getElementById('montagem-btn-solicitar').addEventListener('click', () => abrirModalSolicitacao());
   document.getElementById('montagem-btn-solicitar-inline').addEventListener('click', () => abrirModalSolicitacao());
+  document.getElementById('montagem-btn-efetuar').addEventListener('click', abrirModalEfetuarMontagem);
   document.getElementById('montagem-btn-simular').addEventListener('click', abrirModalSimulacao);
   document.getElementById('montagem-btn-pedidos-menu').addEventListener('click', abrirModalPedidos);
   document.getElementById('montagem-btn-recebidos-menu').addEventListener('click', abrirModalPedidosRecebidos);
@@ -142,6 +163,9 @@ function bindEvents() {
   document.getElementById('btn-fechar-modal-montagem-producao-rodape').addEventListener('click', fecharModalProducao);
   document.getElementById('btn-fechar-modal-montagem-solicitacao').addEventListener('click', fecharModalSolicitacao);
   document.getElementById('btn-cancelar-modal-montagem-solicitacao').addEventListener('click', fecharModalSolicitacao);
+  document.getElementById('btn-fechar-modal-montagem-efetuar').addEventListener('click', fecharModalEfetuarMontagem);
+  document.getElementById('btn-cancelar-modal-montagem-efetuar').addEventListener('click', fecharModalEfetuarMontagem);
+  refs.efetuarSolicitarFaltantes.addEventListener('click', handleSolicitarFaltantesMontagem);
   document.getElementById('btn-fechar-modal-montagem-simulacao').addEventListener('click', fecharModalSimulacao);
   document.getElementById('btn-fechar-modal-montagem-atendimento').addEventListener('click', fecharModalAtendimento);
   document.getElementById('btn-cancelar-modal-montagem-atendimento').addEventListener('click', fecharModalAtendimento);
@@ -153,11 +177,21 @@ function bindEvents() {
     refs.pedidosRecebidosModal,
     refs.producaoModal,
     refs.solicitacaoModal,
+    refs.efetuarModal,
     refs.simulacaoModal,
     refs.atendimentoModal,
     refs.solicitacaoProducaoModal
   ].forEach((modal) => modal.addEventListener('click', handleModalBackdrop));
   refs.solicitacaoForm.addEventListener('submit', handleCriarSolicitacao);
+  refs.efetuarForm.addEventListener('submit', handleEfetuarMontagem);
+  refs.efetuarBusca.addEventListener('input', () => {
+    refs.efetuarSubmontagemId.value = '';
+    atualizarPreviewEfetuarMontagem();
+    renderizarSugestoesEfetuarMontagem(refs.efetuarBusca.value.trim());
+  });
+  refs.efetuarBusca.addEventListener('focus', () => renderizarSugestoesEfetuarMontagem(refs.efetuarBusca.value.trim()));
+  refs.efetuarSugestoes.addEventListener('click', handleSugestaoEfetuarMontagemClick);
+  refs.efetuarQuantidade.addEventListener('input', () => atualizarPreviewEfetuarMontagem());
   refs.simulacaoForm.addEventListener('submit', handleSimular);
   refs.simulacaoTbody.addEventListener('click', handleSimulacaoActions);
   refs.atendimentoForm.addEventListener('submit', handleAtenderPedidoRecebido);
@@ -266,6 +300,38 @@ async function carregarSubmontagens() {
   }
 
   submontagensCache = result;
+}
+
+async function carregarSubmontagensMontagemDisponiveis() {
+  const montagem = obterEstoquePorNome('mont');
+  if (!montagem) {
+    throw new Error('Estoque da Montagem nao encontrado.');
+  }
+
+  const response = await fetch(`${submontagensApiBaseUrl}?estoque_referencia=${montagem.id}`);
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || 'Nao foi possivel carregar as submontagens disponiveis na Montagem.');
+  }
+
+  submontagensMontagemCache = Array.isArray(result) ? result : [];
+}
+
+async function carregarEstruturaSubmontagem(submontagemId) {
+  if (estruturasSubmontagemCache.has(submontagemId)) {
+    return estruturasSubmontagemCache.get(submontagemId);
+  }
+
+  const response = await fetch(`${submontagensApiBaseUrl}/${submontagemId}/componentes`);
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || 'Nao foi possivel carregar a estrutura da submontagem.');
+  }
+
+  estruturasSubmontagemCache.set(submontagemId, result);
+  return result;
 }
 
 async function carregarPedidosMontagem() {
@@ -436,6 +502,300 @@ function abrirModalSolicitacao(prefill = null) {
 
 function fecharModalSolicitacao() {
   closeModal(refs.solicitacaoModal);
+}
+
+async function abrirModalEfetuarMontagem() {
+  resetModalEfetuarMontagem();
+  openModal(refs.efetuarModal);
+
+  try {
+    await carregarSubmontagensMontagemDisponiveis();
+    renderizarSugestoesEfetuarMontagem(refs.efetuarBusca.value.trim());
+  } catch (error) {
+    refs.efetuarMensagem.textContent = error.message;
+    refs.efetuarMensagem.className = 'message error';
+    refs.efetuarMensagem.classList.remove('hidden');
+  }
+}
+
+function fecharModalEfetuarMontagem() {
+  resetModalEfetuarMontagem();
+  closeModal(refs.efetuarModal);
+}
+
+function resetModalEfetuarMontagem() {
+  efetuarFaltantesCache = [];
+  refs.efetuarMensagem.className = 'message hidden';
+  refs.efetuarMensagem.textContent = '';
+  refs.efetuarForm.reset();
+  refs.efetuarSubmontagemId.value = '';
+  refs.efetuarQuantidade.value = '1';
+  refs.efetuarPreviewTitulo.textContent = 'Selecione uma submontagem';
+  refs.efetuarPreviewSubtitulo.textContent = 'A Montagem vai consumir os componentes do proprio estoque e gerar o item pronto no mesmo setor.';
+  refs.efetuarPreviewProntoChip.textContent = 'Pronto atual: 0';
+  refs.efetuarPreviewComponentesChip.textContent = 'Componentes: 0';
+  refs.efetuarPreviewStatusChip.textContent = 'Status: aguardando selecao';
+  refs.efetuarPreviewTbody.innerHTML = '<tr><td colspan="6" class="empty-state">Selecione a submontagem para visualizar o consumo.</td></tr>';
+  refs.efetuarSolicitarFaltantes.disabled = true;
+  refs.efetuarSubmit.disabled = true;
+  esconderSugestoesEfetuarMontagem();
+}
+
+function renderizarSugestoesEfetuarMontagem(termo) {
+  const filtro = normalizarBusca(termo);
+  const itens = submontagensMontagemCache
+    .filter((item) => {
+      if (!filtro) {
+        return true;
+      }
+
+      return normalizarBusca(`${item.codigo} ${item.descricao}`).includes(filtro);
+    })
+    .sort((a, b) => {
+      const capacidadeA = Number(a.capacidade_estoque || 0);
+      const capacidadeB = Number(b.capacidade_estoque || 0);
+
+      if (capacidadeA !== capacidadeB) {
+        return capacidadeB - capacidadeA;
+      }
+
+      return String(a.codigo || '').localeCompare(String(b.codigo || ''));
+    })
+    .slice(0, 8);
+
+  renderizarPainelAutocomplete(
+    refs.efetuarSugestoes,
+    itens,
+    (item) => ({
+      id: item.id,
+      title: `${item.codigo} - ${item.descricao}`,
+      subtitle: `Pronto: ${formatInteger(item.saldo_pronto_estoque)} | Consegue montar: ${formatInteger(item.capacidade_estoque)}`
+    }),
+    'Nenhuma submontagem encontrada.'
+  );
+}
+
+function handleSugestaoEfetuarMontagemClick(event) {
+  const option = event.target.closest('button[data-id]');
+  if (!option) {
+    return;
+  }
+
+  const item = submontagensMontagemCache.find((entry) => Number(entry.id) === Number(option.dataset.id));
+  if (!item) {
+    return;
+  }
+
+  refs.efetuarSubmontagemId.value = String(item.id);
+  refs.efetuarBusca.value = `${item.codigo} - ${item.descricao}`;
+  esconderSugestoesEfetuarMontagem();
+  atualizarPreviewEfetuarMontagem();
+}
+
+async function atualizarPreviewEfetuarMontagem() {
+  const submontagemId = Number.parseInt(refs.efetuarSubmontagemId.value, 10);
+  const submontagem = submontagensMontagemCache.find((item) => Number(item.id) === submontagemId);
+  const quantidadeInformada = Number.parseFloat(refs.efetuarQuantidade.value);
+  const quantidade = Number.isFinite(quantidadeInformada) && quantidadeInformada > 0 ? quantidadeInformada : 0;
+
+  if (!submontagem) {
+    efetuarFaltantesCache = [];
+    refs.efetuarPreviewTitulo.textContent = 'Selecione uma submontagem';
+    refs.efetuarPreviewSubtitulo.textContent = 'A Montagem vai consumir os componentes do proprio estoque e gerar o item pronto no mesmo setor.';
+    refs.efetuarPreviewProntoChip.textContent = 'Pronto atual: 0';
+    refs.efetuarPreviewComponentesChip.textContent = 'Componentes: 0';
+    refs.efetuarPreviewStatusChip.textContent = 'Status: aguardando selecao';
+    refs.efetuarPreviewTbody.innerHTML = '<tr><td colspan="6" class="empty-state">Selecione a submontagem para visualizar o consumo.</td></tr>';
+    refs.efetuarSolicitarFaltantes.disabled = true;
+    refs.efetuarSubmit.disabled = true;
+    return;
+  }
+
+  refs.efetuarPreviewTitulo.textContent = `${submontagem.codigo} - ${submontagem.descricao}`;
+  refs.efetuarPreviewSubtitulo.textContent = `Montagem pronta atual: ${formatInteger(submontagem.saldo_pronto_estoque)} | Capacidade estimada no setor: ${formatInteger(submontagem.capacidade_estoque)}`;
+
+  try {
+    const componentes = await carregarEstruturaSubmontagem(submontagem.id);
+
+    if (!componentes.length) {
+      efetuarFaltantesCache = [];
+      refs.efetuarPreviewProntoChip.textContent = `Pronto atual: ${formatInteger(submontagem.saldo_pronto_estoque)}`;
+      refs.efetuarPreviewComponentesChip.textContent = 'Componentes: 0';
+      refs.efetuarPreviewStatusChip.textContent = 'Status: sem estrutura';
+      refs.efetuarPreviewTbody.innerHTML = '<tr><td colspan="6" class="empty-state">Esta submontagem nao possui componentes cadastrados.</td></tr>';
+      refs.efetuarSolicitarFaltantes.disabled = true;
+      refs.efetuarSubmit.disabled = true;
+      return;
+    }
+
+    const linhas = componentes.map((componente) => {
+      const quantidadeNecessaria = Number((Number(componente.quantidade) * quantidade).toFixed(2));
+      const saldoMontagem = obterSaldoMontagem(componente.id_item_componente);
+      const suficiente = quantidade > 0 && saldoMontagem >= quantidadeNecessaria;
+
+      return {
+        ...componente,
+        quantidade_necessaria: quantidadeNecessaria,
+        saldo_montagem: saldoMontagem,
+        quantidade_faltante: Math.max(0, Number((quantidadeNecessaria - saldoMontagem).toFixed(2))),
+        suficiente
+      };
+    });
+
+    const prontoParaMontar = quantidade > 0 && linhas.every((componente) => componente.suficiente);
+    efetuarFaltantesCache = linhas.filter((componente) => Number(componente.quantidade_faltante || 0) > 0);
+
+    refs.efetuarPreviewProntoChip.textContent = `Pronto atual: ${formatInteger(submontagem.saldo_pronto_estoque)}`;
+    refs.efetuarPreviewComponentesChip.textContent = `Componentes: ${componentes.length}`;
+    refs.efetuarPreviewStatusChip.textContent = prontoParaMontar
+      ? 'Status: pronto para montar'
+      : 'Status: saldo insuficiente';
+    refs.efetuarPreviewTbody.innerHTML = linhas.map((componente) => `
+      <tr>
+        <td class="table-code">${escapeHtml(componente.codigo_componente)}</td>
+        <td class="table-description">${escapeHtml(componente.descricao_componente)}</td>
+        <td class="table-quantity">${formatDecimal(componente.quantidade)}</td>
+        <td class="table-quantity">${formatDecimal(componente.quantidade_necessaria)}</td>
+        <td class="table-quantity">${formatDecimal(componente.saldo_montagem)}</td>
+        <td>${componente.suficiente ? 'OK' : 'Faltando'}</td>
+      </tr>
+    `).join('');
+    refs.efetuarSolicitarFaltantes.disabled = prontoParaMontar || efetuarFaltantesCache.length === 0;
+    refs.efetuarSubmit.disabled = !prontoParaMontar;
+  } catch (error) {
+    efetuarFaltantesCache = [];
+    refs.efetuarPreviewProntoChip.textContent = `Pronto atual: ${formatInteger(submontagem.saldo_pronto_estoque)}`;
+    refs.efetuarPreviewComponentesChip.textContent = 'Componentes: 0';
+    refs.efetuarPreviewStatusChip.textContent = 'Status: erro';
+    refs.efetuarPreviewTbody.innerHTML = `<tr><td colspan="6" class="empty-state">${escapeHtml(error.message)}</td></tr>`;
+    refs.efetuarSolicitarFaltantes.disabled = true;
+    refs.efetuarSubmit.disabled = true;
+  }
+}
+
+async function handleEfetuarMontagem(event) {
+  event.preventDefault();
+
+  try {
+    const montagem = obterEstoquePorNome('mont');
+    if (!montagem) {
+      throw new Error('Estoque da Montagem nao encontrado.');
+    }
+
+    if (!refs.efetuarSubmontagemId.value) {
+      throw new Error('Selecione uma submontagem valida.');
+    }
+
+    const response = await fetch(`${submontagensApiBaseUrl}/${refs.efetuarSubmontagemId.value}/montar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id_estoque: montagem.id,
+        quantidade: refs.efetuarQuantidade.value,
+        observacao: refs.efetuarObservacao.value.trim()
+      })
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.message || 'Nao foi possivel efetuar a montagem da submontagem.');
+    }
+
+    fecharModalEfetuarMontagem();
+    mostrarMensagem('Montagem efetuada com sucesso.', 'success');
+    await Promise.all([
+      carregarEstoqueMontagem(),
+      carregarSubmontagensMontagemDisponiveis()
+    ]);
+  } catch (error) {
+    refs.efetuarMensagem.textContent = error.message;
+    refs.efetuarMensagem.className = 'message error';
+    refs.efetuarMensagem.classList.remove('hidden');
+  }
+}
+
+async function handleSolicitarFaltantesMontagem() {
+  try {
+    const submontagemId = Number.parseInt(refs.efetuarSubmontagemId.value, 10);
+    const submontagem = submontagensMontagemCache.find((item) => Number(item.id) === submontagemId);
+
+    if (!submontagem) {
+      throw new Error('Selecione uma submontagem valida.');
+    }
+
+    const faltantes = efetuarFaltantesCache.filter((item) => Number(item.quantidade_faltante || 0) > 0);
+    if (!faltantes.length) {
+      throw new Error('Nao ha faltantes para solicitar ao Almoxarifado.');
+    }
+
+    const criadas = [];
+    const semSaldo = [];
+    const falhas = [];
+
+    for (const componente of faltantes) {
+      const item = itensCache.find((entry) => Number(entry.id) === Number(componente.id_item_componente));
+
+      if (!item) {
+        falhas.push(`${componente.codigo_componente}: cadastro nao encontrado.`);
+        continue;
+      }
+
+      const saldoAlmox = obterSaldoAlmoxarifado(item);
+      if (saldoAlmox <= 0) {
+        semSaldo.push(`${item.codigo}`);
+        continue;
+      }
+
+      const quantidadeSolicitada = Number(Math.min(saldoAlmox, Number(componente.quantidade_faltante || 0)).toFixed(2));
+      if (quantidadeSolicitada <= 0) {
+        continue;
+      }
+
+      const response = await fetch(solicitacoesApiBaseUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          area_origem: 'MONTAGEM',
+          origem_atendimento: 'ALMOXARIFADO',
+          id_peca: item.id,
+          quantidade_solicitada: quantidadeSolicitada,
+          observacao: `Faltante para montar ${submontagem.codigo} na Montagem.`
+        })
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        falhas.push(`${item.codigo}: ${result.message || 'nao foi possivel solicitar.'}`);
+        continue;
+      }
+
+      criadas.push(`${item.codigo} (${formatDecimal(quantidadeSolicitada)})`);
+    }
+
+    await carregarPedidosMontagem();
+
+    if (!criadas.length) {
+      const detalhes = [
+        semSaldo.length ? `Sem saldo no Almox: ${semSaldo.join(', ')}` : '',
+        falhas.length ? `Falhas: ${falhas.join(' | ')}` : ''
+      ].filter(Boolean).join(' | ');
+      throw new Error(detalhes || 'Nenhuma solicitacao foi criada.');
+    }
+
+    const detalhes = [
+      `Solicitacoes criadas: ${criadas.join(', ')}`,
+      semSaldo.length ? `Sem saldo no Almox: ${semSaldo.join(', ')}` : '',
+      falhas.length ? `Falhas: ${falhas.join(' | ')}` : ''
+    ].filter(Boolean).join(' | ');
+
+    refs.efetuarMensagem.textContent = detalhes;
+    refs.efetuarMensagem.className = 'message success';
+    refs.efetuarMensagem.classList.remove('hidden');
+  } catch (error) {
+    refs.efetuarMensagem.textContent = error.message;
+    refs.efetuarMensagem.className = 'message error';
+    refs.efetuarMensagem.classList.remove('hidden');
+  }
 }
 
 async function handleCriarSolicitacao(event) {
@@ -1164,6 +1524,11 @@ function esconderSugestoesSolicitacao() {
   refs.solicitacaoSugestoes.innerHTML = '';
 }
 
+function esconderSugestoesEfetuarMontagem() {
+  refs.efetuarSugestoes.classList.add('hidden');
+  refs.efetuarSugestoes.innerHTML = '';
+}
+
 function esconderSugestoesSubmontagem() {
   refs.simulacaoSugestoes.classList.add('hidden');
   refs.simulacaoSugestoes.innerHTML = '';
@@ -1175,6 +1540,7 @@ function handleModalBackdrop(event) {
   if (event.target.dataset.closeModal === 'montagem-recebidos') fecharModalPedidosRecebidos();
   if (event.target.dataset.closeModal === 'montagem-producao') fecharModalProducao();
   if (event.target.dataset.closeModal === 'montagem-solicitacao') fecharModalSolicitacao();
+  if (event.target.dataset.closeModal === 'montagem-efetuar') fecharModalEfetuarMontagem();
   if (event.target.dataset.closeModal === 'montagem-simulacao') fecharModalSimulacao();
   if (event.target.dataset.closeModal === 'montagem-atendimento') fecharModalAtendimento();
   if (event.target.dataset.closeModal === 'montagem-producao-solicitacao') fecharModalSolicitacaoProducao();
@@ -1188,6 +1554,7 @@ function handleKeyboardShortcuts(event) {
   closeAllRowMenus();
   esconderSugestoes();
   esconderSugestoesSolicitacao();
+  esconderSugestoesEfetuarMontagem();
   esconderSugestoesSubmontagem();
 
   if (!refs.solicitacaoProducaoModal.classList.contains('hidden')) {
@@ -1207,6 +1574,11 @@ function handleKeyboardShortcuts(event) {
 
   if (!refs.atendimentoModal.classList.contains('hidden')) {
     fecharModalAtendimento();
+    return;
+  }
+
+  if (!refs.efetuarModal.classList.contains('hidden')) {
+    fecharModalEfetuarMontagem();
     return;
   }
 
@@ -1245,6 +1617,7 @@ function closeModal(modal) {
     refs.pedidosRecebidosModal,
     refs.producaoModal,
     refs.solicitacaoModal,
+    refs.efetuarModal,
     refs.simulacaoModal,
     refs.atendimentoModal,
     refs.solicitacaoProducaoModal

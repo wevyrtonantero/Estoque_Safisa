@@ -56,7 +56,10 @@
 
             <div class="sector-menu-list">
               <button id="expedicao-btn-saida-menu" class="btn btn-primary" type="button"><span class="btn-label">Baixa de Venda</span></button>
+              <button id="expedicao-btn-retornar" class="btn btn-neutral" type="button"><span class="btn-label">Devolver Item</span></button>
+              <button id="expedicao-btn-desmembrar" class="btn btn-neutral" type="button"><span class="btn-label">Desmembrar</span></button>
               <button id="expedicao-btn-solicitar" class="btn btn-neutral" type="button"><span class="btn-label">Solicitar Pecas</span></button>
+              <button id="expedicao-btn-efetuar" class="btn btn-success" type="button"><span class="btn-label">Efetuar Montagem</span></button>
               <button id="expedicao-btn-simular" class="btn btn-secondary" type="button"><span class="btn-label">Simulacao de Montagem</span></button>
               <button id="expedicao-btn-pedidos-menu" class="btn btn-neutral" type="button"><span class="btn-label">Meus Pedidos</span><span id="expedicao-badge-pedidos" class="btn-badge hidden">0</span></button>
               <button id="expedicao-btn-historico-menu" class="btn btn-neutral" type="button"><span class="btn-label">Historico de Saidas</span></button>
@@ -264,6 +267,62 @@
     </div>
   </div>
 
+  <div id="expedicao-retorno-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="expedicao-retorno"></div>
+
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Expedicao</span>
+          <h2>Devolver item pronto</h2>
+          <p>Transfira o item ja pronto para outro estoque sem baixar novamente seus componentes.</p>
+        </div>
+
+        <button id="btn-fechar-modal-expedicao-retorno" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="expedicao-retorno-mensagem" class="message hidden"></div>
+
+      <form id="expedicao-retorno-form" class="form-grid">
+        <input type="hidden" id="expedicao-retorno-item-id">
+
+        <div class="field span-8">
+          <label for="expedicao-retorno-item-busca">Item pronto na Expedicao</label>
+          <div class="autocomplete">
+            <input id="expedicao-retorno-item-busca" type="text" placeholder="Digite codigo ou descricao">
+            <div id="expedicao-retorno-item-sugestoes" class="autocomplete-panel hidden"></div>
+          </div>
+        </div>
+
+        <div class="field span-4">
+          <label for="expedicao-retorno-quantidade">Quantidade</label>
+          <input id="expedicao-retorno-quantidade" type="number" min="1" step="1" value="1" required>
+        </div>
+
+        <div id="expedicao-retorno-item-resumo" class="span-12 selected-tags empty">
+          Selecione o item pronto que vai sair da Expedicao.
+        </div>
+
+        <div class="field span-4">
+          <label for="expedicao-retorno-destino">Estoque de destino</label>
+          <select id="expedicao-retorno-destino" required>
+            <option value="">Selecione</option>
+          </select>
+        </div>
+
+        <div class="field span-8">
+          <label for="expedicao-retorno-observacao">Observacao</label>
+          <input id="expedicao-retorno-observacao" type="text" maxlength="255" placeholder="Opcional">
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button id="btn-cancelar-modal-expedicao-retorno" class="btn btn-neutral" type="button">Cancelar</button>
+          <button class="btn btn-primary" type="submit">Transferir item pronto</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div id="expedicao-historico-modal" class="modal hidden" aria-hidden="true">
     <div class="modal-backdrop" data-close-modal="expedicao-historico"></div>
 
@@ -394,6 +453,174 @@
         <div class="span-12 modal-actions">
           <button id="btn-cancelar-modal-expedicao-solicitacao" class="btn btn-neutral" type="button">Cancelar</button>
           <button class="btn btn-primary" type="submit">Enviar solicitacao</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="expedicao-efetuar-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="expedicao-efetuar"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Expedicao</span>
+          <h2>Efetuar montagem</h2>
+          <p>Consuma as pecas do estoque da Expedicao e gere a submontagem pronta no proprio setor.</p>
+        </div>
+
+        <button id="btn-fechar-modal-expedicao-efetuar" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="expedicao-efetuar-mensagem" class="message hidden"></div>
+
+      <form id="expedicao-efetuar-form" class="form-grid">
+        <input type="hidden" id="expedicao-efetuar-submontagem-id">
+
+        <div class="field span-8">
+          <label for="expedicao-efetuar-submontagem-busca">Submontagem</label>
+          <div class="autocomplete">
+            <input id="expedicao-efetuar-submontagem-busca" type="text" placeholder="Digite codigo ou descricao da submontagem">
+            <div id="expedicao-efetuar-submontagem-sugestoes" class="autocomplete-panel hidden"></div>
+          </div>
+        </div>
+
+        <div class="field span-4">
+          <label for="expedicao-efetuar-quantidade">Quantidade a montar</label>
+          <input id="expedicao-efetuar-quantidade" type="number" min="1" step="1" value="1" required>
+        </div>
+
+        <div id="expedicao-efetuar-preview" class="span-12 embedded-section">
+          <div class="structure-highlight">
+            <div>
+              <p class="page-kicker">Montagem da Submontagem</p>
+              <h3 id="expedicao-efetuar-preview-titulo">Selecione uma submontagem</h3>
+              <p id="expedicao-efetuar-preview-subtitulo">A Expedicao vai consumir os componentes do proprio estoque e gerar o item pronto no mesmo setor.</p>
+            </div>
+
+            <div class="structure-kpis">
+              <span id="expedicao-efetuar-preview-pronto-chip" class="mini-chip">Pronto atual: 0</span>
+              <span id="expedicao-efetuar-preview-componentes-chip" class="mini-chip">Componentes: 0</span>
+              <span id="expedicao-efetuar-preview-status-chip" class="mini-chip">Status: aguardando selecao</span>
+            </div>
+          </div>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Codigo</th>
+                  <th>Descricao</th>
+                  <th>Qtd. Estrutura</th>
+                  <th>Qtd. Necessaria</th>
+                  <th>Disponivel na Expedicao</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="expedicao-efetuar-preview-tbody">
+                <tr>
+                  <td colspan="6" class="empty-state">Selecione a submontagem para visualizar o consumo.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="field span-12">
+          <label for="expedicao-efetuar-observacao">Observacao</label>
+          <input id="expedicao-efetuar-observacao" type="text" maxlength="255" placeholder="Opcional">
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button id="btn-expedicao-efetuar-solicitar-faltantes" class="btn btn-neutral" type="button">Solicitar faltantes ao Almox</button>
+          <button id="btn-cancelar-modal-expedicao-efetuar" class="btn btn-neutral" type="button">Cancelar</button>
+          <button id="btn-confirmar-modal-expedicao-efetuar" class="btn btn-success" type="submit">Confirmar montagem</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="expedicao-desmembrar-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="expedicao-desmembrar"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Expedicao</span>
+          <h2>Desmembrar submontagem</h2>
+          <p>Baixe o item pronto da Expedicao e devolva seus componentes para outro estoque.</p>
+        </div>
+
+        <button id="btn-fechar-modal-expedicao-desmembrar" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="expedicao-desmembrar-mensagem" class="message hidden"></div>
+
+      <form id="expedicao-desmembrar-form" class="form-grid">
+        <input type="hidden" id="expedicao-desmembrar-submontagem-id">
+
+        <div class="field span-6">
+          <label for="expedicao-desmembrar-submontagem-busca">Submontagem pronta</label>
+          <div class="autocomplete">
+            <input id="expedicao-desmembrar-submontagem-busca" type="text" placeholder="Digite codigo ou descricao da submontagem">
+            <div id="expedicao-desmembrar-submontagem-sugestoes" class="autocomplete-panel hidden"></div>
+          </div>
+        </div>
+
+        <div class="field span-3">
+          <label for="expedicao-desmembrar-quantidade">Quantidade</label>
+          <input id="expedicao-desmembrar-quantidade" type="number" min="1" step="1" value="1" required>
+        </div>
+
+        <div class="field span-3">
+          <label for="expedicao-desmembrar-destino">Estoque de destino</label>
+          <select id="expedicao-desmembrar-destino" required>
+            <option value="">Selecione</option>
+          </select>
+        </div>
+
+        <div id="expedicao-desmembrar-preview" class="span-12 embedded-section">
+          <div class="structure-highlight">
+            <div>
+              <p class="page-kicker">Retorno dos Componentes</p>
+              <h3 id="expedicao-desmembrar-preview-titulo">Selecione uma submontagem</h3>
+              <p id="expedicao-desmembrar-preview-subtitulo">A Expedicao vai baixar o item pronto e devolver os componentes para outro estoque.</p>
+            </div>
+
+            <div class="structure-kpis">
+              <span id="expedicao-desmembrar-preview-pronto-chip" class="mini-chip">Pronto atual: 0</span>
+              <span id="expedicao-desmembrar-preview-componentes-chip" class="mini-chip">Componentes: 0</span>
+              <span id="expedicao-desmembrar-preview-status-chip" class="mini-chip">Status: aguardando selecao</span>
+            </div>
+          </div>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Codigo</th>
+                  <th>Descricao</th>
+                  <th>Qtd. Estrutura</th>
+                  <th>Qtd. Retornada</th>
+                </tr>
+              </thead>
+              <tbody id="expedicao-desmembrar-preview-tbody">
+                <tr>
+                  <td colspan="4" class="empty-state">Selecione a submontagem para visualizar o retorno dos componentes.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="field span-12">
+          <label for="expedicao-desmembrar-observacao">Observacao</label>
+          <input id="expedicao-desmembrar-observacao" type="text" maxlength="255" placeholder="Opcional">
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button id="btn-cancelar-modal-expedicao-desmembrar" class="btn btn-neutral" type="button">Cancelar</button>
+          <button id="btn-confirmar-modal-expedicao-desmembrar" class="btn btn-success" type="submit">Confirmar desmembramento</button>
         </div>
       </form>
     </div>

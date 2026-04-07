@@ -4,7 +4,7 @@ const express = require('express');
 const SubmontagemController = require('../controllers/SubmontagemController');
 const EstruturaSubmontagemController = require('../controllers/EstruturaSubmontagemController');
 const { requireApiRoles } = require('../middleware/authMiddleware');
-const { ALL_ROLES, ADMIN_WRITE_ROLES, ADMIN_DELETE_ROLES } = require('../security/roles');
+const { ALL_ROLES, ADMIN_WRITE_ROLES, ADMIN_DELETE_ROLES, STOCK_WRITE_ROLES } = require('../security/roles');
 
 const router = express.Router();
 
@@ -16,6 +16,12 @@ router.get('/submontagens/:id', requireApiRoles(ALL_ROLES), SubmontagemControlle
 
 // Rota para simular montagem da submontagem em todos os estoques.
 router.get('/submontagens/:id/simulacao', requireApiRoles(ALL_ROLES), SubmontagemController.simulate);
+
+// Rota para efetuar a montagem da submontagem no estoque do proprio setor.
+router.post('/submontagens/:id/montar', requireApiRoles(STOCK_WRITE_ROLES), SubmontagemController.mount);
+
+// Rota para desmembrar uma submontagem pronta e retornar seus componentes para outro estoque.
+router.post('/submontagens/:id/desmembrar', requireApiRoles(STOCK_WRITE_ROLES), SubmontagemController.disassemble);
 
 // Rota para cadastrar submontagens.
 router.post('/submontagens', requireApiRoles(ADMIN_WRITE_ROLES), SubmontagemController.create);

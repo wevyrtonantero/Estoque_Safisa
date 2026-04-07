@@ -1,6 +1,8 @@
 // Controller do CRUD de submontagens.
 const SubmontagemModel = require('../models/SubmontagemModel');
 const EstruturaSubmontagemModel = require('../models/EstruturaSubmontagemModel');
+const EstoqueModel = require('../models/EstoqueModel');
+const { recordAuditLog } = require('../audit/auditLogger');
 
 // Normaliza inteiros opcionais usados na mesma tabela pecas.
 function normalizeOptionalInteger(value) {
@@ -16,6 +18,14 @@ function normalizeOptionalInteger(value) {
 function normalizeOptionalDecimal(value) {
   if (value === undefined || value === null || value === '') {
     return null;
+  }
+
+  return Number.parseFloat(value);
+}
+
+function normalizePositiveDecimal(value) {
+  if (value === undefined || value === null || value === '') {
+    return Number.NaN;
   }
 
   return Number.parseFloat(value);
@@ -135,6 +145,74 @@ function validateComponentsPayload(componentes, { requireAtLeastOne = false } = 
   return errors;
 }
 
+function buildMontagemPayload(submontagemId, body) {
+  return {
+    id_submontagem: normalizeOptionalInteger(submontagemId),
+    id_estoque: normalizeOptionalInteger(body.id_estoque),
+    quantidade: normalizePositiveDecimal(body.quantidade),
+    observacao: body.observacao ? String(body.observacao).trim() : null
+  };
+}
+
+function validateMontagemPayload(payload) {
+  const errors = [];
+
+  if (!Number.isInteger(payload.id_submontagem)) {
+    errors.push('A submontagem informada deve ser valida.');
+  }
+
+  if (!Number.isInteger(payload.id_estoque)) {
+    errors.push('O estoque do setor deve ser valido.');
+  }
+
+  if (!Number.isFinite(payload.quantidade) || payload.quantidade <= 0) {
+    errors.push('A quantidade deve ser maior que zero.');
+  }
+
+  return errors;
+}
+
+function buildDesmembramentoPayload(submontagemId, body) {
+  return {
+    id_submontagem: normalizeOptionalInteger(submontagemId),
+    id_estoque_origem: normalizeOptionalInteger(body.id_estoque_origem),
+    id_estoque_destino: normalizeOptionalInteger(body.id_estoque_destino),
+    quantidade: normalizePositiveDecimal(body.quantidade),
+    observacao: body.observacao ? String(body.observacao).trim() : null
+  };
+}
+
+function validateDesmembramentoPayload(payload) {
+  const errors = [];
+
+  if (!Number.isInteger(payload.id_submontagem)) {
+    errors.push('A submontagem informada deve ser valida.');
+  }
+
+  if (!Number.isInteger(payload.id_estoque_origem)) {
+    errors.push('O estoque de origem deve ser valido.');
+  }
+
+  if (!Number.isInteger(payload.id_estoque_destino)) {
+    errors.push('O estoque de destino deve ser valido.');
+  }
+
+  if (!Number.isFinite(payload.quantidade) || payload.quantidade <= 0) {
+    errors.push('A quantidade deve ser maior que zero.');
+  }
+
+  return errors;
+}
+
+function extractErrorResponse(error, fallbackMessage) {
+  if (error.statusCode) {
+    return { status: error.statusCode, body: { message: error.message } };
+  }
+
+  console.error(fallbackMessage, error);
+  return { status: 500, body: { message: fallbackMessage } };
+}
+
 const SubmontagemController = {
   // Rota para listar submontagens.
   async getAll(req, res) {
@@ -202,6 +280,94 @@ const SubmontagemController = {
     } catch (error) {
       console.error('Erro ao simular montagem da submontagem:', error);
       return res.status(500).json({ message: 'Erro ao simular a montagem da submontagem.' });
+    }
+  },
+
+  async mount(req, res) {
+    try {
+      const payload = buildMontagemPayload(req.params.id, req.body);
+      const errors = validateMontagemPayload(payload);
+
+      if (errors.length > 0) {
+        return res.status(400).json({ message: 'Dados invalidos.', errors });
+      }
+
+      const submontagem = await SubmontagemModel.findById(payload.id_submontagem, payload.id_estoque);
+      if (!submontagem) {
+        return res.status(404).json({ message: 'Submontagem nao encontrada.' });
+      }
+
+      const observacao = payload.observacao
+        || `Montagem da submontagem ${submontagem.codigo} no estoque do setor.`;
+
+      const result = await EstoqueModel.processEntradaInicial({
+        id_peca: payload.id_submontagem,
+        id_estoque_destino: payload.id_estoque,
+        id_estoque_origem_componentes: payload.id_estoque,
+        quantidade: payload.quantidade,
+        observacao
+      });
+
+      await recordAuditLog(req, {
+        modulo: 'SUBMONTAGEM',
+        acao: 'MONTAGEM_ESTOQUE',
+        entidade_tipo: 'SUBMONTAGEM',
+        entidade_id: payload.id_submontagem,
+        descricao: 'Submontagem montada com consumo do estoque do proprio setor.',
+        depois: {
+          payload,
+          resultado: result
+        }
+      });
+
+      return res.status(201).json(result);
+    } catch (error) {
+      const response = extractErrorResponse(error, 'Erro ao efetuar a montagem da submontagem.');
+      return res.status(response.status).json(response.body);
+    }
+  },
+
+  async disassemble(req, res) {
+    try {
+      const payload = buildDesmembramentoPayload(req.params.id, req.body);
+      const errors = validateDesmembramentoPayload(payload);
+
+      if (errors.length > 0) {
+        return res.status(400).json({ message: 'Dados invalidos.', errors });
+      }
+
+      const submontagem = await SubmontagemModel.findById(payload.id_submontagem, payload.id_estoque_origem);
+      if (!submontagem) {
+        return res.status(404).json({ message: 'Submontagem nao encontrada.' });
+      }
+
+      const observacao = payload.observacao
+        || `Desmembramento da submontagem ${submontagem.codigo} para retorno dos componentes.`;
+
+      const result = await EstoqueModel.processDesmembramentoSubmontagem({
+        id_submontagem: payload.id_submontagem,
+        id_estoque_origem: payload.id_estoque_origem,
+        id_estoque_destino: payload.id_estoque_destino,
+        quantidade: payload.quantidade,
+        observacao
+      });
+
+      await recordAuditLog(req, {
+        modulo: 'SUBMONTAGEM',
+        acao: 'DESMEMBRAMENTO_ESTOQUE',
+        entidade_tipo: 'SUBMONTAGEM',
+        entidade_id: payload.id_submontagem,
+        descricao: 'Submontagem desmembrada com retorno dos componentes para um estoque definido pelo usuario.',
+        depois: {
+          payload,
+          resultado: result
+        }
+      });
+
+      return res.status(201).json(result);
+    } catch (error) {
+      const response = extractErrorResponse(error, 'Erro ao desmembrar a submontagem.');
+      return res.status(response.status).json(response.body);
     }
   },
 
