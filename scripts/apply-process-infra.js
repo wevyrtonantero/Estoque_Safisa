@@ -46,6 +46,34 @@ async function ensureSolicitacoesEstoqueSchema() {
       ADD INDEX idx_solicitacao_origem_atendimento (origem_atendimento)
     `);
   }
+
+  const [previsaoRows] = await pool.query(`
+    SELECT COUNT(*) AS total
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'solicitacoes_estoque'
+      AND COLUMN_NAME = 'data_previsao'
+  `);
+
+  if (!Number(previsaoRows[0]?.total || 0)) {
+    await pool.query(`
+      ALTER TABLE solicitacoes_estoque
+      ADD COLUMN data_previsao DATE NULL AFTER observacao
+    `);
+  }
+
+  await pool.query(`
+    ALTER TABLE solicitacoes_estoque
+    MODIFY COLUMN status ENUM(
+      'PENDENTE',
+      'FALTANDO_PECA',
+      'MONTANDO',
+      'EM_SEPARACAO',
+      'ATENDIDA_PARCIAL',
+      'ATENDIDA',
+      'CANCELADA'
+    ) NOT NULL DEFAULT 'PENDENTE'
+  `);
 }
 
 async function ensureEstoqueMateriaPrimaAllowsNegative() {

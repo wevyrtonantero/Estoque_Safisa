@@ -13,12 +13,15 @@ CREATE TABLE IF NOT EXISTS solicitacoes_estoque (
   quantidade_atendida DECIMAL(12, 2) NOT NULL DEFAULT 0,
   status ENUM(
     'PENDENTE',
+    'FALTANDO_PECA',
+    'MONTANDO',
     'EM_SEPARACAO',
     'ATENDIDA_PARCIAL',
     'ATENDIDA',
     'CANCELADA'
   ) NOT NULL DEFAULT 'PENDENTE',
   observacao VARCHAR(255) NULL,
+  data_previsao DATE NULL,
   data_solicitacao DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   data_inicio_separacao DATETIME NULL,
   data_atendimento DATETIME NULL,

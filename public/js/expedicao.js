@@ -10,7 +10,7 @@ const submontagensApiBaseUrl = '/api/submontagens';
 const composicoesVendaApiBaseUrl = '/api/composicoes-venda';
 const producaoApiBaseUrl = '/api/producao';
 const AUTO_REFRESH_MS = 15000;
-const ACTIVE_REQUEST_STATUSES = ['PENDENTE', 'EM_SEPARACAO', 'ATENDIDA_PARCIAL'];
+const ACTIVE_REQUEST_STATUSES = ['PENDENTE', 'FALTANDO_PECA', 'MONTANDO', 'EM_SEPARACAO', 'ATENDIDA_PARCIAL'];
 const CLOSED_REQUEST_STATUSES = ['ATENDIDA', 'CANCELADA'];
 
 let estoquesCache = [];
@@ -27,6 +27,7 @@ let submontagensExpedicaoCache = [];
 let producaoEmAndamentoCache = [];
 let autoRefreshHandle = null;
 let efetuarFaltantesCache = [];
+let solicitacaoLista = [];
 
 const refs = {
   mensagem: document.getElementById('expedicao-mensagem'),
@@ -48,6 +49,21 @@ const refs = {
   filtroQuantidade: document.getElementById('expedicao-filtro-quantidade'),
   badgePedidos: document.getElementById('expedicao-badge-pedidos'),
   badgeProducao: document.getElementById('expedicao-badge-producao'),
+  estruturaModal: document.getElementById('expedicao-estrutura-modal'),
+  estruturaMensagem: document.getElementById('expedicao-estrutura-mensagem'),
+  estruturaTitulo: document.getElementById('expedicao-estrutura-titulo'),
+  estruturaSubtitulo: document.getElementById('expedicao-estrutura-subtitulo'),
+  estruturaTbody: document.getElementById('expedicao-estrutura-tbody'),
+  historicoItemModal: document.getElementById('expedicao-historico-item-modal'),
+  historicoItemMensagem: document.getElementById('expedicao-historico-item-mensagem'),
+  historicoItemTitulo: document.getElementById('expedicao-historico-item-titulo'),
+  historicoItemSubtitulo: document.getElementById('expedicao-historico-item-subtitulo'),
+  historicoItemTbody: document.getElementById('expedicao-historico-item-tbody'),
+  saldosItemModal: document.getElementById('expedicao-saldos-item-modal'),
+  saldosItemMensagem: document.getElementById('expedicao-saldos-item-mensagem'),
+  saldosItemTitulo: document.getElementById('expedicao-saldos-item-titulo'),
+  saldosItemSubtitulo: document.getElementById('expedicao-saldos-item-subtitulo'),
+  saldosItemTbody: document.getElementById('expedicao-saldos-item-tbody'),
   saidaModal: document.getElementById('expedicao-saida-modal'),
   retornoModal: document.getElementById('expedicao-retorno-modal'),
   retornoMensagem: document.getElementById('expedicao-retorno-mensagem'),
@@ -74,6 +90,9 @@ const refs = {
   solicitacaoResumo: document.getElementById('expedicao-solicitacao-item-resumo'),
   solicitacaoQuantidade: document.getElementById('expedicao-solicitacao-quantidade'),
   solicitacaoObservacao: document.getElementById('expedicao-solicitacao-observacao'),
+  solicitacaoListaTbody: document.getElementById('expedicao-solicitacao-lista-tbody'),
+  solicitacaoListaTotal: document.getElementById('expedicao-solicitacao-lista-total'),
+  solicitacaoEnviar: document.getElementById('btn-expedicao-solicitacao-enviar'),
   efetuarModal: document.getElementById('expedicao-efetuar-modal'),
   efetuarMensagem: document.getElementById('expedicao-efetuar-mensagem'),
   efetuarForm: document.getElementById('expedicao-efetuar-form'),
@@ -136,14 +155,26 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 function bindEvents() {
-  refs.itemBusca.addEventListener('input', () => {
+  refs.itemBusca.addEventListener('input', async () => {
     refs.itemId.value = '';
     renderizarResumoItem(null);
-    renderizarSugestoes(refs.itemBusca.value.trim());
+    await renderizarSugestoes(refs.itemBusca.value.trim());
   });
-  refs.itemBusca.addEventListener('focus', () => renderizarSugestoes(refs.itemBusca.value.trim()));
-  refs.itemSugestoes.addEventListener('click', handleSugestaoClick);
-  document.getElementById('expedicao-btn-adicionar').addEventListener('click', adicionarItemNaLista);
+  refs.itemBusca.addEventListener('focus', async () => {
+    await renderizarSugestoes(refs.itemBusca.value.trim());
+  });
+  refs.itemSugestoes.addEventListener('click', (event) => {
+    handleSugestaoClick(event).catch((error) => {
+      console.error('Falha ao selecionar item para venda na Expedicao:', error);
+      mostrarMensagemSaida(error.message || 'Nao foi possivel carregar a disponibilidade do item.', 'error');
+    });
+  });
+  document.getElementById('expedicao-btn-adicionar').addEventListener('click', () => {
+    adicionarItemNaLista().catch((error) => {
+      console.error('Falha ao adicionar item na lista de saida:', error);
+      mostrarMensagemSaida(error.message || 'Nao foi possivel adicionar o item.', 'error');
+    });
+  });
   document.getElementById('expedicao-btn-limpar-item').addEventListener('click', limparItemAtual);
   document.getElementById('expedicao-btn-baixar').addEventListener('click', baixarSaida);
   refs.listaTbody.addEventListener('click', handleListaActions);
@@ -159,11 +190,14 @@ function bindEvents() {
   document.getElementById('expedicao-btn-historico-menu').addEventListener('click', abrirModalHistorico);
   document.getElementById('expedicao-btn-producao').addEventListener('click', abrirModalProducao);
   refs.pedidosFiltroSituacao.addEventListener('change', renderizarPedidos);
+  refs.pedidosTbody.addEventListener('click', handlePedidosActions);
   refs.filtroCodigo.addEventListener('input', renderizarEstoque);
   refs.filtroDescricao.addEventListener('input', renderizarEstoque);
   refs.filtroClassificacao.addEventListener('change', renderizarEstoque);
   refs.filtroQuantidade.addEventListener('change', renderizarEstoque);
+  refs.estoqueTbody.addEventListener('click', handleEstoqueActions);
   document.getElementById('expedicao-btn-limpar-filtros-estoque').addEventListener('click', limparFiltrosEstoque);
+  document.getElementById('btn-fechar-modal-expedicao-estrutura').addEventListener('click', fecharModalEstrutura);
   document.getElementById('btn-fechar-modal-expedicao-saida').addEventListener('click', fecharModalSaida);
   document.getElementById('btn-fechar-modal-expedicao-retorno').addEventListener('click', fecharModalRetorno);
   document.getElementById('btn-cancelar-modal-expedicao-retorno').addEventListener('click', fecharModalRetorno);
@@ -171,6 +205,8 @@ function bindEvents() {
   document.getElementById('btn-fechar-modal-expedicao-historico').addEventListener('click', fecharModalHistorico);
   document.getElementById('btn-fechar-modal-expedicao-producao').addEventListener('click', fecharModalProducao);
   document.getElementById('btn-fechar-modal-expedicao-producao-rodape').addEventListener('click', fecharModalProducao);
+  document.getElementById('btn-fechar-modal-expedicao-historico-item').addEventListener('click', fecharModalHistoricoItem);
+  document.getElementById('btn-fechar-modal-expedicao-saldos-item').addEventListener('click', fecharModalSaldosItem);
   document.getElementById('btn-fechar-modal-expedicao-solicitacao').addEventListener('click', fecharModalSolicitacao);
   document.getElementById('btn-cancelar-modal-expedicao-solicitacao').addEventListener('click', fecharModalSolicitacao);
   document.getElementById('btn-fechar-modal-expedicao-efetuar').addEventListener('click', fecharModalEfetuarMontagem);
@@ -191,7 +227,7 @@ function bindEvents() {
   refs.retornoBusca.addEventListener('focus', () => renderizarSugestoesRetorno(refs.retornoBusca.value.trim()));
   refs.retornoSugestoes.addEventListener('click', handleSugestaoRetornoClick);
 
-  refs.solicitacaoForm.addEventListener('submit', handleCriarSolicitacao);
+  refs.solicitacaoForm.addEventListener('submit', handleAdicionarSolicitacaoNaLista);
   refs.solicitacaoOrigem.addEventListener('change', handleSolicitacaoOrigemChange);
   refs.solicitacaoBusca.addEventListener('input', () => {
     refs.solicitacaoItemId.value = '';
@@ -200,6 +236,8 @@ function bindEvents() {
   });
   refs.solicitacaoBusca.addEventListener('focus', () => renderizarSugestoesSolicitacao(refs.solicitacaoBusca.value.trim()));
   refs.solicitacaoSugestoes.addEventListener('click', handleSugestaoSolicitacaoClick);
+  refs.solicitacaoListaTbody.addEventListener('click', handleSolicitacaoListaActions);
+  refs.solicitacaoEnviar.addEventListener('click', enviarSolicitacoesDaLista);
 
   refs.efetuarForm.addEventListener('submit', handleEfetuarMontagem);
   refs.efetuarBusca.addEventListener('input', () => {
@@ -241,6 +279,8 @@ function bindEvents() {
         const shouldKeepOpen = currentMenu && currentMenu.hasAttribute('open');
         closeAllRowMenus(shouldKeepOpen ? currentMenu : null);
       });
+    } else if (event.target.closest('.row-menu-item')) {
+      closeAllRowMenus();
     } else if (!event.target.closest('.row-menu')) {
       closeAllRowMenus();
     }
@@ -256,6 +296,9 @@ function bindEvents() {
   });
 
   [
+    refs.estruturaModal,
+    refs.historicoItemModal,
+    refs.saldosItemModal,
     refs.saidaModal,
     refs.retornoModal,
     refs.pedidosModal,
@@ -423,8 +466,39 @@ async function carregarHistoricoSaidas() {
   renderizarHistorico();
 }
 
-function renderizarSugestoes(termo) {
+async function carregarEstruturasParaSugestoesVenda(termo) {
   const filtro = normalizarBusca(termo);
+  if (!filtro) {
+    return;
+  }
+
+  const candidatos = itensCache
+    .filter((item) => (
+      item.classificacao === 'SUBMONTAGEM'
+      && normalizarBusca(`${item.codigo} ${item.descricao} ${item.classificacao}`).includes(filtro)
+      && !estruturasSubmontagemCache.has(item.id)
+    ))
+    .slice(0, 8);
+
+  if (!candidatos.length) {
+    return;
+  }
+
+  await Promise.allSettled(candidatos.map((item) => carregarEstruturaSubmontagem(item.id)));
+}
+
+async function garantirDisponibilidadeVendaCarregada(item) {
+  if (!item || item.classificacao !== 'SUBMONTAGEM' || estruturasSubmontagemCache.has(item.id)) {
+    return;
+  }
+
+  await carregarEstruturaSubmontagem(item.id);
+}
+
+async function renderizarSugestoes(termo) {
+  const filtro = normalizarBusca(termo);
+  await carregarEstruturasParaSugestoesVenda(termo);
+
   const itens = itensCache.filter((item) => {
     const disponibilidade = obterDisponibilidadeVenda(item);
 
@@ -454,7 +528,7 @@ function renderizarSugestoes(termo) {
   refs.itemSugestoes.classList.remove('hidden');
 }
 
-function handleSugestaoClick(event) {
+async function handleSugestaoClick(event) {
   const option = event.target.closest('button[data-id]');
   if (!option) {
     return;
@@ -465,6 +539,7 @@ function handleSugestaoClick(event) {
     return;
   }
 
+  await garantirDisponibilidadeVendaCarregada(item);
   refs.itemId.value = String(item.id);
   refs.itemBusca.value = `${item.codigo} - ${item.descricao}`;
   renderizarResumoItem(item);
@@ -491,6 +566,8 @@ function renderizarResumoItem(item) {
 function abrirModalSolicitacao(prefill = null) {
   refs.solicitacaoMensagem.className = 'message hidden';
   refs.solicitacaoMensagem.textContent = '';
+  solicitacaoLista = [];
+  renderizarListaSolicitacao();
 
   if (prefill) {
     preencherSolicitacaoEstoque(prefill);
@@ -512,6 +589,149 @@ function abrirModalSaida() {
 
 function fecharModalSaida() {
   closeModal(refs.saidaModal);
+}
+
+async function abrirModalEstrutura(submontagemId) {
+  const item = saldosExpedicaoCache.find((entry) => Number(entry.id_peca) === Number(submontagemId))
+    || itensCache.find((entry) => Number(entry.id) === Number(submontagemId))
+    || submontagensCache.find((entry) => Number(entry.id) === Number(submontagemId));
+
+  refs.estruturaMensagem.className = 'message hidden';
+  refs.estruturaMensagem.textContent = '';
+  refs.estruturaTitulo.textContent = item
+    ? `Estrutura de ${item.codigo}`
+    : 'Estrutura da submontagem';
+  refs.estruturaSubtitulo.textContent = item
+    ? `${item.descricao} | Componentes usados na Expedicao.`
+    : 'Veja o que entra nesta submontagem e o saldo atual dos componentes na Expedicao.';
+  refs.estruturaTbody.innerHTML = '<tr><td colspan="4" class="empty-state">Carregando estrutura...</td></tr>';
+  openModal(refs.estruturaModal);
+
+  try {
+    const componentes = await carregarEstruturaSubmontagem(submontagemId);
+
+    if (!componentes.length) {
+      refs.estruturaTbody.innerHTML = '<tr><td colspan="4" class="empty-state">Esta submontagem nao possui componentes cadastrados.</td></tr>';
+      return;
+    }
+
+    refs.estruturaTbody.innerHTML = componentes.map((componente) => `
+      <tr>
+        <td class="table-code">${escapeHtml(componente.codigo_componente)}</td>
+        <td class="table-description">${escapeHtml(componente.descricao_componente)}</td>
+        <td class="table-quantity">${formatDecimal(componente.quantidade)}</td>
+        <td class="table-quantity">${formatDecimal(obterSaldoExpedicao(componente.id_item_componente))}</td>
+      </tr>
+    `).join('');
+  } catch (error) {
+    refs.estruturaMensagem.textContent = error.message;
+    refs.estruturaMensagem.className = 'message error';
+    refs.estruturaMensagem.classList.remove('hidden');
+    refs.estruturaTbody.innerHTML = '<tr><td colspan="4" class="empty-state">Nao foi possivel carregar a estrutura.</td></tr>';
+  }
+}
+
+function fecharModalEstrutura() {
+  closeModal(refs.estruturaModal);
+}
+
+async function abrirModalHistoricoItem(itemId) {
+  const item = saldosExpedicaoCache.find((entry) => Number(entry.id_peca) === Number(itemId))
+    || itensCache.find((entry) => Number(entry.id) === Number(itemId));
+
+  refs.historicoItemMensagem.className = 'message hidden';
+  refs.historicoItemMensagem.textContent = '';
+  refs.historicoItemTitulo.textContent = item
+    ? `Historico de ${item.codigo}`
+    : 'Historico da peca';
+  refs.historicoItemSubtitulo.textContent = item
+    ? `${item.descricao} | Ultimas movimentacoes deste item.`
+    : 'Veja as ultimas movimentacoes desta peca no sistema.';
+  refs.historicoItemTbody.innerHTML = '<tr><td colspan="6" class="empty-state">Carregando historico...</td></tr>';
+  openModal(refs.historicoItemModal);
+
+  try {
+    const response = await fetch(`${estoqueMovimentacoesApiBaseUrl}?idPeca=${itemId}`);
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.message || 'Nao foi possivel carregar o historico da peca.');
+    }
+
+    if (!Array.isArray(result) || !result.length) {
+      refs.historicoItemTbody.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhuma movimentacao encontrada para este item.</td></tr>';
+      return;
+    }
+
+    refs.historicoItemTbody.innerHTML = result.map((movimentacao) => `
+      <tr>
+        <td>${formatarDataHora(movimentacao.data_movimentacao)}</td>
+        <td>${escapeHtml(movimentacao.tipo_movimentacao || '-')}</td>
+        <td>${escapeHtml(movimentacao.estoque_origem_nome || '-')}</td>
+        <td>${escapeHtml(movimentacao.estoque_destino_nome || '-')}</td>
+        <td class="table-quantity">${formatDecimal(movimentacao.quantidade)}</td>
+        <td>${escapeHtml(movimentacao.observacao || '-')}</td>
+      </tr>
+    `).join('');
+  } catch (error) {
+    refs.historicoItemMensagem.textContent = error.message;
+    refs.historicoItemMensagem.className = 'message error';
+    refs.historicoItemMensagem.classList.remove('hidden');
+    refs.historicoItemTbody.innerHTML = '<tr><td colspan="6" class="empty-state">Nao foi possivel carregar o historico.</td></tr>';
+  }
+}
+
+function fecharModalHistoricoItem() {
+  closeModal(refs.historicoItemModal);
+}
+
+async function abrirModalSaldosItem(itemId) {
+  const item = saldosExpedicaoCache.find((entry) => Number(entry.id_peca) === Number(itemId))
+    || itensCache.find((entry) => Number(entry.id) === Number(itemId));
+
+  refs.saldosItemMensagem.className = 'message hidden';
+  refs.saldosItemMensagem.textContent = '';
+  refs.saldosItemTitulo.textContent = item
+    ? `Saldos de ${item.codigo}`
+    : 'Saldo nos estoques';
+  refs.saldosItemSubtitulo.textContent = item
+    ? `${item.descricao} | Estoques com saldo positivo para este item.`
+    : 'Veja em quais estoques este item esta disponivel.';
+  refs.saldosItemTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Carregando saldos...</td></tr>';
+  openModal(refs.saldosItemModal);
+
+  try {
+    const response = await fetch(`${estoqueSaldosApiBaseUrl}?id_peca=${itemId}`);
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.message || 'Nao foi possivel carregar os saldos da peca.');
+    }
+
+    if (!Array.isArray(result) || !result.length) {
+      refs.saldosItemTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhum saldo encontrado para este item.</td></tr>';
+      return;
+    }
+
+    refs.saldosItemTbody.innerHTML = result.map((saldo) => `
+      <tr>
+        <td>${escapeHtml(saldo.estoque_nome || '-')}</td>
+        <td class="table-code">${escapeHtml(saldo.codigo || '-')}</td>
+        <td class="table-description">${escapeHtml(saldo.descricao || '-')}</td>
+        <td>${escapeHtml(saldo.classificacao || '-')}</td>
+        <td class="table-quantity">${formatDecimal(saldo.quantidade)}</td>
+      </tr>
+    `).join('');
+  } catch (error) {
+    refs.saldosItemMensagem.textContent = error.message;
+    refs.saldosItemMensagem.className = 'message error';
+    refs.saldosItemMensagem.classList.remove('hidden');
+    refs.saldosItemTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Nao foi possivel carregar os saldos.</td></tr>';
+  }
+}
+
+function fecharModalSaldosItem() {
+  closeModal(refs.saldosItemModal);
 }
 
 function obterEstoquesDestinoRetorno({ incluirExpedicao = false } = {}) {
@@ -680,6 +900,8 @@ function fecharModalHistorico() {
 }
 
 function fecharModalSolicitacao() {
+  solicitacaoLista = [];
+  renderizarListaSolicitacao();
   closeModal(refs.solicitacaoModal);
 }
 
@@ -1004,7 +1226,7 @@ function handleSolicitacaoOrigemChange() {
 function renderizarSugestoesSolicitacao(termo) {
   const filtro = normalizarBusca(termo);
   const itens = itensCache.filter((item) => {
-    if (obterSaldoOrigemSolicitacao(item) <= 0) {
+    if (refs.solicitacaoOrigem.value !== 'MONTAGEM' && obterSaldoOrigemSolicitacao(item) <= 0) {
       return false;
     }
 
@@ -1016,7 +1238,9 @@ function renderizarSugestoesSolicitacao(termo) {
   }).slice(0, 8);
 
   if (!itens.length) {
-    refs.solicitacaoSugestoes.innerHTML = '<div class="autocomplete-empty">Nenhuma peca com saldo disponivel na origem selecionada.</div>';
+    refs.solicitacaoSugestoes.innerHTML = refs.solicitacaoOrigem.value === 'MONTAGEM'
+      ? '<div class="autocomplete-empty">Nenhum item encontrado para solicitar a Montagem.</div>'
+      : '<div class="autocomplete-empty">Nenhuma peca com saldo disponivel na origem selecionada.</div>';
     refs.solicitacaoSugestoes.classList.remove('hidden');
     return;
   }
@@ -1024,7 +1248,7 @@ function renderizarSugestoesSolicitacao(termo) {
   refs.solicitacaoSugestoes.innerHTML = itens.map((item) => `
     <button type="button" class="autocomplete-option" data-id="${item.id}">
       <strong>${escapeHtml(`${item.codigo} - ${item.descricao}`)}</strong>
-      <span>${escapeHtml(`${item.classificacao} | Pacote: ${formatPackage(item.estoque_minimo)} | Origem: ${formatInteger(obterSaldoOrigemSolicitacao(item))}`)}</span>
+      <span>${escapeHtml(`${item.classificacao} | Pacote: ${formatPackage(item.estoque_minimo)} | Origem: ${formatInteger(obterSaldoOrigemSolicitacao(item))}`)}${refs.solicitacaoOrigem.value === 'MONTAGEM' ? ' (pode pedir sem saldo)' : ''}</span>
     </button>
   `).join('');
   refs.solicitacaoSugestoes.classList.remove('hidden');
@@ -1055,6 +1279,9 @@ function renderizarResumoItemSolicitacao(item) {
   }
 
   const origemLabel = refs.solicitacaoOrigem.value === 'MONTAGEM' ? 'Saldo Montagem' : 'Saldo Almox';
+  const detalheLivre = refs.solicitacaoOrigem.value === 'MONTAGEM'
+    ? `<span class="selected-tag">Pode solicitar mesmo sem saldo</span>`
+    : '';
 
   refs.solicitacaoResumo.classList.remove('empty');
   refs.solicitacaoResumo.classList.add('selected-tags');
@@ -1064,6 +1291,7 @@ function renderizarResumoItemSolicitacao(item) {
     <span class="selected-tag">${escapeHtml(`Classificacao: ${item.classificacao}`)}</span>
     <span class="selected-tag">${escapeHtml(`Qtd por pacote: ${formatPackage(item.estoque_minimo)}`)}</span>
     <span class="selected-tag">${escapeHtml(`${origemLabel}: ${formatInteger(obterSaldoOrigemSolicitacao(item))}`)}</span>
+    ${detalheLivre}
   `;
 }
 
@@ -1085,7 +1313,38 @@ function preencherSolicitacaoEstoque(prefill) {
   });
 }
 
-async function handleCriarSolicitacao(event) {
+function renderizarListaSolicitacao() {
+  refs.solicitacaoListaTotal.textContent = `${solicitacaoLista.length} item(ns) na lista`;
+
+  if (!solicitacaoLista.length) {
+    refs.solicitacaoListaTbody.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhum item na lista de solicitacao.</td></tr>';
+    return;
+  }
+
+  refs.solicitacaoListaTbody.innerHTML = solicitacaoLista.map((item) => `
+    <tr>
+      <td>${escapeHtml(item.origemLabel)}</td>
+      <td class="table-code">${escapeHtml(item.codigo)}</td>
+      <td class="table-description">${escapeHtml(item.descricao)}</td>
+      <td class="table-quantity">${formatInteger(item.quantidade)}</td>
+      <td>${escapeHtml(item.observacao || '-')}</td>
+      <td class="table-actions-cell">
+        <button type="button" class="btn btn-neutral btn-small" data-remove-solicitacao-key="${escapeHtml(item.key)}">Remover</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function limparFormularioSolicitacao() {
+  refs.solicitacaoItemId.value = '';
+  refs.solicitacaoBusca.value = '';
+  refs.solicitacaoQuantidade.value = '1';
+  refs.solicitacaoObservacao.value = '';
+  renderizarResumoItemSolicitacao(null);
+  esconderSugestoesSolicitacao();
+}
+
+async function handleAdicionarSolicitacaoNaLista(event) {
   event.preventDefault();
 
   try {
@@ -1101,35 +1360,106 @@ async function handleCriarSolicitacao(event) {
     const quantidadeSolicitada = Math.max(1, Number.parseInt(refs.solicitacaoQuantidade.value, 10) || 0);
     const saldoDisponivel = obterSaldoOrigemSolicitacao(item);
     const origemNome = refs.solicitacaoOrigem.value === 'MONTAGEM' ? 'Montagem' : 'Almoxarifado';
+    const origemPermiteFila = refs.solicitacaoOrigem.value === 'MONTAGEM';
 
-    if (saldoDisponivel <= 0) {
+    if (!origemPermiteFila && saldoDisponivel <= 0) {
       throw new Error(`${origemNome} nao possui saldo disponivel para esta solicitacao.`);
     }
 
-    if (quantidadeSolicitada > saldoDisponivel) {
+    if (!origemPermiteFila && quantidadeSolicitada > saldoDisponivel) {
       throw new Error(`Saldo insuficiente em ${origemNome}. Disponivel: ${formatInteger(saldoDisponivel)}.`);
     }
 
-    const response = await fetch(solicitacoesApiBaseUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        area_origem: 'EXPEDICAO',
-        origem_atendimento: refs.solicitacaoOrigem.value,
-        id_peca: refs.solicitacaoItemId.value,
-        quantidade_solicitada: refs.solicitacaoQuantidade.value,
+    const key = `${refs.solicitacaoOrigem.value}:${item.id}`;
+    const existente = solicitacaoLista.find((entry) => entry.key === key);
+    if (existente) {
+      existente.quantidade += quantidadeSolicitada;
+      existente.observacao = refs.solicitacaoObservacao.value.trim() || existente.observacao || '';
+    } else {
+      solicitacaoLista.push({
+        key,
+        origem: refs.solicitacaoOrigem.value,
+        origemLabel: origemNome,
+        id_peca: item.id,
+        codigo: item.codigo,
+        descricao: item.descricao,
+        quantidade: quantidadeSolicitada,
         observacao: refs.solicitacaoObservacao.value.trim()
-      })
-    });
-    const result = await response.json();
+      });
+    }
 
-    if (!response.ok) {
-      throw new Error(result.message || 'Nao foi possivel criar a solicitacao.');
+    renderizarListaSolicitacao();
+    limparFormularioSolicitacao();
+    refs.solicitacaoMensagem.textContent = 'Item adicionado a lista de solicitacao.';
+    refs.solicitacaoMensagem.className = 'message success';
+    refs.solicitacaoMensagem.classList.remove('hidden');
+  } catch (error) {
+    refs.solicitacaoMensagem.textContent = error.message;
+    refs.solicitacaoMensagem.className = 'message error';
+    refs.solicitacaoMensagem.classList.remove('hidden');
+  }
+}
+
+function handleSolicitacaoListaActions(event) {
+  const button = event.target.closest('button[data-remove-solicitacao-key]');
+  if (!button) {
+    return;
+  }
+
+  solicitacaoLista = solicitacaoLista.filter((item) => item.key !== button.dataset.removeSolicitacaoKey);
+  renderizarListaSolicitacao();
+}
+
+async function enviarSolicitacoesDaLista() {
+  try {
+    if (!solicitacaoLista.length) {
+      throw new Error('Adicione pelo menos um item na lista de solicitacao.');
+    }
+
+    const criadas = [];
+    const falhas = [];
+    const pendentes = [];
+
+    for (const item of solicitacaoLista) {
+      const response = await fetch(solicitacoesApiBaseUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          area_origem: 'EXPEDICAO',
+          origem_atendimento: item.origem,
+          id_peca: item.id_peca,
+          quantidade_solicitada: item.quantidade,
+          observacao: item.observacao || null
+        })
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        falhas.push(`${item.codigo}: ${result.message || 'nao foi possivel criar a solicitacao.'}`);
+        pendentes.push(item);
+        continue;
+      }
+
+      criadas.push(`${item.codigo} (${formatInteger(item.quantidade)})`);
+    }
+
+    solicitacaoLista = pendentes;
+    renderizarListaSolicitacao();
+    await carregarPedidosExpedicao();
+
+    if (!criadas.length) {
+      throw new Error(falhas.join(' | ') || 'Nenhuma solicitacao foi criada.');
+    }
+
+    if (falhas.length) {
+      refs.solicitacaoMensagem.textContent = `Criadas: ${criadas.join(', ')} | Falhas: ${falhas.join(' | ')}`;
+      refs.solicitacaoMensagem.className = 'message error';
+      refs.solicitacaoMensagem.classList.remove('hidden');
+      return;
     }
 
     fecharModalSolicitacao();
-    mostrarMensagem('Solicitacao enviada com sucesso.', 'success');
-    await carregarPedidosExpedicao();
+    mostrarMensagem(`Solicitacoes enviadas com sucesso: ${criadas.join(', ')}`, 'success');
   } catch (error) {
     refs.solicitacaoMensagem.textContent = error.message;
     refs.solicitacaoMensagem.className = 'message error';
@@ -1582,7 +1912,7 @@ async function handleCriarSolicitacaoProducao(event) {
   }
 }
 
-function adicionarItemNaLista() {
+async function adicionarItemNaLista() {
   if (!refs.itemId.value) {
     mostrarMensagemSaida('Selecione um item valido da Expedicao.', 'error');
     return;
@@ -1593,6 +1923,8 @@ function adicionarItemNaLista() {
     mostrarMensagemSaida('Item nao encontrado para a saida.', 'error');
     return;
   }
+
+  await garantirDisponibilidadeVendaCarregada(item);
 
   const quantidade = Number.parseInt(refs.quantidade.value, 10) || 0;
   if (quantidade <= 0) {
@@ -1757,12 +2089,12 @@ function renderizarPedidos() {
   document.getElementById('expedicao-pedidos-total').textContent = `${pedidosFiltrados.length} registro(s) encontrado(s)`;
 
   if (!pedidosExpedicaoCache.length) {
-    refs.pedidosTbody.innerHTML = '<tr><td colspan="8" class="empty-state">Nenhum pedido da Expedicao encontrado.</td></tr>';
+    refs.pedidosTbody.innerHTML = '<tr><td colspan="10" class="empty-state">Nenhum pedido da Expedicao encontrado.</td></tr>';
     return;
   }
 
   if (!pedidosFiltrados.length) {
-    refs.pedidosTbody.innerHTML = `<tr><td colspan="8" class="empty-state">${escapeHtml(obterMensagemTimeline(refs.pedidosFiltroSituacao.value, 'pedido da Expedicao'))}</td></tr>`;
+    refs.pedidosTbody.innerHTML = `<tr><td colspan="10" class="empty-state">${escapeHtml(obterMensagemTimeline(refs.pedidosFiltroSituacao.value, 'pedido da Expedicao'))}</td></tr>`;
     return;
   }
 
@@ -1775,9 +2107,47 @@ function renderizarPedidos() {
       <td class="table-quantity">${formatInteger(item.quantidade_solicitada)}</td>
       <td class="table-quantity">${formatInteger(item.quantidade_pendente)}</td>
       <td>${renderStatus(item.status)}</td>
+      <td>${formatarDataCurta(item.data_previsao)}</td>
       <td>${formatDate(item.data_solicitacao)}</td>
+      <td class="table-actions-cell">
+        ${['ATENDIDA', 'CANCELADA'].includes(String(item.status || '').toUpperCase())
+          ? '<span class="table-muted">-</span>'
+          : `<button type="button" class="btn btn-neutral btn-small" data-action="cancelar-pedido" data-id="${item.id}">Excluir</button>`}
+      </td>
     </tr>
   `).join('');
+}
+
+async function handlePedidosActions(event) {
+  const button = event.target.closest('button[data-action][data-id]');
+  if (!button || button.dataset.action !== 'cancelar-pedido') {
+    return;
+  }
+
+  const pedido = pedidosExpedicaoCache.find((item) => Number(item.id) === Number(button.dataset.id));
+  if (!pedido) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`${solicitacoesApiBaseUrl}/${pedido.id}/cancelar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        observacao: `Pedido cancelado pela Expedicao. ${pedido.observacao || ''}`.trim()
+      })
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.message || 'Nao foi possivel excluir o pedido.');
+    }
+
+    mostrarMensagem('Pedido da Expedicao excluido com sucesso.', 'success');
+    await carregarPedidosExpedicao();
+  } catch (error) {
+    mostrarMensagem(error.message, 'error');
+  }
 }
 
 function renderizarHistorico() {
@@ -1804,12 +2174,12 @@ function renderizarEstoque() {
   document.getElementById('expedicao-estoque-total').textContent = `${saldosFiltrados.length} registro(s) encontrado(s)`;
 
   if (!saldosExpedicaoCache.length) {
-    refs.estoqueTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhum saldo na Expedicao.</td></tr>';
+    refs.estoqueTbody.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhum saldo na Expedicao.</td></tr>';
     return;
   }
 
   if (!saldosFiltrados.length) {
-    refs.estoqueTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhum item encontrado com os filtros informados.</td></tr>';
+    refs.estoqueTbody.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhum item encontrado com os filtros informados.</td></tr>';
     return;
   }
 
@@ -1820,6 +2190,18 @@ function renderizarEstoque() {
       <td>${escapeHtml(item.tipo)}</td>
       <td>${escapeHtml(item.classificacao)}</td>
       <td class="table-quantity">${formatInteger(item.quantidade)}</td>
+      <td>
+        <details class="row-menu">
+          <summary class="row-menu-trigger" aria-label="Abrir acoes">...</summary>
+          <div class="row-menu-panel">
+            <button type="button" class="row-menu-item" data-action="history" data-item-id="${item.id_peca}">Ver historico</button>
+            <button type="button" class="row-menu-item" data-action="stocks" data-item-id="${item.id_peca}">Ver saldo nos estoques</button>
+            ${item.classificacao === 'SUBMONTAGEM'
+              ? `<button type="button" class="row-menu-item" data-action="structure" data-item-id="${item.id_peca}">Ver o que vai</button>`
+              : '<span class="row-menu-item">Sem estrutura</span>'}
+          </div>
+        </details>
+      </td>
     </tr>
   `).join('');
 }
@@ -2051,6 +2433,9 @@ function esconderSugestoesSubmontagem() {
 }
 
 function handleModalBackdrop(event) {
+  if (event.target.dataset.closeModal === 'expedicao-estrutura') fecharModalEstrutura();
+  if (event.target.dataset.closeModal === 'expedicao-historico-item') fecharModalHistoricoItem();
+  if (event.target.dataset.closeModal === 'expedicao-saldos-item') fecharModalSaldosItem();
   if (event.target.dataset.closeModal === 'expedicao-saida') fecharModalSaida();
   if (event.target.dataset.closeModal === 'expedicao-retorno') fecharModalRetorno();
   if (event.target.dataset.closeModal === 'expedicao-pedidos') fecharModalPedidos();
@@ -2078,6 +2463,21 @@ function handleKeyboardShortcuts(event) {
 
   if (!refs.solicitacaoProducaoModal.classList.contains('hidden')) {
     fecharModalSolicitacaoProducao();
+    return;
+  }
+
+  if (!refs.estruturaModal.classList.contains('hidden')) {
+    fecharModalEstrutura();
+    return;
+  }
+
+  if (!refs.historicoItemModal.classList.contains('hidden')) {
+    fecharModalHistoricoItem();
+    return;
+  }
+
+  if (!refs.saldosItemModal.classList.contains('hidden')) {
+    fecharModalSaldosItem();
     return;
   }
 
@@ -2136,6 +2536,9 @@ function closeModal(modal) {
   modal.classList.add('hidden');
   modal.setAttribute('aria-hidden', 'true');
   const hasModal = [
+    refs.estruturaModal,
+    refs.historicoItemModal,
+    refs.saldosItemModal,
     refs.saidaModal,
     refs.retornoModal,
     refs.pedidosModal,
@@ -2148,6 +2551,27 @@ function closeModal(modal) {
     refs.solicitacaoProducaoModal
   ].some((item) => !item.classList.contains('hidden'));
   document.body.classList.toggle('has-modal', hasModal);
+}
+
+function handleEstoqueActions(event) {
+  const button = event.target.closest('button[data-action][data-item-id]');
+  if (!button) {
+    return;
+  }
+
+  if (button.dataset.action === 'structure') {
+    abrirModalEstrutura(button.dataset.itemId);
+    return;
+  }
+
+  if (button.dataset.action === 'history') {
+    abrirModalHistoricoItem(button.dataset.itemId);
+    return;
+  }
+
+  if (button.dataset.action === 'stocks') {
+    abrirModalSaldosItem(button.dataset.itemId);
+  }
 }
 
 function closeAllRowMenus(exceptMenu = null) {
@@ -2213,8 +2637,10 @@ function renderStatus(status) {
   if (normalized === 'ATENDIDA_PARCIAL') className += ' is-warning';
   if (normalized === 'PENDENTE') className += ' is-danger';
   if (normalized === 'EM_SEPARACAO') className += ' is-info';
+  if (normalized === 'FALTANDO_PECA') className += ' is-warning';
+  if (normalized === 'MONTANDO') className += ' is-info';
 
-  return `<span class="${className}">${escapeHtml(normalized || '-')}</span>`;
+  return `<span class="${className}">${escapeHtml(formatStatusLabel(normalized || '-'))}</span>`;
 }
 
 function mostrarMensagem(texto, tipo) {
@@ -2258,6 +2684,30 @@ function formatDate(value) {
   }
 
   return new Date(value).toLocaleString('pt-BR');
+}
+
+function formatarDataCurta(value) {
+  if (!value) {
+    return '-';
+  }
+
+  const data = new Date(value);
+  if (Number.isNaN(data.getTime())) {
+    return '-';
+  }
+
+  return data.toLocaleDateString('pt-BR');
+}
+
+function formatStatusLabel(value) {
+  return String(value || '-')
+    .replaceAll('_', ' ')
+    .toLowerCase()
+    .replace(/(^|\s)\S/g, (match) => match.toUpperCase());
+}
+
+function formatarDataHora(value) {
+  return formatDate(value);
 }
 
 function escapeHtml(value) {

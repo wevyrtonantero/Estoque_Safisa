@@ -3,6 +3,7 @@ const estoqueApiBaseUrl = '/api/estoque/saldos';
 const estoquePrioridadesApiBaseUrl = '/api/estoque/prioridades';
 const estoqueMateriaPrimaApiBaseUrl = '/api/estoque-materias-primas/saldos';
 const submontagensApiBaseUrl = '/api/submontagens';
+const fornecedoresApiBaseUrl = '/api/fornecedores';
 const AUTO_REFRESH_MS = 15000;
 
 let painelCache = null;
@@ -11,6 +12,7 @@ let estoquesPrioridadesCache = [];
 let alertasAlmoxCache = [];
 let materiasPrimasCache = [];
 let submontagensCache = [];
+let fornecedoresCache = [];
 let autoRefreshHandle = null;
 
 const refs = {
@@ -23,6 +25,7 @@ const refs = {
   producaoTbody: document.getElementById('dashboard-producao-tbody'),
   estoquesModal: document.getElementById('dashboard-estoques-modal'),
   mpModal: document.getElementById('dashboard-mp-modal'),
+  fornecedoresModal: document.getElementById('dashboard-fornecedores-modal'),
   estoquesFiltroForm: document.getElementById('dashboard-estoques-filtro-form'),
   estoquesFiltroEstoque: document.getElementById('dashboard-estoques-filtro-estoque'),
   estoquesFiltroCodigo: document.getElementById('dashboard-estoques-filtro-codigo'),
@@ -39,6 +42,14 @@ const refs = {
   mpFiltroGeometria: document.getElementById('dashboard-mp-filtro-geometria'),
   mpFiltroOrdem: document.getElementById('dashboard-mp-filtro-ordem'),
   mpTbody: document.getElementById('dashboard-mp-tbody'),
+  fornecedoresMensagem: document.getElementById('dashboard-fornecedores-mensagem'),
+  fornecedoresTotal: document.getElementById('dashboard-fornecedores-total'),
+  fornecedoresFiltroForm: document.getElementById('dashboard-fornecedores-filtro-form'),
+  fornecedoresFiltroNome: document.getElementById('dashboard-fornecedores-filtro-nome'),
+  fornecedoresFiltroPeca: document.getElementById('dashboard-fornecedores-filtro-peca'),
+  fornecedoresFiltroContato: document.getElementById('dashboard-fornecedores-filtro-contato'),
+  fornecedoresFiltroCidade: document.getElementById('dashboard-fornecedores-filtro-cidade'),
+  fornecedoresTbody: document.getElementById('dashboard-fornecedores-tbody'),
   estoquesTotalItens: document.getElementById('dashboard-estoques-total-itens'),
   estoquesTotalQuantidade: document.getElementById('dashboard-estoques-total-quantidade'),
   estoquesTotalDepositos: document.getElementById('dashboard-estoques-total-depositos'),
@@ -91,15 +102,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 function bindEvents() {
   document.getElementById('btn-dashboard-estoques').addEventListener('click', () => openModal(refs.estoquesModal));
   document.getElementById('btn-dashboard-mp').addEventListener('click', () => openModal(refs.mpModal));
+  document.getElementById('btn-dashboard-fornecedores').addEventListener('click', abrirModalFornecedores);
   document.getElementById('btn-dashboard-simulacao').addEventListener('click', () => openModal(refs.simulacaoModal));
   document.getElementById('btn-dashboard-indicadores').addEventListener('click', () => openModal(refs.indicadoresModal));
 
   document.getElementById('btn-fechar-modal-dashboard-estoques').addEventListener('click', () => closeModal(refs.estoquesModal));
   document.getElementById('btn-fechar-modal-dashboard-mp').addEventListener('click', () => closeModal(refs.mpModal));
+  document.getElementById('btn-fechar-modal-dashboard-fornecedores').addEventListener('click', fecharModalFornecedores);
   document.getElementById('btn-fechar-modal-dashboard-simulacao').addEventListener('click', () => closeModal(refs.simulacaoModal));
   document.getElementById('btn-fechar-modal-dashboard-indicadores').addEventListener('click', () => closeModal(refs.indicadoresModal));
   document.getElementById('btn-limpar-modal-dashboard-estoques').addEventListener('click', limparFiltrosEstoque);
   document.getElementById('btn-limpar-modal-dashboard-mp').addEventListener('click', limparFiltrosMp);
+  document.getElementById('btn-limpar-modal-dashboard-fornecedores').addEventListener('click', limparFiltrosFornecedores);
 
   refs.estoquesFiltroForm.querySelectorAll('input, select').forEach((field) => {
     field.addEventListener('input', renderizarTabelaEstoquesDetalhados);
@@ -111,6 +125,10 @@ function bindEvents() {
     field.addEventListener('change', renderizarTabelaMateriaPrima);
   });
 
+  refs.fornecedoresFiltroForm.querySelectorAll('input').forEach((field) => {
+    field.addEventListener('input', renderizarFornecedores);
+  });
+
   refs.simulacaoForm.addEventListener('submit', handleSimulacaoSubmit);
   refs.simulacaoSubmontagemBusca.addEventListener('input', () => {
     refs.simulacaoSubmontagemId.value = '';
@@ -119,7 +137,7 @@ function bindEvents() {
   refs.simulacaoSubmontagemBusca.addEventListener('focus', () => renderizarSugestoesSubmontagem(refs.simulacaoSubmontagemBusca.value.trim()));
   refs.simulacaoSugestoes.addEventListener('click', handleSugestaoSubmontagemClick);
 
-  [refs.estoquesModal, refs.mpModal, refs.simulacaoModal, refs.indicadoresModal].forEach((modal) => {
+  [refs.estoquesModal, refs.mpModal, refs.fornecedoresModal, refs.simulacaoModal, refs.indicadoresModal].forEach((modal) => {
     modal.addEventListener('click', handleBackdrop);
   });
 
@@ -185,6 +203,21 @@ async function carregarMateriasPrimas() {
   if (painelCache) {
     renderizarPainel();
   }
+}
+
+async function carregarFornecedores() {
+  if (fornecedoresCache.length) {
+    return;
+  }
+
+  const response = await fetch(fornecedoresApiBaseUrl);
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || 'Nao foi possivel carregar os fornecedores.');
+  }
+
+  fornecedoresCache = Array.isArray(result) ? result : [];
 }
 
 async function carregarSubmontagens() {
@@ -259,10 +292,18 @@ function renderizarTabelaProducao(items) {
 function preencherFiltroEstoques() {
   const base = obterRegistrosDetalhadosDashboard();
   const options = Array.from(new Set(base.map((item) => String(item.estoque_nome || '').trim()).filter(Boolean)));
+  const valorSelecionado = String(refs.estoquesFiltroEstoque.value || '').trim();
   refs.estoquesFiltroEstoque.innerHTML = `
     <option value="">Todos</option>
     ${options.map((item) => `<option value="${escapeHtml(item)}">${escapeHtml(item)}</option>`).join('')}
   `;
+
+  if (valorSelecionado && options.includes(valorSelecionado)) {
+    refs.estoquesFiltroEstoque.value = valorSelecionado;
+    return;
+  }
+
+  refs.estoquesFiltroEstoque.value = '';
 }
 
 function renderizarTabelaEstoquesDetalhados() {
@@ -304,6 +345,54 @@ function renderizarTabelaMateriaPrima() {
       <td>${escapeHtml(item.geometria || '-')}</td>
       <td>${escapeHtml(buildBitolaLabel(item))}</td>
       <td class="table-quantity">${formatMpQuantity(item.quantidade, item.unidade_controle)}</td>
+    </tr>
+  `).join('');
+}
+
+function obterFornecedoresFiltrados() {
+  const filtroNome = normalizarBusca(refs.fornecedoresFiltroNome.value.trim());
+  const filtroPeca = normalizarBusca(refs.fornecedoresFiltroPeca.value.trim());
+  const filtroContato = normalizarBusca(refs.fornecedoresFiltroContato.value.trim());
+  const filtroCidade = normalizarBusca(refs.fornecedoresFiltroCidade.value.trim());
+
+  return fornecedoresCache.filter((item) => {
+    if (filtroNome && !normalizarBusca(item.nome).includes(filtroNome)) {
+      return false;
+    }
+
+    if (filtroPeca && !normalizarBusca(`${item.pecas_codigos || ''} ${item.pecas_vinculadas || ''}`).includes(filtroPeca)) {
+      return false;
+    }
+
+    if (filtroContato && !normalizarBusca(item.contato).includes(filtroContato)) {
+      return false;
+    }
+
+    if (filtroCidade && !normalizarBusca(item.cidade).includes(filtroCidade)) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
+function renderizarFornecedores() {
+  const fornecedores = obterFornecedoresFiltrados();
+  refs.fornecedoresTotal.textContent = `${fornecedores.length} fornecedor(es) encontrado(s)`;
+
+  if (!fornecedores.length) {
+    refs.fornecedoresTbody.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhum fornecedor encontrado com os filtros informados.</td></tr>';
+    return;
+  }
+
+  refs.fornecedoresTbody.innerHTML = fornecedores.map((item) => `
+    <tr>
+      <td class="table-description">${escapeHtml(item.nome || '-')}</td>
+      <td class="table-description">${escapeHtml(item.pecas_codigos || item.pecas_vinculadas || '-')}</td>
+      <td>${escapeHtml(item.contato || '-')}</td>
+      <td>${escapeHtml(item.telefone || '-')}</td>
+      <td>${escapeHtml(item.cidade || '-')}</td>
+      <td>${escapeHtml(item.email || '-')}</td>
     </tr>
   `).join('');
 }
@@ -506,6 +595,9 @@ function handleBackdrop(event) {
   if (modalName === 'dashboard-mp') {
     closeModal(refs.mpModal);
   }
+  if (modalName === 'dashboard-fornecedores') {
+    closeModal(refs.fornecedoresModal);
+  }
   if (modalName === 'dashboard-simulacao') {
     closeModal(refs.simulacaoModal);
   }
@@ -534,6 +626,11 @@ function handleKeyboardShortcuts(event) {
     return;
   }
 
+  if (!refs.fornecedoresModal.classList.contains('hidden')) {
+    closeModal(refs.fornecedoresModal);
+    return;
+  }
+
   if (!refs.estoquesModal.classList.contains('hidden')) {
     closeModal(refs.estoquesModal);
   }
@@ -548,9 +645,25 @@ function openModal(modal) {
 function closeModal(modal) {
   modal.classList.add('hidden');
   modal.setAttribute('aria-hidden', 'true');
-  const hasModal = [refs.estoquesModal, refs.mpModal, refs.simulacaoModal, refs.indicadoresModal]
+  const hasModal = [refs.estoquesModal, refs.mpModal, refs.fornecedoresModal, refs.simulacaoModal, refs.indicadoresModal]
     .some((entry) => !entry.classList.contains('hidden'));
   document.body.classList.toggle('has-modal', hasModal);
+}
+
+async function abrirModalFornecedores() {
+  try {
+    await carregarFornecedores();
+    refs.fornecedoresMensagem.className = 'message hidden';
+    refs.fornecedoresMensagem.textContent = '';
+    renderizarFornecedores();
+    openModal(refs.fornecedoresModal);
+  } catch (error) {
+    mostrarMensagem(error.message, 'error');
+  }
+}
+
+function fecharModalFornecedores() {
+  closeModal(refs.fornecedoresModal);
 }
 
 function handleGlobalClick(event) {
@@ -770,6 +883,11 @@ function limparFiltrosEstoque() {
 function limparFiltrosMp() {
   refs.mpFiltroForm.reset();
   renderizarTabelaMateriaPrima();
+}
+
+function limparFiltrosFornecedores() {
+  refs.fornecedoresFiltroForm.reset();
+  renderizarFornecedores();
 }
 
 function obterAlertasAlmoxOperacionais() {

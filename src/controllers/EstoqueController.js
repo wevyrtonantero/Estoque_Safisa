@@ -199,9 +199,11 @@ const EstoqueController = {
         ? String(req.query.ordem_quantidade).trim().toUpperCase()
         : '';
       const estoque = normalizeOptionalInteger(req.query.estoque);
+      const idPeca = normalizeOptionalInteger(req.query.id_peca);
 
       const saldos = await EstoqueModel.findSaldos({
         estoque: Number.isInteger(estoque) ? estoque : null,
+        idPeca: Number.isInteger(idPeca) ? idPeca : null,
         codigo: req.query.codigo ? String(req.query.codigo).trim() : '',
         descricao: req.query.descricao ? String(req.query.descricao).trim() : '',
         fornecedor: req.query.fornecedor ? String(req.query.fornecedor).trim() : '',

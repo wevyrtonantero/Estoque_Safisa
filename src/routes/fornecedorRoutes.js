@@ -3,18 +3,18 @@ const express = require('express');
 
 const FornecedorController = require('../controllers/FornecedorController');
 const { requireApiRoles } = require('../middleware/authMiddleware');
-const { ADMIN_READ_ROLES, ADMIN_WRITE_ROLES, ADMIN_DELETE_ROLES } = require('../security/roles');
+const { STOCK_READ_ROLES, ADMIN_WRITE_ROLES, ADMIN_DELETE_ROLES } = require('../security/roles');
 
 const router = express.Router();
 
 // Rota para listar fornecedores.
-router.get('/fornecedores', requireApiRoles(ADMIN_READ_ROLES), FornecedorController.getAll);
+router.get('/fornecedores', requireApiRoles(STOCK_READ_ROLES), FornecedorController.getAll);
 
 // Rota para autocomplete de fornecedores.
-router.get('/fornecedores-autocomplete', requireApiRoles(ADMIN_READ_ROLES), FornecedorController.getAutocomplete);
+router.get('/fornecedores-autocomplete', requireApiRoles(STOCK_READ_ROLES), FornecedorController.getAutocomplete);
 
 // Rota para buscar um fornecedor por ID.
-router.get('/fornecedores/:id', requireApiRoles(ADMIN_READ_ROLES), FornecedorController.getById);
+router.get('/fornecedores/:id', requireApiRoles(STOCK_READ_ROLES), FornecedorController.getById);
 
 // Rota para cadastrar fornecedor.
 router.post('/fornecedores', requireApiRoles(ADMIN_WRITE_ROLES), FornecedorController.create);

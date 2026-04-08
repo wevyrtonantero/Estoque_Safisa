@@ -8,37 +8,103 @@ class FornecedorModel {
     const values = [];
 
     if (filters.nome) {
-      conditions.push('nome LIKE ?');
+      conditions.push('f.nome LIKE ?');
       values.push(`%${filters.nome}%`);
     }
 
     if (filters.contato) {
-      conditions.push('contato LIKE ?');
+      conditions.push('f.contato LIKE ?');
       values.push(`%${filters.contato}%`);
     }
 
     if (filters.cidade) {
-      conditions.push('cidade LIKE ?');
+      conditions.push('f.cidade LIKE ?');
       values.push(`%${filters.cidade}%`);
+    }
+
+    if (filters.peca) {
+      conditions.push(`
+        EXISTS (
+          SELECT 1
+          FROM (
+            SELECT
+              pf.id_fornecedor,
+              p.codigo,
+              p.descricao
+            FROM peca_fornecedor pf
+            INNER JOIN pecas p ON p.id = pf.id_peca
+
+            UNION
+
+            SELECT
+              p.id_fornecedor AS id_fornecedor,
+              p.codigo,
+              p.descricao
+            FROM pecas p
+            WHERE p.id_fornecedor IS NOT NULL
+          ) pecas_vinculadas_filtro
+          WHERE pecas_vinculadas_filtro.id_fornecedor = f.id
+            AND (
+              pecas_vinculadas_filtro.codigo LIKE ?
+              OR pecas_vinculadas_filtro.descricao LIKE ?
+              OR CONCAT(pecas_vinculadas_filtro.codigo, ' ', pecas_vinculadas_filtro.descricao) LIKE ?
+            )
+        )
+      `);
+      values.push(`%${filters.peca}%`, `%${filters.peca}%`, `%${filters.peca}%`);
     }
 
     const [rows] = await pool.query(
       `
         SELECT
-          id,
-          nome,
-          telefone,
-          contato,
-          email,
-          cep,
-          endereco,
-          cidade,
-          observacao,
-          created_at,
-          updated_at
-        FROM fornecedores
+          f.id,
+          f.nome,
+          f.telefone,
+          f.contato,
+          f.email,
+          f.cep,
+          f.endereco,
+          f.cidade,
+          f.observacao,
+          f.created_at,
+          f.updated_at,
+          COALESCE(pecas_resumo.pecas_codigos, '') AS pecas_codigos,
+          COALESCE(pecas_resumo.pecas_vinculadas, '') AS pecas_vinculadas,
+          COALESCE(pecas_resumo.total_pecas, 0) AS total_pecas
+        FROM fornecedores f
+        LEFT JOIN (
+          SELECT
+            pecas_vinculadas.id_fornecedor,
+            GROUP_CONCAT(DISTINCT pecas_vinculadas.codigo ORDER BY pecas_vinculadas.codigo SEPARATOR ' | ') AS pecas_codigos,
+            GROUP_CONCAT(
+              DISTINCT CONCAT(pecas_vinculadas.codigo, ' - ', pecas_vinculadas.descricao)
+              ORDER BY pecas_vinculadas.codigo
+              SEPARATOR ' | '
+            ) AS pecas_vinculadas,
+            COUNT(DISTINCT pecas_vinculadas.id_peca) AS total_pecas
+          FROM (
+            SELECT
+              pf.id_fornecedor,
+              p.id AS id_peca,
+              p.codigo,
+              p.descricao
+            FROM peca_fornecedor pf
+            INNER JOIN pecas p ON p.id = pf.id_peca
+
+            UNION
+
+            SELECT
+              p.id_fornecedor AS id_fornecedor,
+              p.id AS id_peca,
+              p.codigo,
+              p.descricao
+            FROM pecas p
+            WHERE p.id_fornecedor IS NOT NULL
+          ) pecas_vinculadas
+          GROUP BY pecas_vinculadas.id_fornecedor
+        ) pecas_resumo ON pecas_resumo.id_fornecedor = f.id
         WHERE ${conditions.join(' AND ')}
-        ORDER BY nome ASC
+        ORDER BY f.nome ASC
       `,
       values
     );

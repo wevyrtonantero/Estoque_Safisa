@@ -62,6 +62,7 @@
             <div class="sector-menu-list">
               <button id="btn-dashboard-estoques" class="btn btn-primary" type="button"><span class="btn-label">Ver Estoques</span></button>
               <button id="btn-dashboard-mp" class="btn btn-secondary" type="button"><span class="btn-label">Ver Estoque MP</span></button>
+              <button id="btn-dashboard-fornecedores" class="btn btn-neutral" type="button"><span class="btn-label">Consultar Fornecedores</span></button>
               <button id="btn-dashboard-simulacao" class="btn btn-secondary" type="button"><span class="btn-label">Simulacao de Submontagem</span></button>
               <button id="btn-dashboard-indicadores" class="btn btn-secondary" type="button"><span class="btn-label">Ver Indicadores</span></button>
             </div>
@@ -315,6 +316,72 @@
           <tbody id="dashboard-mp-tbody">
             <tr>
               <td colspan="6" class="empty-state">Carregando estoque de materia-prima...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="dashboard-fornecedores-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="dashboard-fornecedores"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Fornecedores</span>
+          <h2>Consulta de fornecedores</h2>
+          <p id="dashboard-fornecedores-total">0 fornecedor(es) encontrado(s)</p>
+        </div>
+
+        <button id="btn-fechar-modal-dashboard-fornecedores" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="dashboard-fornecedores-mensagem" class="message hidden"></div>
+
+      <form id="dashboard-fornecedores-filtro-form" class="toolbar-form">
+        <div class="field">
+          <label for="dashboard-fornecedores-filtro-nome">Nome</label>
+          <input id="dashboard-fornecedores-filtro-nome" type="text" placeholder="Digite parte do nome">
+        </div>
+
+        <div class="field">
+          <label for="dashboard-fornecedores-filtro-peca">Peca</label>
+          <input id="dashboard-fornecedores-filtro-peca" type="text" placeholder="Codigo ou descricao da peca">
+        </div>
+
+        <div class="field">
+          <label for="dashboard-fornecedores-filtro-contato">Contato</label>
+          <input id="dashboard-fornecedores-filtro-contato" type="text" placeholder="Digite parte do contato">
+        </div>
+
+        <div class="field">
+          <label for="dashboard-fornecedores-filtro-cidade">Cidade</label>
+          <input id="dashboard-fornecedores-filtro-cidade" type="text" placeholder="Digite a cidade">
+        </div>
+
+        <div class="toolbar-actions">
+          <button id="btn-limpar-modal-dashboard-fornecedores" class="btn btn-neutral" type="button">Limpar</button>
+        </div>
+      </form>
+
+      <div class="subtle-divider"></div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>Pecas vinculadas</th>
+              <th>Contato</th>
+              <th>Telefone</th>
+              <th>Cidade</th>
+              <th>E-mail</th>
+            </tr>
+          </thead>
+          <tbody id="dashboard-fornecedores-tbody">
+            <tr>
+              <td colspan="6" class="empty-state">Carregando fornecedores...</td>
             </tr>
           </tbody>
         </table>

@@ -2,6 +2,8 @@
 const EstoqueModel = require('./EstoqueModel');
 
 class SolicitacaoEstoqueModel {
+  static STATUSS_ABERTOS = ['PENDENTE', 'FALTANDO_PECA', 'MONTANDO', 'EM_SEPARACAO', 'ATENDIDA_PARCIAL'];
+
   static AREAS_DESTINO = {
     EXPEDICAO: 'Expedição',
     MONTAGEM: 'Montagem'
@@ -34,6 +36,11 @@ class SolicitacaoEstoqueModel {
 
   static buildOriginLabel(origin) {
     return origin === 'MONTAGEM' ? 'Montagem' : 'Almoxarifado';
+  }
+
+  static normalizeStatus(value) {
+    const normalized = String(value || '').trim().toUpperCase();
+    return ['PENDENTE', 'FALTANDO_PECA', 'MONTANDO', 'EM_SEPARACAO'].includes(normalized) ? normalized : '';
   }
 
   static async findDestinationStock(connection, area) {
@@ -86,6 +93,7 @@ class SolicitacaoEstoqueModel {
           GREATEST(s.quantidade_solicitada - s.quantidade_atendida, 0) AS quantidade_pendente,
           s.status,
           s.observacao,
+          s.data_previsao,
           s.data_solicitacao,
           s.data_inicio_separacao,
           s.data_atendimento,
@@ -139,7 +147,8 @@ class SolicitacaoEstoqueModel {
     }
 
     if (filters.abertas) {
-      conditions.push("s.status IN ('PENDENTE', 'EM_SEPARACAO', 'ATENDIDA_PARCIAL')");
+      conditions.push(`s.status IN (${this.STATUSS_ABERTOS.map(() => '?').join(', ')})`);
+      values.push(...this.STATUSS_ABERTOS);
     }
 
     if (filters.q) {
@@ -165,6 +174,7 @@ class SolicitacaoEstoqueModel {
           GREATEST(s.quantidade_solicitada - s.quantidade_atendida, 0) AS quantidade_pendente,
           s.status,
           s.observacao,
+          s.data_previsao,
           s.data_solicitacao,
           s.data_inicio_separacao,
           s.data_atendimento,
@@ -194,10 +204,12 @@ class SolicitacaoEstoqueModel {
         ORDER BY
           CASE s.status
             WHEN 'PENDENTE' THEN 1
-            WHEN 'EM_SEPARACAO' THEN 2
-            WHEN 'ATENDIDA_PARCIAL' THEN 3
-            WHEN 'ATENDIDA' THEN 4
-            ELSE 5
+            WHEN 'FALTANDO_PECA' THEN 2
+            WHEN 'MONTANDO' THEN 3
+            WHEN 'EM_SEPARACAO' THEN 4
+            WHEN 'ATENDIDA_PARCIAL' THEN 5
+            WHEN 'ATENDIDA' THEN 6
+            ELSE 7
           END,
           s.id DESC
       `,
@@ -233,20 +245,25 @@ class SolicitacaoEstoqueModel {
       }
 
       const estoqueOrigem = await this.findSourceStock(connection, origemAtendimento);
-      const saldoOrigem = await EstoqueModel.findSaldoForUpdate(connection, estoqueOrigem.id, data.id_peca);
-      const quantidadeDisponivel = saldoOrigem ? Number(saldoOrigem.quantidade) : 0;
       const quantidadeSolicitada = Number(data.quantidade_solicitada || 0);
 
-      if (quantidadeDisponivel <= 0) {
-        throw this.createBusinessError(
-          `Nao ha saldo disponivel de ${item.codigo} em ${estoqueOrigem.nome} para gerar a solicitacao.`
-        );
-      }
+      const exigeSaldoNaOrigem = !(area === 'EXPEDICAO' && origemAtendimento === 'MONTAGEM');
 
-      if (quantidadeSolicitada > quantidadeDisponivel) {
-        throw this.createBusinessError(
-          `Saldo insuficiente em ${estoqueOrigem.nome}. Disponivel: ${quantidadeDisponivel}.`
-        );
+      if (exigeSaldoNaOrigem) {
+        const saldoOrigem = await EstoqueModel.findSaldoForUpdate(connection, estoqueOrigem.id, data.id_peca);
+        const quantidadeDisponivel = saldoOrigem ? Number(saldoOrigem.quantidade) : 0;
+
+        if (quantidadeDisponivel <= 0) {
+          throw this.createBusinessError(
+            `Nao ha saldo disponivel de ${item.codigo} em ${estoqueOrigem.nome} para gerar a solicitacao.`
+          );
+        }
+
+        if (quantidadeSolicitada > quantidadeDisponivel) {
+          throw this.createBusinessError(
+            `Saldo insuficiente em ${estoqueOrigem.nome}. Disponivel: ${quantidadeDisponivel}.`
+          );
+        }
       }
 
       const [result] = await connection.query(
@@ -289,7 +306,7 @@ class SolicitacaoEstoqueModel {
         throw this.createBusinessError('Solicitacao nao encontrada.');
       }
 
-      if (!['PENDENTE', 'ATENDIDA_PARCIAL'].includes(request.status)) {
+      if (!['PENDENTE', 'FALTANDO_PECA', 'MONTANDO', 'ATENDIDA_PARCIAL'].includes(request.status)) {
         throw this.createBusinessError('Somente solicitacoes pendentes podem entrar em separacao.');
       }
 
@@ -298,7 +315,7 @@ class SolicitacaoEstoqueModel {
           UPDATE solicitacoes_estoque
           SET
             status = 'EM_SEPARACAO',
-            data_inicio_separacao = NOW()
+            data_inicio_separacao = COALESCE(data_inicio_separacao, NOW())
           WHERE id = ?
         `,
         [id]
@@ -343,7 +360,7 @@ class SolicitacaoEstoqueModel {
         throw this.createBusinessError('Solicitacao nao encontrada.');
       }
 
-      if (!['PENDENTE', 'EM_SEPARACAO', 'ATENDIDA_PARCIAL'].includes(request.status)) {
+      if (!['PENDENTE', 'FALTANDO_PECA', 'MONTANDO', 'EM_SEPARACAO', 'ATENDIDA_PARCIAL'].includes(request.status)) {
         throw this.createBusinessError('Esta solicitacao nao pode mais ser atendida.');
       }
 
@@ -405,6 +422,7 @@ class SolicitacaoEstoqueModel {
             quantidade_atendida = ?,
             status = ?,
             data_atendimento = NOW(),
+            data_previsao = NULL,
             observacao = ?
           WHERE id = ?
         `,
@@ -450,6 +468,58 @@ class SolicitacaoEstoqueModel {
           WHERE id = ?
         `,
         [data.observacao || request.observacao || null, id]
+      );
+
+      await connection.commit();
+      return this.findById(id);
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }
+
+  static async updateStatus(id, data = {}) {
+    const connection = await pool.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      const request = await this.findById(id, connection);
+      if (!request) {
+        throw this.createBusinessError('Solicitacao nao encontrada.');
+      }
+
+      if (['ATENDIDA', 'CANCELADA'].includes(String(request.status || '').toUpperCase())) {
+        throw this.createBusinessError('Solicitacoes encerradas nao podem ter o status alterado.');
+      }
+
+      const status = this.normalizeStatus(data.status);
+      if (!status) {
+        throw this.createBusinessError('Status invalido para a solicitacao.');
+      }
+
+      await connection.query(
+        `
+          UPDATE solicitacoes_estoque
+          SET
+            status = ?,
+            data_previsao = ?,
+            data_inicio_separacao = CASE
+              WHEN ? = 'EM_SEPARACAO' THEN COALESCE(data_inicio_separacao, NOW())
+              ELSE data_inicio_separacao
+            END,
+            observacao = ?
+          WHERE id = ?
+        `,
+        [
+          status,
+          data.data_previsao || null,
+          status,
+          data.observacao || request.observacao || null,
+          id
+        ]
       );
 
       await connection.commit();

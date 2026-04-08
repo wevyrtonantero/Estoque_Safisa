@@ -172,6 +172,11 @@ class EstoqueModel {
       values.push(filters.estoque);
     }
 
+    if (filters.idPeca) {
+      conditions.push('p.id = ?');
+      values.push(filters.idPeca);
+    }
+
     if (filters.codigo) {
       conditions.push('p.codigo LIKE ?');
       values.push(`%${filters.codigo}%`);

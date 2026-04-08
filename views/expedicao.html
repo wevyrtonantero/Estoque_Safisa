@@ -122,11 +122,12 @@
                   <th>Tipo</th>
                   <th>Classificacao</th>
                   <th>Quantidade</th>
+                  <th>Acoes</th>
                 </tr>
               </thead>
               <tbody id="expedicao-estoque-tbody">
                 <tr>
-                  <td colspan="5" class="empty-state">Carregando estoque...</td>
+                  <td colspan="6" class="empty-state">Carregando estoque...</td>
                 </tr>
               </tbody>
             </table>
@@ -135,6 +136,117 @@
       </div>
     </section>
   </main>
+
+  <div id="expedicao-estrutura-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="expedicao-estrutura"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Submontagem</span>
+          <h2 id="expedicao-estrutura-titulo">Estrutura da submontagem</h2>
+          <p id="expedicao-estrutura-subtitulo">Veja o que entra nesta submontagem e o saldo atual dos componentes na Expedicao.</p>
+        </div>
+
+        <button id="btn-fechar-modal-expedicao-estrutura" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="expedicao-estrutura-mensagem" class="message hidden"></div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Codigo</th>
+              <th>Descricao</th>
+              <th>Qtd na estrutura</th>
+              <th>Saldo na Expedicao</th>
+            </tr>
+          </thead>
+          <tbody id="expedicao-estrutura-tbody">
+            <tr>
+              <td colspan="4" class="empty-state">Selecione uma submontagem para visualizar a estrutura.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="expedicao-historico-item-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="expedicao-historico-item"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Historico</span>
+          <h2 id="expedicao-historico-item-titulo">Historico da peca</h2>
+          <p id="expedicao-historico-item-subtitulo">Veja as ultimas movimentacoes desta peca no sistema.</p>
+        </div>
+
+        <button id="btn-fechar-modal-expedicao-historico-item" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="expedicao-historico-item-mensagem" class="message hidden"></div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Tipo</th>
+              <th>Origem</th>
+              <th>Destino</th>
+              <th>Quantidade</th>
+              <th>Observacao</th>
+            </tr>
+          </thead>
+          <tbody id="expedicao-historico-item-tbody">
+            <tr>
+              <td colspan="6" class="empty-state">Selecione um item para visualizar o historico.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="expedicao-saldos-item-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="expedicao-saldos-item"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Estoques</span>
+          <h2 id="expedicao-saldos-item-titulo">Saldo nos estoques</h2>
+          <p id="expedicao-saldos-item-subtitulo">Veja em quais estoques este item esta disponivel.</p>
+        </div>
+
+        <button id="btn-fechar-modal-expedicao-saldos-item" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="expedicao-saldos-item-mensagem" class="message hidden"></div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Estoque</th>
+              <th>Codigo</th>
+              <th>Descricao</th>
+              <th>Classificacao</th>
+              <th>Quantidade</th>
+            </tr>
+          </thead>
+          <tbody id="expedicao-saldos-item-tbody">
+            <tr>
+              <td colspan="5" class="empty-state">Selecione um item para visualizar os saldos.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 
   <div id="expedicao-saida-modal" class="modal hidden" aria-hidden="true">
     <div class="modal-backdrop" data-close-modal="expedicao-saida"></div>
@@ -254,12 +366,14 @@
               <th>Solicitada</th>
               <th>Pendente</th>
               <th>Status</th>
+              <th>Previsao</th>
               <th>Data</th>
+              <th>Acoes</th>
             </tr>
           </thead>
           <tbody id="expedicao-pedidos-tbody">
             <tr>
-              <td colspan="8" class="empty-state">Carregando pedidos...</td>
+              <td colspan="10" class="empty-state">Carregando pedidos...</td>
             </tr>
           </tbody>
         </table>
@@ -404,12 +518,12 @@
   <div id="expedicao-solicitacao-modal" class="modal hidden" aria-hidden="true">
     <div class="modal-backdrop" data-close-modal="expedicao-solicitacao"></div>
 
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-wide">
       <div class="modal-header">
         <div>
           <span class="section-pill">Solicitacao</span>
-          <h2>Pedir pecas</h2>
-          <p>Solicite ao Almoxarifado ou, quando fizer sentido, diretamente para a Montagem.</p>
+          <h2>Pedir pecas em lote</h2>
+          <p>Monte uma lista de solicitacoes para Almoxarifado ou Montagem e envie tudo de uma vez.</p>
         </div>
 
         <button id="btn-fechar-modal-expedicao-solicitacao" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
@@ -451,8 +565,42 @@
         </div>
 
         <div class="span-12 modal-actions">
+          <button id="btn-expedicao-solicitacao-adicionar" class="btn btn-secondary" type="submit">Adicionar a lista</button>
+        </div>
+
+        <div class="span-12 embedded-section">
+          <div class="section-header-inline">
+            <div>
+              <p class="page-kicker">Lista de solicitacoes</p>
+              <h3>Itens para pedir</h3>
+            </div>
+            <p id="expedicao-solicitacao-lista-total">0 item(ns) na lista</p>
+          </div>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Atendido por</th>
+                  <th>Codigo</th>
+                  <th>Descricao</th>
+                  <th>Quantidade</th>
+                  <th>Observacao</th>
+                  <th>Acoes</th>
+                </tr>
+              </thead>
+              <tbody id="expedicao-solicitacao-lista-tbody">
+                <tr>
+                  <td colspan="6" class="empty-state">Nenhum item na lista de solicitacao.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="span-12 modal-actions">
           <button id="btn-cancelar-modal-expedicao-solicitacao" class="btn btn-neutral" type="button">Cancelar</button>
-          <button class="btn btn-primary" type="submit">Enviar solicitacao</button>
+          <button id="btn-expedicao-solicitacao-enviar" class="btn btn-primary" type="button">Enviar solicitacoes</button>
         </div>
       </form>
     </div>

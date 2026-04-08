@@ -33,6 +33,14 @@ function buildFulfillPayload(body) {
   };
 }
 
+function buildStatusPayload(body) {
+  return {
+    status: body.status ? String(body.status).trim().toUpperCase() : '',
+    data_previsao: body.data_previsao ? String(body.data_previsao).trim() : null,
+    observacao: body.observacao ? String(body.observacao).trim() : null
+  };
+}
+
 function extractErrorResponse(error, fallbackMessage) {
   if (error.statusCode) {
     return { status: error.statusCode, body: { message: error.message } };
@@ -136,6 +144,22 @@ const SolicitacaoEstoqueController = {
       return res.status(200).json(result);
     } catch (error) {
       const response = extractErrorResponse(error, 'Erro ao cancelar solicitacao de estoque.');
+      return res.status(response.status).json(response.body);
+    }
+  },
+
+  async updateStatus(req, res) {
+    try {
+      const payload = buildStatusPayload(req.body);
+
+      if (!payload.status) {
+        return res.status(400).json({ message: 'O status deve ser informado.' });
+      }
+
+      const result = await SolicitacaoEstoqueModel.updateStatus(req.params.id, payload);
+      return res.status(200).json(result);
+    } catch (error) {
+      const response = extractErrorResponse(error, 'Erro ao atualizar o status da solicitacao.');
       return res.status(response.status).json(response.body);
     }
   }

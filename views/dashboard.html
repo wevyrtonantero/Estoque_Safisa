@@ -61,8 +61,11 @@
 
             <div class="sector-menu-list">
               <button id="almox-btn-pedidos" class="btn btn-primary" type="button"><span class="btn-label">Solicitacoes Recebidas</span><span id="almox-badge-pedidos" class="btn-badge hidden">0</span></button>
+              <button id="almox-btn-entrada-manual" class="btn btn-secondary" type="button"><span class="btn-label">Entrada Manual</span></button>
+              <button id="almox-btn-transferencia" class="btn btn-secondary" type="button"><span class="btn-label">Movimentacao entre Estoques</span></button>
               <button id="almox-btn-tratamento" class="btn btn-neutral" type="button"><span class="btn-label">Entrada do Tratamento Externo</span><span id="almox-badge-tratamento" class="btn-badge hidden">0</span></button>
               <button id="almox-btn-mp" class="btn btn-secondary" type="button"><span class="btn-label">Entrada de Materia-prima</span></button>
+              <button id="almox-btn-fornecedores" class="btn btn-neutral" type="button"><span class="btn-label">Consultar Fornecedores</span></button>
               <button id="almox-btn-historico" class="btn btn-neutral" type="button"><span class="btn-label">Historico de Movimentacoes</span></button>
               <button id="almox-btn-producao" class="btn btn-secondary" type="button"><span class="btn-label">Ver Producao</span><span id="almox-badge-producao" class="btn-badge hidden">0</span></button>
             </div>
@@ -359,6 +362,178 @@
           <button class="btn btn-success" type="submit">Confirmar Recebimento</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <div id="almox-entrada-manual-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="almox-entrada-manual"></div>
+
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Estoque</span>
+          <h2>Entrada manual no Almoxarifado</h2>
+          <p>Lance um item pronto diretamente no estoque do Almoxarifado.</p>
+        </div>
+
+        <button id="btn-fechar-modal-almox-entrada-manual" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="almox-entrada-manual-mensagem" class="message hidden"></div>
+
+      <form id="almox-entrada-manual-form" class="form-grid">
+        <input type="hidden" id="almox-entrada-manual-id-item">
+
+        <div class="field span-12">
+          <label for="almox-entrada-manual-busca">Item ou submontagem</label>
+          <div class="autocomplete">
+            <input id="almox-entrada-manual-busca" type="text" placeholder="Digite codigo ou descricao">
+            <div id="almox-entrada-manual-sugestoes" class="autocomplete-panel hidden"></div>
+          </div>
+        </div>
+
+        <div id="almox-entrada-manual-resumo" class="span-12 selected-tags empty">Selecione um item para continuar.</div>
+
+        <div class="field span-4">
+          <label for="almox-entrada-manual-quantidade">Quantidade</label>
+          <input id="almox-entrada-manual-quantidade" type="number" min="0.01" step="0.01" value="1" required>
+        </div>
+
+        <div class="field span-8">
+          <label for="almox-entrada-manual-observacao">Observacao</label>
+          <input id="almox-entrada-manual-observacao" type="text" maxlength="255" placeholder="Opcional">
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button id="btn-cancelar-modal-almox-entrada-manual" class="btn btn-neutral" type="button">Cancelar</button>
+          <button class="btn btn-primary" type="submit">Salvar Entrada</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="almox-transferencia-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="almox-transferencia"></div>
+
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Estoque</span>
+          <h2>Movimentacao entre estoques</h2>
+          <p>Transfira um item entre os estoques cadastrados.</p>
+        </div>
+
+        <button id="btn-fechar-modal-almox-transferencia" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="almox-transferencia-mensagem" class="message hidden"></div>
+
+      <form id="almox-transferencia-form" class="form-grid">
+        <input type="hidden" id="almox-transferencia-id-item">
+
+        <div class="field span-12">
+          <label for="almox-transferencia-busca">Item ou submontagem</label>
+          <div class="autocomplete">
+            <input id="almox-transferencia-busca" type="text" placeholder="Digite codigo ou descricao">
+            <div id="almox-transferencia-sugestoes" class="autocomplete-panel hidden"></div>
+          </div>
+        </div>
+
+        <div id="almox-transferencia-resumo" class="span-12 selected-tags empty">Selecione um item para continuar.</div>
+
+        <div class="field span-4">
+          <label for="almox-transferencia-origem">Estoque de origem</label>
+          <select id="almox-transferencia-origem" required>
+            <option value="">Selecione</option>
+          </select>
+        </div>
+
+        <div class="field span-4">
+          <label for="almox-transferencia-destino">Estoque de destino</label>
+          <select id="almox-transferencia-destino" required>
+            <option value="">Selecione</option>
+          </select>
+        </div>
+
+        <div class="field span-4">
+          <label for="almox-transferencia-quantidade">Quantidade</label>
+          <input id="almox-transferencia-quantidade" type="number" min="0.01" step="0.01" value="1" required>
+        </div>
+
+        <div class="field span-12">
+          <label for="almox-transferencia-observacao">Observacao</label>
+          <input id="almox-transferencia-observacao" type="text" maxlength="255" placeholder="Opcional">
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button id="btn-cancelar-modal-almox-transferencia" class="btn btn-neutral" type="button">Cancelar</button>
+          <button class="btn btn-primary" type="submit">Confirmar Transferencia</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="almox-fornecedores-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="almox-fornecedores"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Fornecedores</span>
+          <h2>Consulta de fornecedores</h2>
+          <p id="almox-fornecedores-total">0 fornecedor(es) encontrado(s)</p>
+        </div>
+
+        <button id="btn-fechar-modal-almox-fornecedores" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="almox-fornecedores-mensagem" class="message hidden"></div>
+
+      <form id="almox-fornecedores-filtro-form" class="toolbar-form">
+        <div class="field">
+          <label for="almox-fornecedores-filtro-nome">Nome</label>
+          <input id="almox-fornecedores-filtro-nome" type="text" placeholder="Digite parte do nome">
+        </div>
+
+        <div class="field">
+          <label for="almox-fornecedores-filtro-peca">Peca</label>
+          <input id="almox-fornecedores-filtro-peca" type="text" placeholder="Codigo ou descricao da peca">
+        </div>
+
+        <div class="field">
+          <label for="almox-fornecedores-filtro-contato">Contato</label>
+          <input id="almox-fornecedores-filtro-contato" type="text" placeholder="Digite parte do contato">
+        </div>
+
+        <div class="field">
+          <label for="almox-fornecedores-filtro-cidade">Cidade</label>
+          <input id="almox-fornecedores-filtro-cidade" type="text" placeholder="Digite a cidade">
+        </div>
+
+        <button id="almox-btn-limpar-fornecedores" class="btn btn-neutral" type="button">Limpar</button>
+      </form>
+
+      <div class="subtle-divider"></div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>Pecas vinculadas</th>
+              <th>Contato</th>
+              <th>Telefone</th>
+              <th>Cidade</th>
+              <th>Email</th>
+            </tr>
+          </thead>
+          <tbody id="almox-fornecedores-tbody">
+            <tr>
+              <td colspan="6" class="empty-state">Carregando fornecedores...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 

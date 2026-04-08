@@ -125,11 +125,12 @@
                   <th>Tipo</th>
                   <th>Classificacao</th>
                   <th>Quantidade</th>
+                  <th>Acoes</th>
                 </tr>
               </thead>
               <tbody id="montagem-estoque-tbody">
                 <tr>
-                  <td colspan="5" class="empty-state">Carregando estoque...</td>
+                  <td colspan="6" class="empty-state">Carregando estoque...</td>
                 </tr>
               </tbody>
             </table>
@@ -138,6 +139,117 @@
       </div>
     </section>
   </main>
+
+  <div id="montagem-estrutura-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="montagem-estrutura"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Submontagem</span>
+          <h2 id="montagem-estrutura-titulo">Estrutura da submontagem</h2>
+          <p id="montagem-estrutura-subtitulo">Veja o que entra nesta submontagem e o saldo atual dos componentes na Montagem.</p>
+        </div>
+
+        <button id="btn-fechar-modal-montagem-estrutura" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="montagem-estrutura-mensagem" class="message hidden"></div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Codigo</th>
+              <th>Descricao</th>
+              <th>Qtd na estrutura</th>
+              <th>Saldo na Montagem</th>
+            </tr>
+          </thead>
+          <tbody id="montagem-estrutura-tbody">
+            <tr>
+              <td colspan="4" class="empty-state">Selecione uma submontagem para visualizar a estrutura.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="montagem-historico-item-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="montagem-historico-item"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Historico</span>
+          <h2 id="montagem-historico-item-titulo">Historico da peca</h2>
+          <p id="montagem-historico-item-subtitulo">Veja as ultimas movimentacoes desta peca no sistema.</p>
+        </div>
+
+        <button id="btn-fechar-modal-montagem-historico-item" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="montagem-historico-item-mensagem" class="message hidden"></div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Tipo</th>
+              <th>Origem</th>
+              <th>Destino</th>
+              <th>Quantidade</th>
+              <th>Observacao</th>
+            </tr>
+          </thead>
+          <tbody id="montagem-historico-item-tbody">
+            <tr>
+              <td colspan="6" class="empty-state">Selecione um item para visualizar o historico.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="montagem-saldos-item-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="montagem-saldos-item"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Estoques</span>
+          <h2 id="montagem-saldos-item-titulo">Saldo nos estoques</h2>
+          <p id="montagem-saldos-item-subtitulo">Veja em quais estoques este item esta disponivel.</p>
+        </div>
+
+        <button id="btn-fechar-modal-montagem-saldos-item" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="montagem-saldos-item-mensagem" class="message hidden"></div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Estoque</th>
+              <th>Codigo</th>
+              <th>Descricao</th>
+              <th>Classificacao</th>
+              <th>Quantidade</th>
+            </tr>
+          </thead>
+          <tbody id="montagem-saldos-item-tbody">
+            <tr>
+              <td colspan="5" class="empty-state">Selecione um item para visualizar os saldos.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 
   <div id="montagem-transferencia-modal" class="modal hidden" aria-hidden="true">
     <div class="modal-backdrop" data-close-modal="montagem-transferencia"></div>
@@ -228,11 +340,12 @@
               <th>Pendente</th>
               <th>Status</th>
               <th>Data</th>
+              <th>Acoes</th>
             </tr>
           </thead>
           <tbody id="montagem-pedidos-tbody">
             <tr>
-              <td colspan="8" class="empty-state">Carregando pedidos...</td>
+              <td colspan="9" class="empty-state">Carregando pedidos...</td>
             </tr>
           </tbody>
         </table>
@@ -276,12 +389,13 @@
               <th>Pendente</th>
               <th>Saldo Montagem</th>
               <th>Status</th>
+              <th>Previsao</th>
               <th>Acoes</th>
             </tr>
           </thead>
           <tbody id="montagem-pedidos-recebidos-tbody">
             <tr>
-              <td colspan="8" class="empty-state">Carregando pedidos recebidos...</td>
+              <td colspan="9" class="empty-state">Carregando pedidos recebidos...</td>
             </tr>
           </tbody>
         </table>
@@ -335,12 +449,12 @@
   <div id="montagem-solicitacao-modal" class="modal hidden" aria-hidden="true">
     <div class="modal-backdrop" data-close-modal="montagem-solicitacao"></div>
 
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-wide">
       <div class="modal-header">
         <div>
           <span class="section-pill">Solicitacao</span>
           <h2>Pedir pecas ao Almoxarifado</h2>
-          <p>Digite a peca, confira o pacote e envie a solicitacao sem sair da Montagem.</p>
+          <p>Monte uma lista de pecas e envie tudo de uma vez, sem precisar pedir item por item.</p>
         </div>
 
         <button id="btn-fechar-modal-montagem-solicitacao" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
@@ -379,8 +493,41 @@
         </div>
 
         <div class="span-12 modal-actions">
+          <button id="btn-montagem-solicitacao-adicionar" class="btn btn-secondary" type="submit">Adicionar a lista</button>
+        </div>
+
+        <div class="span-12 embedded-section">
+          <div class="section-header-inline">
+            <div>
+              <p class="page-kicker">Lista de solicitacoes</p>
+              <h3>Itens para pedir ao Almoxarifado</h3>
+            </div>
+            <p id="montagem-solicitacao-lista-total">0 item(ns) na lista</p>
+          </div>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Codigo</th>
+                  <th>Descricao</th>
+                  <th>Quantidade</th>
+                  <th>Observacao</th>
+                  <th>Acoes</th>
+                </tr>
+              </thead>
+              <tbody id="montagem-solicitacao-lista-tbody">
+                <tr>
+                  <td colspan="5" class="empty-state">Nenhum item na lista de solicitacao.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="span-12 modal-actions">
           <button id="btn-cancelar-modal-montagem-solicitacao" class="btn btn-neutral" type="button">Cancelar</button>
-          <button class="btn btn-primary" type="submit">Enviar solicitacao</button>
+          <button id="btn-montagem-solicitacao-enviar" class="btn btn-primary" type="button">Enviar solicitacoes</button>
         </div>
       </form>
     </div>
@@ -568,6 +715,55 @@
         <div class="span-12 modal-actions">
           <button id="btn-cancelar-modal-montagem-atendimento" class="btn btn-neutral" type="button">Cancelar</button>
           <button class="btn btn-success" type="submit">Confirmar Atendimento</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="montagem-status-solicitacao-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="montagem-status-solicitacao"></div>
+
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Montagem</span>
+          <h2>Atualizar status do pedido</h2>
+          <p>Informe a situacao do pedido recebido da Expedicao e, se quiser, uma previsao.</p>
+        </div>
+
+        <button id="btn-fechar-modal-montagem-status-solicitacao" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="montagem-status-solicitacao-mensagem" class="message hidden"></div>
+
+      <form id="montagem-status-solicitacao-form" class="form-grid">
+        <input type="hidden" id="montagem-status-solicitacao-id">
+
+        <div id="montagem-status-solicitacao-resumo" class="span-12 selected-tags empty">Selecione um pedido para atualizar.</div>
+
+        <div class="field span-4">
+          <label for="montagem-status-solicitacao-status">Status</label>
+          <select id="montagem-status-solicitacao-status" required>
+            <option value="PENDENTE">Pendente</option>
+            <option value="FALTANDO_PECA">Faltando peca</option>
+            <option value="MONTANDO">Montando</option>
+            <option value="EM_SEPARACAO">Em separacao</option>
+          </select>
+        </div>
+
+        <div class="field span-4">
+          <label for="montagem-status-solicitacao-previsao">Previsao</label>
+          <input id="montagem-status-solicitacao-previsao" type="date">
+        </div>
+
+        <div class="field span-12">
+          <label for="montagem-status-solicitacao-observacao">Observacao</label>
+          <input id="montagem-status-solicitacao-observacao" type="text" maxlength="255" placeholder="Opcional">
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button id="btn-cancelar-modal-montagem-status-solicitacao" class="btn btn-neutral" type="button">Cancelar</button>
+          <button class="btn btn-primary" type="submit">Salvar status</button>
         </div>
       </form>
     </div>

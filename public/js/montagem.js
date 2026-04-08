@@ -1,13 +1,14 @@
 const estoquesApiBaseUrl = '/api/estoques';
 const estoqueSaldosApiBaseUrl = '/api/estoque/saldos';
 const estoqueItensApiBaseUrl = '/api/estoque/itens';
+const estoqueMovimentacoesApiBaseUrl = '/api/estoque/movimentacoes';
 const transferenciaApiBaseUrl = '/api/estoque/transferencia';
 const solicitacoesApiBaseUrl = '/api/solicitacoes-estoque';
 const solicitacoesProducaoApiBaseUrl = '/api/solicitacoes-producao';
 const submontagensApiBaseUrl = '/api/submontagens';
 const producaoApiBaseUrl = '/api/producao';
 const AUTO_REFRESH_MS = 15000;
-const ACTIVE_REQUEST_STATUSES = ['PENDENTE', 'EM_SEPARACAO', 'ATENDIDA_PARCIAL'];
+const ACTIVE_REQUEST_STATUSES = ['PENDENTE', 'FALTANDO_PECA', 'MONTANDO', 'EM_SEPARACAO', 'ATENDIDA_PARCIAL'];
 const CLOSED_REQUEST_STATUSES = ['ATENDIDA', 'CANCELADA'];
 
 let estoquesCache = [];
@@ -21,6 +22,7 @@ let producaoEmAndamentoCache = [];
 let autoRefreshHandle = null;
 let estruturasSubmontagemCache = new Map();
 let efetuarFaltantesCache = [];
+let solicitacaoLista = [];
 
 const refs = {
   mensagem: document.getElementById('montagem-mensagem'),
@@ -44,6 +46,21 @@ const refs = {
   badgePedidos: document.getElementById('montagem-badge-pedidos'),
   badgeRecebidos: document.getElementById('montagem-badge-recebidos'),
   badgeProducao: document.getElementById('montagem-badge-producao'),
+  estruturaModal: document.getElementById('montagem-estrutura-modal'),
+  estruturaMensagem: document.getElementById('montagem-estrutura-mensagem'),
+  estruturaTitulo: document.getElementById('montagem-estrutura-titulo'),
+  estruturaSubtitulo: document.getElementById('montagem-estrutura-subtitulo'),
+  estruturaTbody: document.getElementById('montagem-estrutura-tbody'),
+  historicoItemModal: document.getElementById('montagem-historico-item-modal'),
+  historicoItemMensagem: document.getElementById('montagem-historico-item-mensagem'),
+  historicoItemTitulo: document.getElementById('montagem-historico-item-titulo'),
+  historicoItemSubtitulo: document.getElementById('montagem-historico-item-subtitulo'),
+  historicoItemTbody: document.getElementById('montagem-historico-item-tbody'),
+  saldosItemModal: document.getElementById('montagem-saldos-item-modal'),
+  saldosItemMensagem: document.getElementById('montagem-saldos-item-mensagem'),
+  saldosItemTitulo: document.getElementById('montagem-saldos-item-titulo'),
+  saldosItemSubtitulo: document.getElementById('montagem-saldos-item-subtitulo'),
+  saldosItemTbody: document.getElementById('montagem-saldos-item-tbody'),
   transferenciaModal: document.getElementById('montagem-transferencia-modal'),
   pedidosModal: document.getElementById('montagem-pedidos-modal'),
   pedidosRecebidosModal: document.getElementById('montagem-recebidos-modal'),
@@ -59,6 +76,9 @@ const refs = {
   solicitacaoResumo: document.getElementById('montagem-solicitacao-item-resumo'),
   solicitacaoQuantidade: document.getElementById('montagem-solicitacao-quantidade'),
   solicitacaoObservacao: document.getElementById('montagem-solicitacao-observacao'),
+  solicitacaoListaTbody: document.getElementById('montagem-solicitacao-lista-tbody'),
+  solicitacaoListaTotal: document.getElementById('montagem-solicitacao-lista-total'),
+  solicitacaoEnviar: document.getElementById('btn-montagem-solicitacao-enviar'),
   efetuarModal: document.getElementById('montagem-efetuar-modal'),
   efetuarMensagem: document.getElementById('montagem-efetuar-mensagem'),
   efetuarForm: document.getElementById('montagem-efetuar-form'),
@@ -91,6 +111,14 @@ const refs = {
   atendimentoResumo: document.getElementById('montagem-atendimento-resumo'),
   atendimentoQuantidade: document.getElementById('montagem-atendimento-quantidade'),
   atendimentoObservacao: document.getElementById('montagem-atendimento-observacao'),
+  statusSolicitacaoModal: document.getElementById('montagem-status-solicitacao-modal'),
+  statusSolicitacaoMensagem: document.getElementById('montagem-status-solicitacao-mensagem'),
+  statusSolicitacaoForm: document.getElementById('montagem-status-solicitacao-form'),
+  statusSolicitacaoId: document.getElementById('montagem-status-solicitacao-id'),
+  statusSolicitacaoResumo: document.getElementById('montagem-status-solicitacao-resumo'),
+  statusSolicitacaoStatus: document.getElementById('montagem-status-solicitacao-status'),
+  statusSolicitacaoPrevisao: document.getElementById('montagem-status-solicitacao-previsao'),
+  statusSolicitacaoObservacao: document.getElementById('montagem-status-solicitacao-observacao'),
   solicitacaoProducaoModal: document.getElementById('montagem-producao-solicitacao-modal'),
   solicitacaoProducaoMensagem: document.getElementById('montagem-producao-solicitacao-mensagem'),
   solicitacaoProducaoForm: document.getElementById('montagem-producao-solicitacao-form'),
@@ -133,6 +161,10 @@ function bindEvents() {
       closeAllRowMenus();
     }
 
+    if (event.target.closest('.row-menu-item')) {
+      closeAllRowMenus();
+    }
+
     if (!event.target.closest('.autocomplete')) {
       esconderSugestoes();
       esconderSugestoesSolicitacao();
@@ -150,11 +182,16 @@ function bindEvents() {
   document.getElementById('montagem-btn-producao').addEventListener('click', abrirModalProducao);
   refs.pedidosFiltroSituacao.addEventListener('change', renderizarPedidos);
   refs.pedidosRecebidosFiltroSituacao.addEventListener('change', renderizarPedidosRecebidos);
+  refs.pedidosTbody.addEventListener('click', handlePedidosActions);
   refs.filtroCodigo.addEventListener('input', renderizarEstoque);
   refs.filtroDescricao.addEventListener('input', renderizarEstoque);
   refs.filtroClassificacao.addEventListener('change', renderizarEstoque);
   refs.filtroQuantidade.addEventListener('change', renderizarEstoque);
+  refs.estoqueTbody.addEventListener('click', handleEstoqueActions);
   document.getElementById('montagem-btn-limpar-filtros-estoque').addEventListener('click', limparFiltrosEstoque);
+  document.getElementById('btn-fechar-modal-montagem-estrutura').addEventListener('click', fecharModalEstrutura);
+  document.getElementById('btn-fechar-modal-montagem-historico-item').addEventListener('click', fecharModalHistoricoItem);
+  document.getElementById('btn-fechar-modal-montagem-saldos-item').addEventListener('click', fecharModalSaldosItem);
   document.getElementById('btn-fechar-modal-montagem-transferencia').addEventListener('click', fecharModalTransferencia);
   document.getElementById('btn-cancelar-modal-montagem-transferencia').addEventListener('click', fecharModalTransferencia);
   document.getElementById('btn-fechar-modal-montagem-pedidos').addEventListener('click', fecharModalPedidos);
@@ -169,9 +206,14 @@ function bindEvents() {
   document.getElementById('btn-fechar-modal-montagem-simulacao').addEventListener('click', fecharModalSimulacao);
   document.getElementById('btn-fechar-modal-montagem-atendimento').addEventListener('click', fecharModalAtendimento);
   document.getElementById('btn-cancelar-modal-montagem-atendimento').addEventListener('click', fecharModalAtendimento);
+  document.getElementById('btn-fechar-modal-montagem-status-solicitacao').addEventListener('click', fecharModalStatusSolicitacao);
+  document.getElementById('btn-cancelar-modal-montagem-status-solicitacao').addEventListener('click', fecharModalStatusSolicitacao);
   document.getElementById('btn-fechar-modal-montagem-producao-solicitacao').addEventListener('click', fecharModalSolicitacaoProducao);
   document.getElementById('btn-cancelar-modal-montagem-producao-solicitacao').addEventListener('click', fecharModalSolicitacaoProducao);
   [
+    refs.estruturaModal,
+    refs.historicoItemModal,
+    refs.saldosItemModal,
     refs.transferenciaModal,
     refs.pedidosModal,
     refs.pedidosRecebidosModal,
@@ -180,9 +222,10 @@ function bindEvents() {
     refs.efetuarModal,
     refs.simulacaoModal,
     refs.atendimentoModal,
+    refs.statusSolicitacaoModal,
     refs.solicitacaoProducaoModal
   ].forEach((modal) => modal.addEventListener('click', handleModalBackdrop));
-  refs.solicitacaoForm.addEventListener('submit', handleCriarSolicitacao);
+  refs.solicitacaoForm.addEventListener('submit', handleAdicionarSolicitacaoNaLista);
   refs.efetuarForm.addEventListener('submit', handleEfetuarMontagem);
   refs.efetuarBusca.addEventListener('input', () => {
     refs.efetuarSubmontagemId.value = '';
@@ -195,7 +238,10 @@ function bindEvents() {
   refs.simulacaoForm.addEventListener('submit', handleSimular);
   refs.simulacaoTbody.addEventListener('click', handleSimulacaoActions);
   refs.atendimentoForm.addEventListener('submit', handleAtenderPedidoRecebido);
+  refs.statusSolicitacaoForm.addEventListener('submit', handleAtualizarStatusSolicitacao);
   refs.pedidosRecebidosTbody.addEventListener('click', handlePedidosRecebidosActions);
+  refs.solicitacaoListaTbody.addEventListener('click', handleSolicitacaoListaActions);
+  refs.solicitacaoEnviar.addEventListener('click', enviarSolicitacoesDaLista);
   refs.solicitacaoProducaoForm.addEventListener('submit', handleCriarSolicitacaoProducao);
   refs.solicitacaoBusca.addEventListener('input', () => {
     refs.solicitacaoItemId.value = '';
@@ -237,6 +283,149 @@ function abrirModalPedidosRecebidos() {
 
 function fecharModalPedidosRecebidos() {
   closeModal(refs.pedidosRecebidosModal);
+}
+
+async function abrirModalEstrutura(submontagemId) {
+  const item = saldosMontagemCache.find((entry) => Number(entry.id_peca) === Number(submontagemId))
+    || itensCache.find((entry) => Number(entry.id) === Number(submontagemId))
+    || submontagensCache.find((entry) => Number(entry.id) === Number(submontagemId));
+
+  refs.estruturaMensagem.className = 'message hidden';
+  refs.estruturaMensagem.textContent = '';
+  refs.estruturaTitulo.textContent = item
+    ? `Estrutura de ${item.codigo}`
+    : 'Estrutura da submontagem';
+  refs.estruturaSubtitulo.textContent = item
+    ? `${item.descricao} | Componentes usados na Montagem.`
+    : 'Veja o que entra nesta submontagem e o saldo atual dos componentes na Montagem.';
+  refs.estruturaTbody.innerHTML = '<tr><td colspan="4" class="empty-state">Carregando estrutura...</td></tr>';
+  openModal(refs.estruturaModal);
+
+  try {
+    const componentes = await carregarEstruturaSubmontagem(submontagemId);
+
+    if (!componentes.length) {
+      refs.estruturaTbody.innerHTML = '<tr><td colspan="4" class="empty-state">Esta submontagem nao possui componentes cadastrados.</td></tr>';
+      return;
+    }
+
+    refs.estruturaTbody.innerHTML = componentes.map((componente) => `
+      <tr>
+        <td class="table-code">${escapeHtml(componente.codigo_componente)}</td>
+        <td class="table-description">${escapeHtml(componente.descricao_componente)}</td>
+        <td class="table-quantity">${formatDecimal(componente.quantidade)}</td>
+        <td class="table-quantity">${formatDecimal(obterSaldoMontagem(componente.id_item_componente))}</td>
+      </tr>
+    `).join('');
+  } catch (error) {
+    refs.estruturaMensagem.textContent = error.message;
+    refs.estruturaMensagem.className = 'message error';
+    refs.estruturaMensagem.classList.remove('hidden');
+    refs.estruturaTbody.innerHTML = '<tr><td colspan="4" class="empty-state">Nao foi possivel carregar a estrutura.</td></tr>';
+  }
+}
+
+function fecharModalEstrutura() {
+  closeModal(refs.estruturaModal);
+}
+
+async function abrirModalHistoricoItem(itemId) {
+  const item = saldosMontagemCache.find((entry) => Number(entry.id_peca) === Number(itemId))
+    || itensCache.find((entry) => Number(entry.id) === Number(itemId));
+
+  refs.historicoItemMensagem.className = 'message hidden';
+  refs.historicoItemMensagem.textContent = '';
+  refs.historicoItemTitulo.textContent = item
+    ? `Historico de ${item.codigo}`
+    : 'Historico da peca';
+  refs.historicoItemSubtitulo.textContent = item
+    ? `${item.descricao} | Ultimas movimentacoes deste item.`
+    : 'Veja as ultimas movimentacoes desta peca no sistema.';
+  refs.historicoItemTbody.innerHTML = '<tr><td colspan="6" class="empty-state">Carregando historico...</td></tr>';
+  openModal(refs.historicoItemModal);
+
+  try {
+    const response = await fetch(`${estoqueMovimentacoesApiBaseUrl}?idPeca=${itemId}`);
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.message || 'Nao foi possivel carregar o historico da peca.');
+    }
+
+    if (!Array.isArray(result) || !result.length) {
+      refs.historicoItemTbody.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhuma movimentacao encontrada para este item.</td></tr>';
+      return;
+    }
+
+    refs.historicoItemTbody.innerHTML = result.map((movimentacao) => `
+      <tr>
+        <td>${formatarDataHora(movimentacao.data_movimentacao)}</td>
+        <td>${escapeHtml(movimentacao.tipo_movimentacao || '-')}</td>
+        <td>${escapeHtml(movimentacao.estoque_origem_nome || '-')}</td>
+        <td>${escapeHtml(movimentacao.estoque_destino_nome || '-')}</td>
+        <td class="table-quantity">${formatDecimal(movimentacao.quantidade)}</td>
+        <td>${escapeHtml(movimentacao.observacao || '-')}</td>
+      </tr>
+    `).join('');
+  } catch (error) {
+    refs.historicoItemMensagem.textContent = error.message;
+    refs.historicoItemMensagem.className = 'message error';
+    refs.historicoItemMensagem.classList.remove('hidden');
+    refs.historicoItemTbody.innerHTML = '<tr><td colspan="6" class="empty-state">Nao foi possivel carregar o historico.</td></tr>';
+  }
+}
+
+function fecharModalHistoricoItem() {
+  closeModal(refs.historicoItemModal);
+}
+
+async function abrirModalSaldosItem(itemId) {
+  const item = saldosMontagemCache.find((entry) => Number(entry.id_peca) === Number(itemId))
+    || itensCache.find((entry) => Number(entry.id) === Number(itemId));
+
+  refs.saldosItemMensagem.className = 'message hidden';
+  refs.saldosItemMensagem.textContent = '';
+  refs.saldosItemTitulo.textContent = item
+    ? `Saldos de ${item.codigo}`
+    : 'Saldo nos estoques';
+  refs.saldosItemSubtitulo.textContent = item
+    ? `${item.descricao} | Estoques com saldo positivo para este item.`
+    : 'Veja em quais estoques este item esta disponivel.';
+  refs.saldosItemTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Carregando saldos...</td></tr>';
+  openModal(refs.saldosItemModal);
+
+  try {
+    const response = await fetch(`${estoqueSaldosApiBaseUrl}?id_peca=${itemId}`);
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.message || 'Nao foi possivel carregar os saldos da peca.');
+    }
+
+    if (!Array.isArray(result) || !result.length) {
+      refs.saldosItemTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhum saldo encontrado para este item.</td></tr>';
+      return;
+    }
+
+    refs.saldosItemTbody.innerHTML = result.map((saldo) => `
+      <tr>
+        <td>${escapeHtml(saldo.estoque_nome || '-')}</td>
+        <td class="table-code">${escapeHtml(saldo.codigo || '-')}</td>
+        <td class="table-description">${escapeHtml(saldo.descricao || '-')}</td>
+        <td>${escapeHtml(saldo.classificacao || '-')}</td>
+        <td class="table-quantity">${formatDecimal(saldo.quantidade)}</td>
+      </tr>
+    `).join('');
+  } catch (error) {
+    refs.saldosItemMensagem.textContent = error.message;
+    refs.saldosItemMensagem.className = 'message error';
+    refs.saldosItemMensagem.classList.remove('hidden');
+    refs.saldosItemTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Nao foi possivel carregar os saldos.</td></tr>';
+  }
+}
+
+function fecharModalSaldosItem() {
+  closeModal(refs.saldosItemModal);
 }
 
 async function carregarTudo() {
@@ -486,6 +675,8 @@ function renderizarResumoItemSolicitacao(item) {
 function abrirModalSolicitacao(prefill = null) {
   refs.solicitacaoMensagem.className = 'message hidden';
   refs.solicitacaoMensagem.textContent = '';
+  solicitacaoLista = [];
+  renderizarListaSolicitacao();
 
   if (prefill) {
     preencherSolicitacaoEstoque(prefill);
@@ -501,7 +692,39 @@ function abrirModalSolicitacao(prefill = null) {
 }
 
 function fecharModalSolicitacao() {
+  solicitacaoLista = [];
+  renderizarListaSolicitacao();
   closeModal(refs.solicitacaoModal);
+}
+
+function renderizarListaSolicitacao() {
+  refs.solicitacaoListaTotal.textContent = `${solicitacaoLista.length} item(ns) na lista`;
+
+  if (!solicitacaoLista.length) {
+    refs.solicitacaoListaTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhum item na lista de solicitacao.</td></tr>';
+    return;
+  }
+
+  refs.solicitacaoListaTbody.innerHTML = solicitacaoLista.map((item) => `
+    <tr>
+      <td class="table-code">${escapeHtml(item.codigo)}</td>
+      <td class="table-description">${escapeHtml(item.descricao)}</td>
+      <td class="table-quantity">${formatInteger(item.quantidade)}</td>
+      <td>${escapeHtml(item.observacao || '-')}</td>
+      <td class="table-actions-cell">
+        <button type="button" class="btn btn-neutral btn-small" data-remove-solicitacao-key="${escapeHtml(item.key)}">Remover</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function limparFormularioSolicitacao() {
+  refs.solicitacaoItemId.value = '';
+  refs.solicitacaoBusca.value = '';
+  refs.solicitacaoQuantidade.value = '1';
+  refs.solicitacaoObservacao.value = '';
+  renderizarResumoItemSolicitacao(null);
+  esconderSugestoesSolicitacao();
 }
 
 async function abrirModalEfetuarMontagem() {
@@ -798,7 +1021,7 @@ async function handleSolicitarFaltantesMontagem() {
   }
 }
 
-async function handleCriarSolicitacao(event) {
+async function handleAdicionarSolicitacaoNaLista(event) {
   event.preventDefault();
 
   try {
@@ -822,26 +1045,94 @@ async function handleCriarSolicitacao(event) {
       throw new Error(`Saldo insuficiente no Almoxarifado. Disponivel: ${formatInteger(saldoDisponivel)}.`);
     }
 
-    const response = await fetch(solicitacoesApiBaseUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        area_origem: 'MONTAGEM',
-        origem_atendimento: 'ALMOXARIFADO',
-        id_peca: refs.solicitacaoItemId.value,
-        quantidade_solicitada: refs.solicitacaoQuantidade.value,
+    const key = String(item.id);
+    const existente = solicitacaoLista.find((entry) => entry.key === key);
+    if (existente) {
+      existente.quantidade += quantidadeSolicitada;
+      existente.observacao = refs.solicitacaoObservacao.value.trim() || existente.observacao || '';
+    } else {
+      solicitacaoLista.push({
+        key,
+        id_peca: item.id,
+        codigo: item.codigo,
+        descricao: item.descricao,
+        quantidade: quantidadeSolicitada,
         observacao: refs.solicitacaoObservacao.value.trim()
-      })
-    });
-    const result = await response.json();
+      });
+    }
 
-    if (!response.ok) {
-      throw new Error(result.message || 'Nao foi possivel criar a solicitacao.');
+    renderizarListaSolicitacao();
+    limparFormularioSolicitacao();
+    refs.solicitacaoMensagem.textContent = 'Item adicionado a lista de solicitacao.';
+    refs.solicitacaoMensagem.className = 'message success';
+    refs.solicitacaoMensagem.classList.remove('hidden');
+  } catch (error) {
+    refs.solicitacaoMensagem.textContent = error.message;
+    refs.solicitacaoMensagem.className = 'message error';
+    refs.solicitacaoMensagem.classList.remove('hidden');
+  }
+}
+
+function handleSolicitacaoListaActions(event) {
+  const button = event.target.closest('button[data-remove-solicitacao-key]');
+  if (!button) {
+    return;
+  }
+
+  solicitacaoLista = solicitacaoLista.filter((item) => item.key !== button.dataset.removeSolicitacaoKey);
+  renderizarListaSolicitacao();
+}
+
+async function enviarSolicitacoesDaLista() {
+  try {
+    if (!solicitacaoLista.length) {
+      throw new Error('Adicione pelo menos um item na lista de solicitacao.');
+    }
+
+    const criadas = [];
+    const falhas = [];
+    const pendentes = [];
+
+    for (const item of solicitacaoLista) {
+      const response = await fetch(solicitacoesApiBaseUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          area_origem: 'MONTAGEM',
+          origem_atendimento: 'ALMOXARIFADO',
+          id_peca: item.id_peca,
+          quantidade_solicitada: item.quantidade,
+          observacao: item.observacao || null
+        })
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        falhas.push(`${item.codigo}: ${result.message || 'nao foi possivel criar a solicitacao.'}`);
+        pendentes.push(item);
+        continue;
+      }
+
+      criadas.push(`${item.codigo} (${formatInteger(item.quantidade)})`);
+    }
+
+    solicitacaoLista = pendentes;
+    renderizarListaSolicitacao();
+    await carregarPedidosMontagem();
+
+    if (!criadas.length) {
+      throw new Error(falhas.join(' | ') || 'Nenhuma solicitacao foi criada.');
+    }
+
+    if (falhas.length) {
+      refs.solicitacaoMensagem.textContent = `Criadas: ${criadas.join(', ')} | Falhas: ${falhas.join(' | ')}`;
+      refs.solicitacaoMensagem.className = 'message error';
+      refs.solicitacaoMensagem.classList.remove('hidden');
+      return;
     }
 
     fecharModalSolicitacao();
-    mostrarMensagem('Solicitacao enviada com sucesso.', 'success');
-    await carregarPedidosMontagem();
+    mostrarMensagem(`Solicitacoes enviadas com sucesso: ${criadas.join(', ')}`, 'success');
   } catch (error) {
     refs.solicitacaoMensagem.textContent = error.message;
     refs.solicitacaoMensagem.className = 'message error';
@@ -1206,12 +1497,12 @@ function renderizarPedidos() {
   document.getElementById('montagem-pedidos-total').textContent = `${pedidosFiltrados.length} registro(s) encontrado(s)`;
 
   if (!pedidosMontagemCache.length) {
-    refs.pedidosTbody.innerHTML = '<tr><td colspan="8" class="empty-state">Nenhum pedido da Montagem encontrado.</td></tr>';
+    refs.pedidosTbody.innerHTML = '<tr><td colspan="9" class="empty-state">Nenhum pedido da Montagem encontrado.</td></tr>';
     return;
   }
 
   if (!pedidosFiltrados.length) {
-    refs.pedidosTbody.innerHTML = `<tr><td colspan="8" class="empty-state">${escapeHtml(obterMensagemTimeline(refs.pedidosFiltroSituacao.value, 'pedido da Montagem'))}</td></tr>`;
+    refs.pedidosTbody.innerHTML = `<tr><td colspan="9" class="empty-state">${escapeHtml(obterMensagemTimeline(refs.pedidosFiltroSituacao.value, 'pedido da Montagem'))}</td></tr>`;
     return;
   }
 
@@ -1225,8 +1516,45 @@ function renderizarPedidos() {
       <td class="table-quantity">${formatInteger(item.quantidade_pendente)}</td>
       <td>${renderStatus(item.status)}</td>
       <td>${formatDate(item.data_solicitacao)}</td>
+      <td class="table-actions-cell">
+        ${['ATENDIDA', 'CANCELADA'].includes(String(item.status || '').toUpperCase())
+          ? '<span class="table-muted">-</span>'
+          : `<button type="button" class="btn btn-neutral btn-small" data-action="cancelar-pedido" data-id="${item.id}">Excluir</button>`}
+      </td>
     </tr>
   `).join('');
+}
+
+async function handlePedidosActions(event) {
+  const button = event.target.closest('button[data-action][data-id]');
+  if (!button || button.dataset.action !== 'cancelar-pedido') {
+    return;
+  }
+
+  const pedido = pedidosMontagemCache.find((item) => Number(item.id) === Number(button.dataset.id));
+  if (!pedido) {
+    return;
+  }
+
+  try {
+    const response = await fetch(`${solicitacoesApiBaseUrl}/${pedido.id}/cancelar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        observacao: `Pedido cancelado pela Montagem. ${pedido.observacao || ''}`.trim()
+      })
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.message || 'Nao foi possivel excluir o pedido.');
+    }
+
+    mostrarMensagem('Pedido da Montagem excluido com sucesso.', 'success');
+    await carregarPedidosMontagem();
+  } catch (error) {
+    mostrarMensagem(error.message, 'error');
+  }
 }
 
 function renderizarPedidosRecebidos() {
@@ -1234,12 +1562,12 @@ function renderizarPedidosRecebidos() {
   document.getElementById('montagem-pedidos-recebidos-total').textContent = `${pedidosFiltrados.length} registro(s) encontrado(s)`;
 
   if (!pedidosRecebidosCache.length) {
-    refs.pedidosRecebidosTbody.innerHTML = '<tr><td colspan="8" class="empty-state">Nenhum pedido da Expedicao para a Montagem.</td></tr>';
+    refs.pedidosRecebidosTbody.innerHTML = '<tr><td colspan="9" class="empty-state">Nenhum pedido da Expedicao para a Montagem.</td></tr>';
     return;
   }
 
   if (!pedidosFiltrados.length) {
-    refs.pedidosRecebidosTbody.innerHTML = `<tr><td colspan="8" class="empty-state">${escapeHtml(obterMensagemTimeline(refs.pedidosRecebidosFiltroSituacao.value, 'pedido da Expedicao para a Montagem'))}</td></tr>`;
+    refs.pedidosRecebidosTbody.innerHTML = `<tr><td colspan="9" class="empty-state">${escapeHtml(obterMensagemTimeline(refs.pedidosRecebidosFiltroSituacao.value, 'pedido da Expedicao para a Montagem'))}</td></tr>`;
     return;
   }
 
@@ -1252,11 +1580,12 @@ function renderizarPedidosRecebidos() {
       <td class="table-quantity">${formatInteger(item.quantidade_pendente)}</td>
       <td class="table-quantity">${formatInteger(obterSaldoMontagem(item.id_peca))}</td>
       <td>${renderStatus(item.status)}</td>
+      <td>${formatarDataCurta(item.data_previsao)}</td>
       <td class="table-actions-cell">
         <details class="row-menu">
           <summary class="row-menu-trigger" aria-label="Abrir acoes">...</summary>
           <div class="row-menu-panel">
-            <button type="button" class="row-menu-item" data-action="iniciar" data-id="${item.id}">Iniciar separacao</button>
+            <button type="button" class="row-menu-item" data-action="status" data-id="${item.id}">Atualizar status</button>
             <button type="button" class="row-menu-item" data-action="atender" data-id="${item.id}">Atender</button>
           </div>
         </details>
@@ -1276,8 +1605,22 @@ function handlePedidosRecebidosActions(event) {
     return;
   }
 
-  if (actionButton.dataset.action === 'iniciar') {
-    executarAcaoSolicitacao(`${solicitacoesApiBaseUrl}/${pedido.id}/iniciar-separacao`, 'Separacao iniciada na Montagem.');
+  if (actionButton.dataset.action === 'status') {
+    refs.statusSolicitacaoMensagem.className = 'message hidden';
+    refs.statusSolicitacaoMensagem.textContent = '';
+    refs.statusSolicitacaoId.value = String(pedido.id);
+    refs.statusSolicitacaoStatus.value = String(pedido.status || 'PENDENTE').toUpperCase();
+    refs.statusSolicitacaoPrevisao.value = pedido.data_previsao ? String(pedido.data_previsao).slice(0, 10) : '';
+    refs.statusSolicitacaoObservacao.value = pedido.observacao || '';
+    refs.statusSolicitacaoResumo.classList.remove('empty');
+    refs.statusSolicitacaoResumo.classList.add('selected-tags');
+    refs.statusSolicitacaoResumo.innerHTML = `
+      <span class="selected-tag">Expedicao</span>
+      <span class="selected-tag">${escapeHtml(`${pedido.codigo} - ${pedido.descricao}`)}</span>
+      <span class="selected-tag">${escapeHtml(`Pendente: ${formatInteger(pedido.quantidade_pendente)}`)}</span>
+      <span class="selected-tag">${escapeHtml(`Saldo Montagem: ${formatInteger(obterSaldoMontagem(pedido.id_peca))}`)}</span>
+    `;
+    openModal(refs.statusSolicitacaoModal);
     return;
   }
 
@@ -1323,6 +1666,39 @@ function fecharModalAtendimento() {
   closeModal(refs.atendimentoModal);
 }
 
+function fecharModalStatusSolicitacao() {
+  closeModal(refs.statusSolicitacaoModal);
+}
+
+async function handleAtualizarStatusSolicitacao(event) {
+  event.preventDefault();
+
+  try {
+    const response = await fetch(`${solicitacoesApiBaseUrl}/${refs.statusSolicitacaoId.value}/status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        status: refs.statusSolicitacaoStatus.value,
+        data_previsao: refs.statusSolicitacaoPrevisao.value || null,
+        observacao: refs.statusSolicitacaoObservacao.value.trim()
+      })
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.message || 'Nao foi possivel atualizar o status do pedido.');
+    }
+
+    fecharModalStatusSolicitacao();
+    mostrarMensagem('Status do pedido atualizado com sucesso.', 'success');
+    await carregarPedidosRecebidos();
+  } catch (error) {
+    refs.statusSolicitacaoMensagem.textContent = error.message;
+    refs.statusSolicitacaoMensagem.className = 'message error';
+    refs.statusSolicitacaoMensagem.classList.remove('hidden');
+  }
+}
+
 async function handleAtenderPedidoRecebido(event) {
   event.preventDefault();
 
@@ -1357,12 +1733,12 @@ function renderizarEstoque() {
   document.getElementById('montagem-estoque-total').textContent = `${saldosFiltrados.length} registro(s) encontrado(s)`;
 
   if (!registrosEstoque.length) {
-    refs.estoqueTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhum item monitorado na Montagem.</td></tr>';
+    refs.estoqueTbody.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhum item monitorado na Montagem.</td></tr>';
     return;
   }
 
   if (!saldosFiltrados.length) {
-    refs.estoqueTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhum item encontrado com os filtros informados.</td></tr>';
+    refs.estoqueTbody.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhum item encontrado com os filtros informados.</td></tr>';
     return;
   }
 
@@ -1373,6 +1749,18 @@ function renderizarEstoque() {
       <td>${escapeHtml(item.tipo)}</td>
       <td>${escapeHtml(item.classificacao)}</td>
       <td class="table-quantity">${formatDecimal(item.quantidade)}</td>
+      <td>
+        <details class="row-menu">
+          <summary class="row-menu-trigger" aria-label="Abrir acoes">...</summary>
+          <div class="row-menu-panel">
+            <button type="button" class="row-menu-item" data-action="history" data-item-id="${item.id_peca}">Ver historico</button>
+            <button type="button" class="row-menu-item" data-action="stocks" data-item-id="${item.id_peca}">Ver saldo nos estoques</button>
+            ${item.classificacao === 'SUBMONTAGEM'
+              ? `<button type="button" class="row-menu-item" data-action="structure" data-item-id="${item.id_peca}">Ver o que vai</button>`
+              : '<span class="row-menu-item">Sem estrutura</span>'}
+          </div>
+        </details>
+      </td>
     </tr>
   `).join('');
 }
@@ -1535,6 +1923,9 @@ function esconderSugestoesSubmontagem() {
 }
 
 function handleModalBackdrop(event) {
+  if (event.target.dataset.closeModal === 'montagem-historico-item') fecharModalHistoricoItem();
+  if (event.target.dataset.closeModal === 'montagem-saldos-item') fecharModalSaldosItem();
+  if (event.target.dataset.closeModal === 'montagem-estrutura') fecharModalEstrutura();
   if (event.target.dataset.closeModal === 'montagem-transferencia') fecharModalTransferencia();
   if (event.target.dataset.closeModal === 'montagem-pedidos') fecharModalPedidos();
   if (event.target.dataset.closeModal === 'montagem-recebidos') fecharModalPedidosRecebidos();
@@ -1543,6 +1934,7 @@ function handleModalBackdrop(event) {
   if (event.target.dataset.closeModal === 'montagem-efetuar') fecharModalEfetuarMontagem();
   if (event.target.dataset.closeModal === 'montagem-simulacao') fecharModalSimulacao();
   if (event.target.dataset.closeModal === 'montagem-atendimento') fecharModalAtendimento();
+  if (event.target.dataset.closeModal === 'montagem-status-solicitacao') fecharModalStatusSolicitacao();
   if (event.target.dataset.closeModal === 'montagem-producao-solicitacao') fecharModalSolicitacaoProducao();
 }
 
@@ -1562,6 +1954,21 @@ function handleKeyboardShortcuts(event) {
     return;
   }
 
+  if (!refs.historicoItemModal.classList.contains('hidden')) {
+    fecharModalHistoricoItem();
+    return;
+  }
+
+  if (!refs.saldosItemModal.classList.contains('hidden')) {
+    fecharModalSaldosItem();
+    return;
+  }
+
+  if (!refs.estruturaModal.classList.contains('hidden')) {
+    fecharModalEstrutura();
+    return;
+  }
+
   if (!refs.pedidosRecebidosModal.classList.contains('hidden')) {
     fecharModalPedidosRecebidos();
     return;
@@ -1574,6 +1981,11 @@ function handleKeyboardShortcuts(event) {
 
   if (!refs.atendimentoModal.classList.contains('hidden')) {
     fecharModalAtendimento();
+    return;
+  }
+
+  if (!refs.statusSolicitacaoModal.classList.contains('hidden')) {
+    fecharModalStatusSolicitacao();
     return;
   }
 
@@ -1612,6 +2024,9 @@ function closeModal(modal) {
   modal.classList.add('hidden');
   modal.setAttribute('aria-hidden', 'true');
   const hasModal = [
+    refs.historicoItemModal,
+    refs.saldosItemModal,
+    refs.estruturaModal,
     refs.transferenciaModal,
     refs.pedidosModal,
     refs.pedidosRecebidosModal,
@@ -1620,9 +2035,31 @@ function closeModal(modal) {
     refs.efetuarModal,
     refs.simulacaoModal,
     refs.atendimentoModal,
+    refs.statusSolicitacaoModal,
     refs.solicitacaoProducaoModal
   ].some((item) => !item.classList.contains('hidden'));
   document.body.classList.toggle('has-modal', hasModal);
+}
+
+function handleEstoqueActions(event) {
+  const button = event.target.closest('button[data-action][data-item-id]');
+  if (!button) {
+    return;
+  }
+
+  if (button.dataset.action === 'structure') {
+    abrirModalEstrutura(button.dataset.itemId);
+    return;
+  }
+
+  if (button.dataset.action === 'history') {
+    abrirModalHistoricoItem(button.dataset.itemId);
+    return;
+  }
+
+  if (button.dataset.action === 'stocks') {
+    abrirModalSaldosItem(button.dataset.itemId);
+  }
 }
 
 function formatMateriaPrima(item) {
@@ -1644,8 +2081,10 @@ function renderStatus(status) {
   if (normalized === 'ATENDIDA_PARCIAL') className += ' is-warning';
   if (normalized === 'PENDENTE') className += ' is-danger';
   if (normalized === 'EM_SEPARACAO') className += ' is-info';
+  if (normalized === 'FALTANDO_PECA') className += ' is-warning';
+  if (normalized === 'MONTANDO') className += ' is-info';
 
-  return `<span class="${className}">${escapeHtml(normalized || '-')}</span>`;
+  return `<span class="${className}">${escapeHtml(formatStatusLabel(normalized || '-'))}</span>`;
 }
 
 function mostrarMensagem(texto, tipo) {
@@ -1689,6 +2128,17 @@ function formatDate(value) {
   }
 
   return new Date(value).toLocaleString('pt-BR');
+}
+
+function formatStatusLabel(value) {
+  return String(value || '-')
+    .replaceAll('_', ' ')
+    .toLowerCase()
+    .replace(/(^|\s)\S/g, (match) => match.toUpperCase());
+}
+
+function formatarDataHora(value) {
+  return formatDate(value);
 }
 
 function formatarDataCurta(value) {

@@ -35,7 +35,8 @@ const FornecedorController = {
       const fornecedores = await FornecedorModel.findAll({
         nome: req.query.nome ? String(req.query.nome).trim() : '',
         contato: req.query.contato ? String(req.query.contato).trim() : '',
-        cidade: req.query.cidade ? String(req.query.cidade).trim() : ''
+        cidade: req.query.cidade ? String(req.query.cidade).trim() : '',
+        peca: req.query.peca ? String(req.query.peca).trim() : ''
       });
 
       res.status(200).json(fornecedores);
