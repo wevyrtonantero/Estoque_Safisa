@@ -78,7 +78,8 @@ const EstoqueMateriaPrimaController = {
         nome: req.query.nome ? String(req.query.nome).trim() : '',
         categoria: req.query.categoria ? String(req.query.categoria).trim().toUpperCase() : '',
         geometria: req.query.geometria ? String(req.query.geometria).trim().toUpperCase() : '',
-        bitola: req.query.bitola ? String(req.query.bitola).trim() : ''
+        bitola: req.query.bitola ? String(req.query.bitola).trim() : '',
+        mostrar_todos: String(req.query.modo || '').trim().toUpperCase() === 'TODOS'
       });
 
       return res.status(200).json(saldos);

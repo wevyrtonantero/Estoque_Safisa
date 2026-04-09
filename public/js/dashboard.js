@@ -12,6 +12,7 @@ const estoqueMateriaPrimaApiBaseUrl = '/api/estoque-materias-primas';
 const materiasPrimasAutocompleteApiBaseUrl = '/api/materias-primas-autocomplete';
 const producaoApiBaseUrl = '/api/producao';
 const AUTO_REFRESH_MS = 15000;
+const RECEBIMENTO_DESTINO_ESTOQUE_MP = 'ESTOQUE_MP';
 
 let estoquesCache = [];
 let saldosAlmoxCache = [];
@@ -1178,12 +1179,13 @@ async function handleReceberTratamento(event) {
   event.preventDefault();
 
   try {
+    const destinoSelecionado = refs.recebimentoDestino.value;
     const response = await fetch(`${terceirizacaoApiBaseUrl}/retorno`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         id_item: refs.recebimentoIdPeca.value,
-        id_estoque_destino: refs.recebimentoDestino.value,
+        id_estoque_destino: destinoSelecionado,
         quantidade_retorno: refs.recebimentoQuantidade.value,
         observacao: refs.recebimentoObservacao.value.trim()
       })
@@ -1195,7 +1197,12 @@ async function handleReceberTratamento(event) {
     }
 
     fecharModalRecebimento();
-    mostrarMensagem('Retorno da terceirizacao registrado com sucesso.', 'success');
+    mostrarMensagem(
+      destinoSelecionado === RECEBIMENTO_DESTINO_ESTOQUE_MP
+        ? 'Retorno da terceirizacao enviado ao estoque de materia-prima com sucesso.'
+        : 'Retorno da terceirizacao registrado com sucesso.',
+      'success'
+    );
     await Promise.all([carregarTratamento(), carregarEstoqueAlmox(), carregarHistoricoSeAberto()]);
   } catch (error) {
     refs.recebimentoMensagem.textContent = error.message;
@@ -1318,14 +1325,19 @@ async function executarAcaoPedido(url, successMessage) {
 }
 
 function preencherEstoquesDestino() {
-  const options = `
+  const recebimentoOptions = `
+    <option value="">Selecione</option>
+    <option value="${RECEBIMENTO_DESTINO_ESTOQUE_MP}">Estoque de materia-prima</option>
+    ${estoquesCache.map((estoque) => `<option value="${estoque.id}">${escapeHtml(estoque.nome)}</option>`).join('')}
+  `;
+  const transferenciaOptions = `
     <option value="">Selecione</option>
     ${estoquesCache.map((estoque) => `<option value="${estoque.id}">${escapeHtml(estoque.nome)}</option>`).join('')}
   `;
 
-  refs.recebimentoDestino.innerHTML = options;
-  refs.transferenciaOrigem.innerHTML = options;
-  refs.transferenciaDestino.innerHTML = options;
+  refs.recebimentoDestino.innerHTML = recebimentoOptions;
+  refs.transferenciaOrigem.innerHTML = transferenciaOptions;
+  refs.transferenciaDestino.innerHTML = transferenciaOptions;
 }
 
 function limparFiltrosEstoque() {

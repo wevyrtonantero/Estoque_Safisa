@@ -1,5 +1,6 @@
 const TerceirizacaoRemessaModel = require('../models/TerceirizacaoRemessaModel');
 const { recordAuditLog } = require('../audit/auditLogger');
+const DESTINO_ESTOQUE_MATERIA_PRIMA = 'ESTOQUE_MP';
 
 function normalizeOptionalInteger(value) {
   if (value === undefined || value === null || value === '') {
@@ -51,10 +52,29 @@ function buildUpdateNfPayload(body) {
   };
 }
 
+function normalizeReturnDestination(value) {
+  const normalized = String(value || '').trim().toUpperCase();
+
+  if (normalized === DESTINO_ESTOQUE_MATERIA_PRIMA) {
+    return {
+      destino_tipo: 'MATERIA_PRIMA',
+      id_estoque_destino: null
+    };
+  }
+
+  return {
+    destino_tipo: 'ESTOQUE',
+    id_estoque_destino: normalizeOptionalInteger(value)
+  };
+}
+
 function buildReturnPayload(body) {
+  const destino = normalizeReturnDestination(body.id_estoque_destino);
+
   return {
     id_item: normalizeOptionalInteger(body.id_item ?? body.id),
-    id_estoque_destino: normalizeOptionalInteger(body.id_estoque_destino),
+    destino_tipo: destino.destino_tipo,
+    id_estoque_destino: destino.id_estoque_destino,
     quantidade_retorno: normalizeDecimal(body.quantidade_retorno),
     observacao: body.observacao ? String(body.observacao).trim() : null
   };
@@ -197,7 +217,7 @@ const TerceirizacaoRemessaController = {
         return res.status(400).json({ message: 'O item da remessa deve ser valido.' });
       }
 
-      if (!Number.isInteger(payload.id_estoque_destino)) {
+      if (payload.destino_tipo !== 'MATERIA_PRIMA' && !Number.isInteger(payload.id_estoque_destino)) {
         return res.status(400).json({ message: 'O estoque de destino deve ser valido.' });
       }
 

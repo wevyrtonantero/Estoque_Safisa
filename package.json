@@ -8,6 +8,7 @@
     "dev": "node server.js",
     "seed:real": "node scripts/reset-real-initial-data.js",
     "db:processos": "node scripts/apply-process-infra.js",
+    "db:intermediarias": "node scripts/ensure-intermediate-mps.js",
     "suppliers:sync": "node scripts/sync-supplier-catalog.js",
     "suppliers:contacts": "node scripts/update-supplier-contacts.js"
   },

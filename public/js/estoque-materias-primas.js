@@ -1,5 +1,7 @@
 const estoqueMateriaPrimaApiBaseUrl = '/api/estoque-materias-primas';
 const materiasPrimasAutocompleteApiBaseUrl = '/api/materias-primas-autocomplete';
+const ESTOQUE_MINIMO_PADRAO_LAMINADO = 60;
+const ESTOQUE_MINIMO_PADRAO_FUNDIDO = 50;
 
 let saldosCache = [];
 let movimentacoesCache = [];
@@ -12,6 +14,8 @@ const refs = {
   tabela: document.getElementById('estoque-mp-tbody'),
   listaTitulo: document.getElementById('estoque-mp-lista-titulo'),
   total: document.getElementById('total-estoque-mp'),
+  totalAlertas: document.getElementById('metric-mp-alertas'),
+  totalCriticos: document.getElementById('metric-mp-criticos'),
   movimentacoesTabela: document.getElementById('estoque-mp-movimentacoes-tbody'),
   totalMovimentacoes: document.getElementById('total-movimentacoes-mp'),
   filtroForm: document.getElementById('estoque-mp-filtro-form'),
@@ -95,11 +99,10 @@ async function carregarSaldos() {
   if (nome) params.append('nome', nome);
   if (categoria) params.append('categoria', categoria);
   if (geometria) params.append('geometria', geometria);
+  params.append('modo', 'TODOS');
 
   try {
-    const endpoint = params.toString()
-      ? `${estoqueMateriaPrimaApiBaseUrl}/saldos?${params.toString()}`
-      : `${estoqueMateriaPrimaApiBaseUrl}/saldos`;
+    const endpoint = `${estoqueMateriaPrimaApiBaseUrl}/saldos?${params.toString()}`;
     const response = await fetch(endpoint);
     const result = await response.json();
 
@@ -147,24 +150,37 @@ async function carregarMovimentacoes(idMateriaPrima = null) {
 function renderizarSaldos() {
   refs.listaTitulo.textContent = buscaIncluiMateriasSemSaldo()
     ? 'Materias-primas Localizadas'
-    : 'Materias-primas com Saldo';
+    : 'Materias-primas Monitoradas';
   refs.total.textContent = `${saldosCache.length} registro(s) encontrado(s)`;
 
   if (saldosCache.length === 0) {
     refs.tabela.innerHTML = buscaIncluiMateriasSemSaldo()
-      ? '<tr><td colspan="8" class="empty-state">Nenhuma materia-prima encontrada para a busca informada.</td></tr>'
-      : '<tr><td colspan="8" class="empty-state">Nenhum saldo de materia-prima encontrado.</td></tr>';
+      ? '<tr><td colspan="10" class="empty-state">Nenhuma materia-prima encontrada para a busca informada.</td></tr>'
+      : '<tr><td colspan="10" class="empty-state">Nenhuma materia-prima monitorada no momento.</td></tr>';
     return;
   }
 
-  refs.tabela.innerHTML = saldosCache.map((item) => `
-    <tr>
+  const itensOrdenados = [...saldosCache].sort((a, b) => {
+    const pesoA = obterPesoStatusEstoque(a);
+    const pesoB = obterPesoStatusEstoque(b);
+
+    if (pesoA !== pesoB) {
+      return pesoA - pesoB;
+    }
+
+    return String(a.codigo || '').localeCompare(String(b.codigo || ''), 'pt-BR');
+  });
+
+  refs.tabela.innerHTML = itensOrdenados.map((item) => `
+    <tr class="${obterClasseLinhaEstoque(item)}">
       <td class="table-code">${escapeHtml(item.codigo)}</td>
       <td class="table-description">${escapeHtml(item.nome)}</td>
       <td>${escapeHtml(item.categoria)}</td>
       <td>${escapeHtml(formatarReferencia(item))}</td>
       <td>${escapeHtml(item.unidade_estoque)}</td>
-      <td class="table-quantity">${formatQuantity(item.quantidade)} ${escapeHtml(item.unidade_estoque)}</td>
+      <td class="table-quantity">${renderizarQuantidadeEstoque(item)}</td>
+      <td>${renderizarLimiteEstoque(item)}</td>
+      <td>${renderizarStatusEstoque(item)}</td>
       <td>${escapeHtml(item.fornecedores_nomes || '-')}</td>
       <td class="table-actions-cell">
         <details class="row-menu">
@@ -205,10 +221,14 @@ function renderizarMovimentacoes() {
 function atualizarIndicadores() {
   const laminados = saldosCache.filter((item) => item.categoria === 'LAMINADO').length;
   const fundidos = saldosCache.filter((item) => item.categoria === 'FUNDIDO').length;
+  const alertas = saldosCache.filter((item) => isMateriaPrimaEmAlerta(item)).length;
+  const criticos = saldosCache.filter((item) => obterStatusEstoqueKey(item) === 'CRITICO').length;
 
   document.getElementById('metric-mp-com-saldo').textContent = String(saldosCache.length);
   document.getElementById('metric-mp-laminados').textContent = String(laminados);
   document.getElementById('metric-mp-fundidos').textContent = String(fundidos);
+  refs.totalAlertas.textContent = String(alertas);
+  refs.totalCriticos.textContent = `${criticos} criticos`;
 }
 
 function abrirModalMovimentacao(tipo, materiaPrimaId = null) {
@@ -555,6 +575,96 @@ function formatarBitolaAutocomplete(item) {
   }
 
   return item.geometria || '-';
+}
+
+function getEstoqueMinimoPadrao(item) {
+  return String(item?.unidade_estoque || '').toUpperCase() === 'UN'
+    ? ESTOQUE_MINIMO_PADRAO_FUNDIDO
+    : ESTOQUE_MINIMO_PADRAO_LAMINADO;
+}
+
+function getEstoqueMinimoEfetivo(item) {
+  const valorConfigurado = Number(item?.estoque_minimo);
+  if (Number.isFinite(valorConfigurado) && valorConfigurado > 0) {
+    return valorConfigurado;
+  }
+
+  return getEstoqueMinimoPadrao(item);
+}
+
+function usaEstoqueMinimoPadrao(item) {
+  const valorConfigurado = Number(item?.estoque_minimo);
+  return !(Number.isFinite(valorConfigurado) && valorConfigurado > 0);
+}
+
+function obterStatusEstoqueKey(item) {
+  const quantidadeAtual = Number(item?.quantidade || 0);
+  const limite = getEstoqueMinimoEfetivo(item);
+
+  if (quantidadeAtual < limite) {
+    return 'CRITICO';
+  }
+
+  if (quantidadeAtual === limite) {
+    return 'ATENCAO';
+  }
+
+  return 'NORMAL';
+}
+
+function obterPesoStatusEstoque(item) {
+  const status = obterStatusEstoqueKey(item);
+
+  if (status === 'CRITICO') return 0;
+  if (status === 'ATENCAO') return 1;
+  return 2;
+}
+
+function isMateriaPrimaEmAlerta(item) {
+  return obterStatusEstoqueKey(item) !== 'NORMAL';
+}
+
+function obterClasseLinhaEstoque(item) {
+  return isMateriaPrimaEmAlerta(item) ? 'table-row-attention' : '';
+}
+
+function renderizarStatusEstoque(item) {
+  const status = obterStatusEstoqueKey(item);
+
+  if (status === 'CRITICO') {
+    return '<span class="status-chip is-danger">Abaixo do limite</span>';
+  }
+
+  if (status === 'ATENCAO') {
+    return '<span class="status-chip is-warning">No limite</span>';
+  }
+
+  return '<span class="status-chip is-success">Normal</span>';
+}
+
+function renderizarQuantidadeEstoque(item) {
+  const quantidade = `${formatQuantity(item.quantidade)} ${String(item.unidade_estoque || '').trim()}`;
+  const status = obterStatusEstoqueKey(item);
+
+  if (status === 'CRITICO') {
+    return `<span class="status-chip is-danger">${escapeHtml(quantidade)}</span>`;
+  }
+
+  if (status === 'ATENCAO') {
+    return `<span class="status-chip is-warning">${escapeHtml(quantidade)}</span>`;
+  }
+
+  return escapeHtml(quantidade);
+}
+
+function renderizarLimiteEstoque(item) {
+  const limite = `${formatQuantity(getEstoqueMinimoEfetivo(item))} ${String(item.unidade_estoque || '').trim()}`;
+  const detalhe = usaEstoqueMinimoPadrao(item) ? 'Padrao' : 'Configurado';
+
+  return `
+    <strong>${escapeHtml(limite)}</strong><br>
+    <small>${escapeHtml(detalhe)}</small>
+  `;
 }
 
 function formatQuantity(value) {

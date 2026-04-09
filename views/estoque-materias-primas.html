@@ -67,7 +67,7 @@
 
     <section class="summary-row">
       <article class="summary-card">
-        <span>Materiais Listados</span>
+        <span>Materiais Monitorados</span>
         <strong id="metric-mp-com-saldo">0</strong>
       </article>
 
@@ -80,6 +80,12 @@
         <span>Fundidos Listados</span>
         <strong id="metric-mp-fundidos">0</strong>
       </article>
+
+      <article class="summary-card">
+        <span>Alertas Ativos</span>
+        <strong id="metric-mp-alertas">0</strong>
+        <small id="metric-mp-criticos">0 criticos</small>
+      </article>
     </section>
 
     <div id="estoque-mp-mensagem" class="message hidden"></div>
@@ -88,7 +94,7 @@
       <div class="card-top">
         <div>
           <span class="section-pill">Saldo</span>
-          <h2 id="estoque-mp-lista-titulo">Materias-primas com Saldo</h2>
+          <h2 id="estoque-mp-lista-titulo">Materias-primas Monitoradas</h2>
           <p id="total-estoque-mp">0 registro(s) encontrado(s)</p>
         </div>
       </div>
@@ -140,13 +146,15 @@
               <th>Referencia</th>
               <th>Unidade</th>
               <th>Quantidade</th>
+              <th>Limite</th>
+              <th>Status</th>
               <th>Fornecedores</th>
               <th>Acoes</th>
             </tr>
           </thead>
           <tbody id="estoque-mp-tbody">
             <tr>
-              <td colspan="8" class="empty-state">Carregando estoque de materia-prima...</td>
+              <td colspan="10" class="empty-state">Carregando estoque de materia-prima...</td>
             </tr>
           </tbody>
         </table>

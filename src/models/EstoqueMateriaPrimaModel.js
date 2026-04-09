@@ -47,6 +47,35 @@ class EstoqueMateriaPrimaModel {
     return rows[0] || null;
   }
 
+  static async findMateriaPrimaByCode(codigo, connection = pool) {
+    const [rows] = await connection.query(
+      `
+        SELECT
+          mp.id,
+          mp.codigo,
+          mp.nome,
+          mp.categoria,
+          mp.material,
+          mp.liga,
+          mp.geometria,
+          mp.bitola,
+          mp.bitola_mm,
+          mp.comprimento_padrao_mm,
+          mp.peso_por_metro,
+          mp.peso_unitario_kg,
+          mp.unidade_estoque,
+          COALESCE(fs.fornecedores_nomes, fp.nome, '') AS fornecedores_nomes
+        FROM materias_primas mp
+        LEFT JOIN fornecedores fp ON fp.id = mp.id_fornecedor_principal
+        LEFT JOIN (${this.supplierSummarySubquery()}) fs ON fs.id_materia_prima = mp.id
+        WHERE mp.codigo = ?
+      `,
+      [codigo]
+    );
+
+    return rows[0] || null;
+  }
+
   static async findSaldoByMateriaPrimaId(idMateriaPrima) {
     const [rows] = await pool.query(
       `
@@ -110,10 +139,11 @@ class EstoqueMateriaPrimaModel {
 
   static async findSaldos(filters = {}) {
     const includeZeroBySearch = Boolean(filters.codigo || filters.nome);
+    const mostrarTodos = Boolean(filters.mostrar_todos);
     const conditions = [];
     const values = [];
 
-    if (!includeZeroBySearch) {
+    if (!mostrarTodos && !includeZeroBySearch) {
       conditions.push('COALESCE(s.quantidade, 0) > 0');
     }
 
@@ -158,6 +188,7 @@ class EstoqueMateriaPrimaModel {
           mp.comprimento_padrao_mm,
           mp.peso_por_metro,
           mp.peso_unitario_kg,
+          mp.estoque_minimo,
           mp.unidade_estoque,
           COALESCE(s.quantidade, 0) AS quantidade,
           COALESCE(fs.fornecedores_nomes, fp.nome, '') AS fornecedores_nomes,
@@ -416,6 +447,43 @@ class EstoqueMateriaPrimaModel {
       quantidade_entrada: quantidadeEntrada,
       saldo_resultante: novoSaldo,
       unidade: data.unidade || materiaPrima.unidade_estoque
+    };
+  }
+
+  static async registerThirdPartyReturn(connection, data) {
+    const materiaPrima = await this.findMateriaPrimaById(data.id_materia_prima, connection);
+    if (!materiaPrima) {
+      throw this.createBusinessError('Materia-prima nao encontrada para receber o retorno.');
+    }
+
+    if (String(materiaPrima.unidade_estoque || '').toUpperCase() !== 'UN') {
+      throw this.createBusinessError('A materia-prima de destino precisa estar cadastrada com unidade UN.');
+    }
+
+    const quantidadeEntrada = Number(Number(data.quantidade).toFixed(4));
+    if (quantidadeEntrada <= 0) {
+      throw this.createBusinessError('A quantidade de entrada deve ser maior que zero.');
+    }
+
+    const saldoAtual = await this.findSaldoForUpdate(connection, data.id_materia_prima);
+    const quantidadeAtual = saldoAtual ? Number(saldoAtual.quantidade) : 0;
+    const novoSaldo = Number((quantidadeAtual + quantidadeEntrada).toFixed(4));
+
+    await this.persistSaldo(connection, data.id_materia_prima, novoSaldo, saldoAtual);
+    await this.createMovimentacao(connection, {
+      id_materia_prima: data.id_materia_prima,
+      tipo_movimentacao: 'ENTRADA',
+      quantidade: quantidadeEntrada,
+      unidade: materiaPrima.unidade_estoque,
+      saldo_resultante: novoSaldo,
+      observacao: data.observacao || 'Retorno de terceirizacao recebido no estoque de materia-prima.'
+    });
+
+    return {
+      materia_prima: materiaPrima,
+      quantidade_entrada: quantidadeEntrada,
+      saldo_resultante: novoSaldo,
+      unidade: materiaPrima.unidade_estoque
     };
   }
 }

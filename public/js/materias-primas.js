@@ -27,6 +27,8 @@ const ligasFundido = [
   'NODULAR',
   'FERRO FUNDIDO'
 ];
+const ESTOQUE_MINIMO_PADRAO_LAMINADO = 60;
+const ESTOQUE_MINIMO_PADRAO_FUNDIDO = 50;
 
 let editingMateriaPrimaId = null;
 let filtroDebounceTimer = null;
@@ -61,6 +63,7 @@ const refs = {
   fornecedorSelect: document.getElementById('mp-fornecedor-select'),
   adicionarFornecedorButton: document.getElementById('btn-adicionar-fornecedor-mp'),
   fornecedoresLista: document.getElementById('mp-fornecedores-lista'),
+  estoqueMinimoInput: document.getElementById('mp-estoque-minimo'),
   materialInput: document.getElementById('mp-material'),
   materialDatalist: document.getElementById('mp-descricao-tecnica-opcoes'),
   geometriaSelect: document.getElementById('mp-geometria'),
@@ -343,6 +346,7 @@ function montarPayloadMateriaPrima() {
     categoria,
     liga: refs.ligaInput.value.trim(),
     fornecedores: selectedFornecedorIds,
+    estoque_minimo: normalizeDecimalPayloadValue(refs.estoqueMinimoInput.value),
     material: isFundido ? '' : refs.materialInput.value.trim(),
     geometria: isFundido ? 'FUNDIDO' : refs.geometriaSelect.value,
     bitola: isFundido ? '' : refs.bitolaPolegadaInput.value.trim(),
@@ -387,6 +391,7 @@ async function carregarMateriaPrimaParaEdicao(id) {
       : (String(materiaPrima.geometria || '').toUpperCase() === 'FITA / BOBINA' ? '' : '3');
     refs.pesoMetroInput.value = formatInputDecimal(materiaPrima.peso_por_metro, 2);
     refs.pesoUnitarioInput.value = formatInputDecimal(materiaPrima.peso_unitario_kg, 3);
+    refs.estoqueMinimoInput.value = formatInputDecimal(obterEstoqueMinimoMateriaPrima(materiaPrima), 3);
 
     selectedFornecedorIds = fornecedores.map((item) => Number(item.id_fornecedor));
     renderizarFornecedoresSelecionados();
@@ -437,6 +442,7 @@ function montarVisualizacaoMateriaPrima(materiaPrima, fornecedores) {
     ['Descricao', materiaPrima.nome],
     ['Categoria', materiaPrima.categoria],
     ['Liga', materiaPrima.liga || '-'],
+    ['Estoque minimo', `${formatInputDecimal(obterEstoqueMinimoMateriaPrima(materiaPrima), 3)} ${materiaPrima.unidade_estoque || '-'}`],
     ['Fornecedores', fornecedores.length > 0
       ? fornecedores.map((item) => item.fornecedor_nome).join(', ')
       : (materiaPrima.fornecedores_nomes || materiaPrima.fornecedor_principal_nome || '-')]
@@ -587,6 +593,10 @@ function setCategoria(categoria) {
   }
 
   preencherOpcoesLiga(categoriaFinal);
+  refs.estoqueMinimoInput.placeholder = isFundido ? 'Padrao: 50 pc' : 'Padrao: 60 kg';
+  if (!editingMateriaPrimaId || !refs.estoqueMinimoInput.value.trim()) {
+    refs.estoqueMinimoInput.value = String(isFundido ? ESTOQUE_MINIMO_PADRAO_FUNDIDO : ESTOQUE_MINIMO_PADRAO_LAMINADO);
+  }
   atualizarModoBitola();
   renderizarAjudaBitola();
 }
@@ -703,6 +713,17 @@ function resetMateriaPrimaForm() {
   renderizarFornecedoresSelecionados();
   setCategoria('LAMINADO');
   esconderMensagemModalMateriaPrima();
+}
+
+function obterEstoqueMinimoMateriaPrima(materiaPrima) {
+  const valor = Number(materiaPrima?.estoque_minimo);
+  if (Number.isFinite(valor) && valor > 0) {
+    return valor;
+  }
+
+  return String(materiaPrima?.categoria || '').toUpperCase() === 'FUNDIDO'
+    ? ESTOQUE_MINIMO_PADRAO_FUNDIDO
+    : ESTOQUE_MINIMO_PADRAO_LAMINADO;
 }
 
 function limparFiltrosMateriaPrima() {

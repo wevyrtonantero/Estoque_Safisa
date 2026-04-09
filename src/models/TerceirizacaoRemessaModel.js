@@ -1,7 +1,13 @@
 const { pool } = require('../../database/connection');
 const TratamentoExternoModel = require('./TratamentoExternoModel');
+const EstoqueMateriaPrimaModel = require('./EstoqueMateriaPrimaModel');
 
 class TerceirizacaoRemessaModel {
+  static buildMateriaPrimaReturnCode(codigoPeca) {
+    const codigo = String(codigoPeca || '').trim();
+    return codigo.toUpperCase().startsWith('MP') ? codigo : `MP${codigo}`;
+  }
+
   static PROVIDERS = [
     {
       key: 'MULTIELOS',
@@ -624,12 +630,31 @@ class TerceirizacaoRemessaModel {
         throw this.createBusinessError('A quantidade de retorno e maior que o saldo pendente da remessa.');
       }
 
-      await TratamentoExternoModel.receiveFromThirdParty(connection, {
-        id_peca: item.id_peca,
-        quantidade: quantidadeRetorno,
-        id_estoque_destino: data.id_estoque_destino,
-        observacao: `Retorno de terceirizacao de ${item.codigo} - ${item.descricao}.`.slice(0, 255)
-      });
+      const observacaoRetorno = `Retorno de terceirizacao de ${item.codigo} - ${item.descricao}.`.slice(0, 255);
+
+      if (data.destino_tipo === 'MATERIA_PRIMA') {
+        const codigoMateriaPrimaDestino = this.buildMateriaPrimaReturnCode(item.codigo);
+        const materiaPrimaDestino = await EstoqueMateriaPrimaModel.findMateriaPrimaByCode(codigoMateriaPrimaDestino, connection);
+
+        if (!materiaPrimaDestino) {
+          throw this.createBusinessError(
+            `Nao existe materia-prima cadastrada com o codigo ${codigoMateriaPrimaDestino} para receber este retorno.`
+          );
+        }
+
+        await EstoqueMateriaPrimaModel.registerThirdPartyReturn(connection, {
+          id_materia_prima: materiaPrimaDestino.id,
+          quantidade: quantidadeRetorno,
+          observacao: observacaoRetorno
+        });
+      } else {
+        await TratamentoExternoModel.receiveFromThirdParty(connection, {
+          id_peca: item.id_peca,
+          quantidade: quantidadeRetorno,
+          id_estoque_destino: data.id_estoque_destino,
+          observacao: observacaoRetorno
+        });
+      }
 
       const novoRetorno = Number((Number(item.quantidade_retorno) + quantidadeRetorno).toFixed(2));
       const novoStatus = novoRetorno >= Number(item.quantidade_enviada) ? 'RETORNADO' : 'RETORNO_PARCIAL';

@@ -8,6 +8,8 @@ const CATEGORIAS_VALIDAS = ['LAMINADO', 'FUNDIDO'];
 const GEOMETRIAS_LAMINADO = ['REDONDO', 'QUADRADO', 'SEXTAVADO', 'FITA / BOBINA'];
 const UNIDADES_LAMINADO = ['KG'];
 const UNIDADES_FUNDIDO = ['UN'];
+const ESTOQUE_MINIMO_PADRAO_LAMINADO = 60;
+const ESTOQUE_MINIMO_PADRAO_FUNDIDO = 50;
 
 function parseLocaleDecimal(value) {
   const text = String(value || '').trim();
@@ -80,10 +82,17 @@ function normalizeSupplierIds(value) {
   return uniqueIds;
 }
 
+function getDefaultEstoqueMinimo(categoria) {
+  return categoria === 'FUNDIDO'
+    ? ESTOQUE_MINIMO_PADRAO_FUNDIDO
+    : ESTOQUE_MINIMO_PADRAO_LAMINADO;
+}
+
 function buildPayload(body) {
   const categoria = String(body.categoria || '').trim().toUpperCase() || 'LAMINADO';
   const isFundido = categoria === 'FUNDIDO';
   const comprimentoPadraoMetros = normalizeOptionalDecimal(body.comprimento_padrao_m);
+  const estoqueMinimoInformado = normalizeOptionalDecimal(body.estoque_minimo);
 
   const fornecedorIds = normalizeSupplierIds(body.fornecedores);
 
@@ -104,7 +113,7 @@ function buildPayload(body) {
     peso_por_metro: isFundido ? null : normalizeOptionalDecimal(body.peso_por_metro),
     peso_unitario_kg: isFundido ? normalizeOptionalDecimal(body.peso_unitario_kg) : null,
     densidade_g_cm3: null,
-    estoque_minimo: 0,
+    estoque_minimo: estoqueMinimoInformado === null ? getDefaultEstoqueMinimo(categoria) : estoqueMinimoInformado,
     unidade_estoque: isFundido ? 'UN' : 'KG',
     id_fornecedor_principal: fornecedorIds[0] || null,
     fornecedor_ids: fornecedorIds,
@@ -171,6 +180,10 @@ function validatePayload(payload) {
     && (!Number.isFinite(payload.peso_unitario_kg) || payload.peso_unitario_kg <= 0)
   ) {
     errors.push('Informe a massa do fundido.');
+  }
+
+  if (!Number.isFinite(payload.estoque_minimo) || payload.estoque_minimo < 0) {
+    errors.push('O estoque minimo deve ser maior ou igual a zero.');
   }
 
   if (payload.categoria === 'LAMINADO' && !UNIDADES_LAMINADO.includes(payload.unidade_estoque)) {
