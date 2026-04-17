@@ -109,6 +109,7 @@
               <thead>
                 <tr>
                   <th>Empresa</th>
+                  <th>Codigos</th>
                   <th>Status</th>
                   <th>NF</th>
                   <th>Data Envio</th>
@@ -120,7 +121,7 @@
               </thead>
               <tbody id="remessas-tbody">
                 <tr>
-                  <td colspan="8" class="empty-state">Carregando remessas...</td>
+                  <td colspan="9" class="empty-state">Carregando remessas...</td>
                 </tr>
               </tbody>
             </table>
@@ -211,6 +212,8 @@
 
       <form id="remessa-nf-form" class="form-grid">
         <input type="hidden" id="remessa-nf-id">
+
+        <div id="remessa-nf-resumo" class="span-12 selected-tags empty">Nenhuma peca vinculada a esta remessa.</div>
 
         <div class="field span-6">
           <label for="remessa-nf-numero">Numero da NF</label>
@@ -320,5 +323,3 @@
   <script src="/js/session-indicator.js"></script>
 </body>
 </html>
-
-

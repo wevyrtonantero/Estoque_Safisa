@@ -151,6 +151,53 @@ class TerceirizacaoRemessaModel {
     return this.ensureDefaultProviders();
   }
 
+  static async findFornecedorById(id, connection = pool) {
+    const [rows] = await connection.query(
+      `
+        SELECT
+          id,
+          nome,
+          endereco,
+          cidade,
+          cep,
+          observacao
+        FROM fornecedores
+        WHERE id = ?
+        LIMIT 1
+      `,
+      [id]
+    );
+
+    return rows[0] || null;
+  }
+
+  static async resolveDispatchProvider(connection, idFornecedor) {
+    const providers = await this.ensureDefaultProviders(connection);
+    const specialProvider = providers.find((entry) => Number(entry.id) === Number(idFornecedor));
+
+    if (specialProvider) {
+      return specialProvider;
+    }
+
+    const fornecedor = await this.findFornecedorById(idFornecedor, connection);
+    if (!fornecedor) {
+      return null;
+    }
+
+    return {
+      id: fornecedor.id,
+      key: 'EXTERNO',
+      nome: fornecedor.nome,
+      cidade: fornecedor.cidade || '',
+      endereco: fornecedor.endereco || '',
+      cep: fornecedor.cep || '',
+      observacao: fornecedor.observacao || '',
+      servicos: [],
+      dureza_padrao: '',
+      profundidade_padrao: ''
+    };
+  }
+
   static buildWeightSnapshot(massaKg, quantidade) {
     if (!massaKg || Number(massaKg) <= 0) {
       return null;
@@ -244,6 +291,7 @@ class TerceirizacaoRemessaModel {
           f.endereco,
           f.cidade,
           f.cep,
+          COALESCE(GROUP_CONCAT(DISTINCT p.codigo ORDER BY p.codigo SEPARATOR ' | '), '') AS pecas_codigos,
           COUNT(ri.id) AS total_itens,
           COALESCE(SUM(ri.quantidade_enviada), 0) AS quantidade_enviada_total,
           COALESCE(SUM(ri.quantidade_retorno), 0) AS quantidade_retorno_total,
@@ -252,6 +300,7 @@ class TerceirizacaoRemessaModel {
         FROM terceirizacao_remessas r
         INNER JOIN fornecedores f ON f.id = r.id_fornecedor
         LEFT JOIN terceirizacao_remessa_itens ri ON ri.id_remessa = r.id
+        LEFT JOIN pecas p ON p.id = ri.id_peca
         WHERE ${conditions.join(' AND ')}
         GROUP BY
           r.id,
@@ -440,8 +489,7 @@ class TerceirizacaoRemessaModel {
     try {
       await connection.beginTransaction();
 
-      const providers = await this.ensureDefaultProviders(connection);
-      const provider = providers.find((entry) => Number(entry.id) === Number(data.id_fornecedor));
+      const provider = await this.resolveDispatchProvider(connection, data.id_fornecedor);
 
       if (!provider) {
         throw this.createBusinessError('Empresa de tratamento nao encontrada.');

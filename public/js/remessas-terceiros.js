@@ -23,6 +23,7 @@ const refs = {
   itensTbody: document.getElementById('remessa-itens-tbody'),
   nfModal: document.getElementById('remessa-nf-modal'),
   nfMensagem: document.getElementById('remessa-nf-mensagem'),
+  nfResumo: document.getElementById('remessa-nf-resumo'),
   nfId: document.getElementById('remessa-nf-id'),
   nfNumero: document.getElementById('remessa-nf-numero'),
   nfData: document.getElementById('remessa-nf-data'),
@@ -133,13 +134,14 @@ function renderizarRemessas() {
   refs.total.textContent = `${remessasCache.length} registro(s) encontrado(s)`;
 
   if (remessasCache.length === 0) {
-    refs.tabela.innerHTML = '<tr><td colspan="8" class="empty-state">Nenhuma remessa encontrada.</td></tr>';
+    refs.tabela.innerHTML = '<tr><td colspan="9" class="empty-state">Nenhuma remessa encontrada.</td></tr>';
     return;
   }
 
   refs.tabela.innerHTML = remessasCache.map((remessa) => `
     <tr class="${remessa.numero_nf ? '' : 'table-row-attention'}">
       <td class="table-description">${escapeHtml(remessa.nome_empresa)}</td>
+      <td class="table-code">${renderCodigosRemessa(remessa)}</td>
       <td>${renderStatusBadge(remessa.status)}</td>
       <td>${renderNfCell(remessa)}</td>
       <td>${formatarData(remessa.data_envio)}</td>
@@ -158,6 +160,11 @@ function renderizarRemessas() {
       </td>
     </tr>
   `).join('');
+}
+
+function renderCodigosRemessa(remessa) {
+  const codigos = String(remessa.pecas_codigos || '').trim();
+  return escapeHtml(codigos || '-');
 }
 
 function renderNfCell(remessa) {
@@ -263,6 +270,7 @@ async function abrirModalNf(id) {
 
   refs.nfMensagem.className = 'message hidden';
   refs.nfMensagem.textContent = '';
+  renderizarResumoNf(remessaSelecionada);
   refs.nfId.value = String(remessaSelecionada.id);
   refs.nfNumero.value = remessaSelecionada.numero_nf || '';
   refs.nfData.value = remessaSelecionada.data_nf ? String(remessaSelecionada.data_nf).slice(0, 10) : '';
@@ -282,7 +290,26 @@ function fecharModalNf() {
   document.getElementById('remessa-nf-form').reset();
   refs.nfMensagem.className = 'message hidden';
   refs.nfMensagem.textContent = '';
+  refs.nfResumo.classList.add('selected-tags', 'empty');
+  refs.nfResumo.innerHTML = 'Nenhuma peca vinculada a esta remessa.';
   closeModal(refs.nfModal);
+}
+
+function renderizarResumoNf(remessa) {
+  const itens = Array.isArray(remessa?.itens) ? remessa.itens : [];
+
+  if (!itens.length) {
+    refs.nfResumo.classList.add('selected-tags', 'empty');
+    refs.nfResumo.innerHTML = 'Nenhuma peca vinculada a esta remessa.';
+    return;
+  }
+
+  refs.nfResumo.classList.remove('empty');
+  refs.nfResumo.classList.add('selected-tags');
+  refs.nfResumo.innerHTML = [
+    `<span class="selected-tag">${escapeHtml(`${itens.length} item(ns)`)}</span>`,
+    ...itens.map((item) => `<span class="selected-tag">${escapeHtml(`${item.codigo} - ${item.descricao}`)}</span>`)
+  ].join('');
 }
 
 async function handleSalvarNf(event) {

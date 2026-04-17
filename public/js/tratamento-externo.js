@@ -1,6 +1,13 @@
 const tratamentoExternoApiBaseUrl = '/api/tratamento-externo';
 const terceirizacaoApiBaseUrl = '/api/terceirizacao';
 const estoquesApiBaseUrl = '/api/estoques';
+const fornecedoresApiBaseUrl = '/api/fornecedores';
+
+const SPECIAL_PROVIDER_KEYS = Object.freeze({
+  MULTIELOS: 'MULTIELOS',
+  TEMPERA: 'TEMPERA',
+  GENERICO: 'EXTERNO'
+});
 
 let saldosCache = [];
 let movimentacoesCache = [];
@@ -127,20 +134,57 @@ async function carregarMovimentacoes() {
 }
 
 async function carregarProviders() {
-  const response = await fetch(`${terceirizacaoApiBaseUrl}/opcoes`);
-  const result = await response.json();
+  const [specialResponse, suppliersResponse] = await Promise.all([
+    fetch(`${terceirizacaoApiBaseUrl}/opcoes`),
+    fetch(fornecedoresApiBaseUrl)
+  ]);
+  const [specialResult, suppliersResult] = await Promise.all([
+    specialResponse.json(),
+    suppliersResponse.json()
+  ]);
 
-  if (!response.ok) {
-    throw new Error(result.message || 'Nao foi possivel carregar as empresas de tratamento.');
+  if (!specialResponse.ok) {
+    throw new Error(specialResult.message || 'Nao foi possivel carregar as empresas de tratamento.');
   }
 
-  providersCache = result;
+  if (!suppliersResponse.ok) {
+    throw new Error(suppliersResult.message || 'Nao foi possivel carregar os fornecedores.');
+  }
+
+  const specialProviders = Array.isArray(specialResult)
+    ? specialResult.map((provider) => ({
+      ...provider,
+      key: String(provider.key || '').trim().toUpperCase(),
+      especial: true
+    }))
+    : [];
+
+  const specialIds = new Set(specialProviders.map((provider) => Number(provider.id)));
+  const genericProviders = Array.isArray(suppliersResult)
+    ? suppliersResult
+      .filter((supplier) => Number.isInteger(Number(supplier.id)) && !specialIds.has(Number(supplier.id)))
+      .map((supplier) => ({
+        id: Number(supplier.id),
+        key: SPECIAL_PROVIDER_KEYS.GENERICO,
+        nome: supplier.nome,
+        cidade: supplier.cidade || '',
+        endereco: supplier.endereco || '',
+        cep: supplier.cep || '',
+        observacao: supplier.observacao || '',
+        servicos: [],
+        dureza_padrao: '',
+        profundidade_padrao: '',
+        especial: false
+      }))
+      .sort((left, right) => String(left.nome || '').localeCompare(String(right.nome || ''), 'pt-BR'))
+    : [];
+
+  providersCache = [...specialProviders, ...genericProviders];
   refs.encaminhamentoFornecedor.innerHTML = `
     <option value="">Selecione</option>
     ${providersCache.map((provider) => `<option value="${provider.id}">${escapeHtml(provider.nome)}</option>`).join('')}
   `;
 }
-
 async function carregarStocks() {
   const response = await fetch(estoquesApiBaseUrl);
   const result = await response.json();
@@ -286,7 +330,7 @@ function handleProviderChange() {
 
   refs.encaminhamentoTipoTratamento.value = provider.key;
 
-  if (provider.key === 'MULTIELOS') {
+  if (provider.key === SPECIAL_PROVIDER_KEYS.MULTIELOS) {
     refs.encaminhamentoServicosWrap.classList.remove('hidden');
     refs.encaminhamentoServicosLista.innerHTML = provider.servicos.map((service, index) => `
       <label class="selected-tag" for="service-${index}">
@@ -297,11 +341,12 @@ function handleProviderChange() {
     return;
   }
 
-  refs.encaminhamentoTemperaWrap.classList.remove('hidden');
-  refs.encaminhamentoDureza.value = provider.dureza_padrao || '56 a 58 HRC';
-  refs.encaminhamentoProfundidade.value = provider.profundidade_padrao || '0,3 a 0,6 mm';
+  if (provider.key === SPECIAL_PROVIDER_KEYS.TEMPERA) {
+    refs.encaminhamentoTemperaWrap.classList.remove('hidden');
+    refs.encaminhamentoDureza.value = provider.dureza_padrao || '56 a 58 HRC';
+    refs.encaminhamentoProfundidade.value = provider.profundidade_padrao || '0,3 a 0,6 mm';
+  }
 }
-
 async function handleEncaminhamentoSubmit(event) {
   event.preventDefault();
 
