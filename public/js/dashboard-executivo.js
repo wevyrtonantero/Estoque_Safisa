@@ -319,7 +319,7 @@ function renderizarTabelaEstoquesDetalhados() {
       <td>${escapeHtml(item.estoque_nome)}</td>
       <td class="table-code">${escapeHtml(item.codigo)}</td>
       <td class="table-description">${escapeHtml(item.descricao)}</td>
-      <td>${escapeHtml(obterFornecedorLabel(item))}</td>
+      <td class="table-compact-text">${escapeHtml(obterFornecedorLabelCompacto(item))}</td>
       <td>${escapeHtml(item.classificacao)}</td>
       <td class="table-quantity">${formatDecimal(item.quantidade)}</td>
       <td class="table-quantity">${item.aplica_prioridade ? formatDecimal(item.quantidade_saida_mes) : '-'}</td>
@@ -847,14 +847,14 @@ function formatarDuracaoPrioridade(item) {
   const dataPrevista = formatarDataCurta(item.data_prevista_ruptura);
 
   if (!Number.isFinite(dias) && dataPrevista === '-') {
-    return 'Sem previsao';
+    return 'Sem prev.';
   }
 
   if (!Number.isFinite(dias)) {
-    return `ate ${dataPrevista}`;
+    return dataPrevista;
   }
 
-  return `${formatDecimal(dias)} dia(s) | ate ${dataPrevista}`;
+  return `${formatDecimal(dias)}d | ${dataPrevista}`;
 }
 
 function getStockQuantity(item, key) {
@@ -896,6 +896,20 @@ function obterAlertasAlmoxOperacionais() {
 
 function obterFornecedorLabel(item) {
   return String(item?.fornecedores_nomes || item?.fornecedor_nome || '-').trim() || '-';
+}
+
+function obterFornecedorLabelCompacto(item) {
+  const fornecedores = obterFornecedorLabel(item)
+    .split(',')
+    .map((nome) => nome.trim())
+    .filter(Boolean)
+    .filter((nome) => !normalizarBusca(nome).includes('california'));
+
+  if (!fornecedores.length) {
+    return '-';
+  }
+
+  return fornecedores.join(', ');
 }
 
 function buildBitolaLabel(item) {

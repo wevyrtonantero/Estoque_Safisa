@@ -2636,7 +2636,7 @@ function renderStatus(status) {
   if (normalized === 'ATENDIDA') className += ' is-success';
   if (normalized === 'ATENDIDA_PARCIAL') className += ' is-warning';
   if (normalized === 'PENDENTE') className += ' is-danger';
-  if (normalized === 'EM_SEPARACAO') className += ' is-info';
+  if (normalized === 'EM_SEPARACAO') className += ' is-success';
   if (normalized === 'FALTANDO_PECA') className += ' is-warning';
   if (normalized === 'MONTANDO') className += ' is-info';
 
@@ -2700,6 +2700,21 @@ function formatarDataCurta(value) {
 }
 
 function formatStatusLabel(value) {
+  const normalized = String(value || '').toUpperCase();
+  const labels = {
+    PENDENTE: 'Pendente',
+    EM_SEPARACAO: 'Pronto',
+    ATENDIDA_PARCIAL: 'Pode retirar parcial',
+    ATENDIDA: 'Pode retirar',
+    CANCELADA: 'Cancelada',
+    FALTANDO_PECA: 'Faltando peca',
+    MONTANDO: 'Montando'
+  };
+
+  if (labels[normalized]) {
+    return labels[normalized];
+  }
+
   return String(value || '-')
     .replaceAll('_', ' ')
     .toLowerCase()

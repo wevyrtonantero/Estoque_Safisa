@@ -313,9 +313,21 @@ function renderStatus(status) {
   if (normalized === 'ATENDIDA') className += ' is-success';
   if (normalized === 'ATENDIDA_PARCIAL') className += ' is-warning';
   if (normalized === 'PENDENTE') className += ' is-danger';
-  if (normalized === 'EM_SEPARACAO') className += ' is-info';
+  if (normalized === 'EM_SEPARACAO') className += ' is-success';
 
-  return `<span class="${className}">${escapeHtml(normalized || '-')}</span>`;
+  return `<span class="${className}">${escapeHtml(formatStatusLabel(normalized))}</span>`;
+}
+
+function formatStatusLabel(status) {
+  const labels = {
+    PENDENTE: 'Pendente',
+    EM_SEPARACAO: 'Pronto',
+    ATENDIDA_PARCIAL: 'Pode retirar parcial',
+    ATENDIDA: 'Pode retirar',
+    CANCELADA: 'Cancelada'
+  };
+
+  return labels[status] || status || '-';
 }
 
 function obterSaldoDisponivelSolicitacao(item) {

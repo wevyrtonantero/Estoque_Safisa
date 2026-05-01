@@ -65,6 +65,7 @@ class ProducaoModel {
           mp.geometria AS materia_prima_geometria,
           mp.bitola AS materia_prima_bitola,
           mp.bitola_mm AS materia_prima_bitola_mm,
+          mp.comprimento_padrao_mm AS materia_prima_comprimento_padrao_mm,
           mp.unidade_estoque AS materia_prima_unidade_estoque
         FROM producao_ordens po
         INNER JOIN maquinas m ON m.id = po.id_maquina

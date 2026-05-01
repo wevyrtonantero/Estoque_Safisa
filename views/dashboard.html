@@ -95,6 +95,11 @@
             </div>
 
             <div class="field">
+              <label for="almox-filtro-fornecedor">Fornecedor</label>
+              <input id="almox-filtro-fornecedor" type="text" placeholder="Digite parte do fornecedor">
+            </div>
+
+            <div class="field">
               <label for="almox-filtro-classificacao">Classificacao</label>
               <select id="almox-filtro-classificacao">
                 <option value="">Todas</option>
@@ -131,23 +136,24 @@
 
           <div class="subtle-divider"></div>
 
-          <div class="table-wrapper">
+          <div class="table-wrapper" data-print-table data-print-title="Almoxarifado">
             <table>
               <thead>
                 <tr>
-                  <th>Codigo</th>
-                  <th>Descricao</th>
+                  <th>Cod.</th>
+                  <th>Desc.</th>
                   <th>Tipo</th>
-                  <th>Classificacao</th>
-                  <th>Quantidade</th>
-                  <th>Sai no mes</th>
-                  <th>Vai durar ate</th>
+                  <th>Classe</th>
+                  <th>Qtd.</th>
+                  <th>Fornecedor</th>
+                  <th>Sai/mes</th>
+                  <th>Dura ate</th>
                   <th>Estado</th>
                 </tr>
               </thead>
               <tbody id="almox-estoque-tbody">
                 <tr>
-                  <td colspan="8" class="empty-state">Carregando estoque...</td>
+                  <td colspan="9" class="empty-state">Carregando estoque...</td>
                 </tr>
               </tbody>
             </table>
@@ -190,11 +196,11 @@
           <label for="almox-pedidos-filtro-status">Status</label>
           <select id="almox-pedidos-filtro-status">
             <option value="">Todos</option>
-            <option value="PENDENTE">PENDENTE</option>
-            <option value="EM_SEPARACAO">EM_SEPARACAO</option>
-            <option value="ATENDIDA_PARCIAL">ATENDIDA_PARCIAL</option>
-            <option value="ATENDIDA">ATENDIDA</option>
-            <option value="CANCELADA">CANCELADA</option>
+            <option value="PENDENTE">Pendente</option>
+            <option value="EM_SEPARACAO">Pronto</option>
+            <option value="ATENDIDA_PARCIAL">Pode retirar parcial</option>
+            <option value="ATENDIDA">Pode retirar</option>
+            <option value="CANCELADA">Cancelada</option>
           </select>
         </div>
 
@@ -234,9 +240,9 @@
     <div class="modal-dialog">
       <div class="modal-header">
         <div>
-          <span class="section-pill">Atendimento</span>
-          <h2>Atender Solicitacao</h2>
-          <p>Transferencia direta do Almoxarifado para o estoque que fez o pedido.</p>
+          <span class="section-pill">Retirada</span>
+          <h2>Pode retirar</h2>
+          <p>Confirme a liberacao e transfira do Almoxarifado para o estoque solicitante.</p>
         </div>
 
         <button id="btn-fechar-modal-almox-atendimento" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
@@ -247,10 +253,10 @@
       <form id="almox-atendimento-form" class="form-grid">
         <input type="hidden" id="almox-atendimento-id">
 
-        <div id="almox-atendimento-resumo" class="span-12 selected-tags empty">Selecione uma solicitacao para atender.</div>
+        <div id="almox-atendimento-resumo" class="span-12 selected-tags empty">Selecione uma solicitacao para liberar.</div>
 
         <div class="field span-4">
-          <label for="almox-atendimento-quantidade">Quantidade a separar</label>
+          <label for="almox-atendimento-quantidade">Quantidade a liberar</label>
           <input id="almox-atendimento-quantidade" type="number" min="1" step="1" value="1" required>
         </div>
 
@@ -261,7 +267,7 @@
 
         <div class="span-12 modal-actions">
           <button id="btn-cancelar-modal-almox-atendimento" class="btn btn-neutral" type="button">Cancelar</button>
-          <button class="btn btn-success" type="submit">Confirmar Atendimento</button>
+          <button class="btn btn-success" type="submit">Confirmar liberacao</button>
         </div>
       </form>
     </div>
@@ -667,6 +673,7 @@
 
   <script src="/js/sector-menu.js"></script>
   <script src="/js/dashboard.js"></script>
+  <script src="/js/table-print.js"></script>
   <script src="/js/session-indicator.js"></script>
 </body>
 </html>

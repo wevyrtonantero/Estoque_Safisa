@@ -1155,15 +1155,12 @@ function renderSolicitacaoStatusBadge(status) {
 }
 
 function renderMateriaPrimaCelula(producao) {
-  const titulo = formatarMateriaPrimaTitulo(producao);
-  const resumoTecnico = formatarResumoTecnicoMateriaPrima(producao);
+  const titulo = formatarMateriaPrimaNome(producao);
+  return `<span class="table-primary-line">${escapeHtml(titulo)}</span>`;
+}
 
-  return `
-    <div class="table-stack">
-      <strong class="table-primary-line">${escapeHtml(titulo)}</strong>
-      <span class="table-secondary-line">${escapeHtml(resumoTecnico)}</span>
-    </div>
-  `;
+function formatarMateriaPrimaNome(item) {
+  return item.materia_prima_nome || item.nome || 'Sem materia-prima';
 }
 
 function formatarMateriaPrimaTitulo(item) {
@@ -1424,10 +1421,29 @@ function formatarConsumo(producao) {
     return '-';
   }
 
-  return `${Number(producao.quantidade_consumida_materia_prima).toLocaleString('pt-BR', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 4
-  })} ${producao.unidade_consumo}`;
+  const quantidade = Number(producao.quantidade_consumida_materia_prima);
+  const unidade = String(producao.unidade_consumo || '').trim().toUpperCase();
+
+  if (!Number.isFinite(quantidade) || quantidade <= 0) {
+    return '-';
+  }
+
+  if (unidade === 'M') {
+    const comprimentoBarraMetros = obterComprimentoBarraMetros(producao);
+    const barras = quantidade / comprimentoBarraMetros;
+    return `${formatDecimal(barras)} ${Math.abs(barras) === 1 ? 'barra' : 'barras'}`;
+  }
+
+  return `${formatDecimal(quantidade)} ${unidade}`;
+}
+
+function obterComprimentoBarraMetros(producao) {
+  const comprimentoMm = Number(producao.materia_prima_comprimento_padrao_mm || 0);
+  if (Number.isFinite(comprimentoMm) && comprimentoMm > 0) {
+    return comprimentoMm / 1000;
+  }
+
+  return 3;
 }
 
 function formatarData(value) {

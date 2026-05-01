@@ -34,6 +34,7 @@ const refs = {
   estoqueTotal: document.getElementById('almox-estoque-total'),
   filtroCodigo: document.getElementById('almox-filtro-codigo'),
   filtroDescricao: document.getElementById('almox-filtro-descricao'),
+  filtroFornecedor: document.getElementById('almox-filtro-fornecedor'),
   filtroClassificacao: document.getElementById('almox-filtro-classificacao'),
   filtroEstado: document.getElementById('almox-filtro-estado'),
   filtroQuantidade: document.getElementById('almox-filtro-quantidade'),
@@ -121,6 +122,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 function bindEvents() {
   refs.filtroCodigo.addEventListener('input', renderizarEstoque);
   refs.filtroDescricao.addEventListener('input', renderizarEstoque);
+  refs.filtroFornecedor.addEventListener('input', renderizarEstoque);
   refs.filtroClassificacao.addEventListener('change', renderizarEstoque);
   refs.filtroEstado.addEventListener('change', renderizarEstoque);
   refs.filtroQuantidade.addEventListener('change', renderizarEstoque);
@@ -534,12 +536,12 @@ function renderizarEstoque() {
   refs.estoqueTotal.textContent = `${saldosFiltrados.length} registro(s) encontrado(s)`;
 
   if (!registrosEstoque.length) {
-    refs.estoqueTbody.innerHTML = '<tr><td colspan="8" class="empty-state">Nenhum item monitorado no Almoxarifado.</td></tr>';
+    refs.estoqueTbody.innerHTML = '<tr><td colspan="9" class="empty-state">Nenhum item monitorado no Almoxarifado.</td></tr>';
     return;
   }
 
   if (!saldosFiltrados.length) {
-    refs.estoqueTbody.innerHTML = '<tr><td colspan="8" class="empty-state">Nenhum item encontrado com os filtros informados.</td></tr>';
+    refs.estoqueTbody.innerHTML = '<tr><td colspan="9" class="empty-state">Nenhum item encontrado com os filtros informados.</td></tr>';
     return;
   }
 
@@ -550,6 +552,7 @@ function renderizarEstoque() {
       <td>${escapeHtml(item.tipo)}</td>
       <td>${escapeHtml(item.classificacao)}</td>
       <td class="table-quantity">${formatDecimal(item.quantidade)}</td>
+      <td class="table-description">${escapeHtml(formatarFornecedorEstoque(item))}</td>
       <td class="table-quantity">${formatDecimal(item.quantidade_saida_mes)}</td>
       <td>${escapeHtml(formatarDuracaoPrioridade(item))}</td>
       <td>${renderizarEstadoNecessidade(item.estado_necessidade)}</td>
@@ -586,10 +589,10 @@ function renderizarPedidos() {
           <summary class="row-menu-trigger" aria-label="Abrir acoes">...</summary>
           <div class="row-menu-panel">
             ${['PENDENTE', 'ATENDIDA_PARCIAL'].includes(item.status)
-              ? `<button type="button" class="row-menu-item" data-action="iniciar" data-id="${item.id}">Iniciar separacao</button>`
+              ? `<button type="button" class="row-menu-item" data-action="iniciar" data-id="${item.id}">Marcar pronto</button>`
               : ''}
             ${['PENDENTE', 'EM_SEPARACAO', 'ATENDIDA_PARCIAL'].includes(item.status)
-              ? `<button type="button" class="row-menu-item" data-action="atender" data-id="${item.id}">Atender</button>`
+              ? `<button type="button" class="row-menu-item" data-action="atender" data-id="${item.id}">Ja retirou</button>`
               : '<span class="row-menu-item">Sem acoes</span>'}
           </div>
         </details>
@@ -765,6 +768,7 @@ function obterMensagemSolicitacaoVazia(filtro) {
 function obterSaldosFiltrados() {
   const filtroCodigo = normalizarBusca(refs.filtroCodigo.value.trim());
   const filtroDescricao = normalizarBusca(refs.filtroDescricao.value.trim());
+  const filtroFornecedor = normalizarBusca(refs.filtroFornecedor.value.trim());
   const filtroClassificacao = refs.filtroClassificacao.value.trim().toUpperCase();
   const filtroEstado = refs.filtroEstado.value.trim().toUpperCase();
   const ordenacaoQuantidade = refs.filtroQuantidade.value;
@@ -775,6 +779,10 @@ function obterSaldosFiltrados() {
     }
 
     if (filtroDescricao && !normalizarBusca(item.descricao).includes(filtroDescricao)) {
+      return false;
+    }
+
+    if (filtroFornecedor && !normalizarBusca(formatarFornecedorEstoque(item)).includes(filtroFornecedor)) {
       return false;
     }
 
@@ -1019,7 +1027,7 @@ function abrirModalAtendimento(item) {
 function fecharModalAtendimento() {
   refs.atendimentoId.value = '';
   refs.atendimentoResumo.classList.add('selected-tags', 'empty');
-  refs.atendimentoResumo.textContent = 'Selecione uma solicitacao para atender.';
+  refs.atendimentoResumo.textContent = 'Selecione uma solicitacao para liberar.';
   closeModal(refs.atendimentoModal);
 }
 
@@ -1122,7 +1130,7 @@ function handlePedidosActions(event) {
   }
 
   if (button.dataset.action === 'iniciar') {
-    executarAcaoPedido(`${solicitacoesApiBaseUrl}/${item.id}/iniciar-separacao`, 'Separacao iniciada com sucesso.');
+    executarAcaoPedido(`${solicitacoesApiBaseUrl}/${item.id}/iniciar-separacao`, 'Pedido marcado como separando.');
     return;
   }
 
@@ -1150,7 +1158,7 @@ async function handleAtenderSolicitacao(event) {
     }
 
     fecharModalAtendimento();
-    mostrarMensagem('Solicitacao atendida com sucesso.', 'success');
+    mostrarMensagem('Pedido liberado para retirada com sucesso.', 'success');
     await Promise.all([carregarSolicitacoes(), carregarEstoqueAlmox(), carregarHistoricoSeAberto()]);
   } catch (error) {
     refs.atendimentoMensagem.textContent = error.message;
@@ -1343,6 +1351,7 @@ function preencherEstoquesDestino() {
 function limparFiltrosEstoque() {
   refs.filtroCodigo.value = '';
   refs.filtroDescricao.value = '';
+  refs.filtroFornecedor.value = '';
   refs.filtroClassificacao.value = '';
   refs.filtroEstado.value = '';
   refs.filtroQuantidade.value = '';
@@ -1420,12 +1429,18 @@ function enriquecerRegistroEstoque(item, prioridade = null) {
     descricao: prioridade?.descricao ?? item.descricao ?? '-',
     tipo: prioridade?.tipo ?? item.tipo ?? '-',
     classificacao: prioridade?.classificacao ?? item.classificacao ?? '-',
+    fornecedor_nome: prioridade?.fornecedor_nome ?? item.fornecedor_nome ?? '',
+    fornecedores_nomes: prioridade?.fornecedores_nomes ?? item.fornecedores_nomes ?? '',
     quantidade: Number(prioridade?.quantidade ?? item.quantidade ?? 0),
     quantidade_saida_mes: Number(prioridade?.quantidade_saida_mes ?? item.consumo_mensal ?? 0),
     dias_cobertura: prioridade?.dias_cobertura ?? null,
     data_prevista_ruptura: prioridade?.data_prevista_ruptura ?? null,
     estado_necessidade: String(prioridade?.estado_necessidade || (isItemEmAlerta(item) ? 'ATENCAO' : 'NORMAL')).toUpperCase()
   };
+}
+
+function formatarFornecedorEstoque(item) {
+  return String(item.fornecedores_nomes || item.fornecedor_nome || '-').trim() || '-';
 }
 
 function obterClasseLinhaPrioridade(item) {
@@ -1536,9 +1551,23 @@ function renderizarStatus(status) {
   if (normalized === 'ATENDIDA') cssClass += ' is-success';
   if (normalized === 'ATENDIDA_PARCIAL') cssClass += ' is-warning';
   if (normalized === 'PENDENTE') cssClass += ' is-danger';
-  if (normalized === 'EM_SEPARACAO') cssClass += ' is-info';
+  if (normalized === 'EM_SEPARACAO') cssClass += ' is-success';
 
-  return `<span class="${cssClass}">${escapeHtml(normalized || '-')}</span>`;
+  return `<span class="${cssClass}">${escapeHtml(formatarStatusSolicitacao(normalized))}</span>`;
+}
+
+function formatarStatusSolicitacao(status) {
+  const labels = {
+    PENDENTE: 'Pendente',
+    EM_SEPARACAO: 'Pronto',
+    ATENDIDA_PARCIAL: 'Pode retirar parcial',
+    ATENDIDA: 'Pode retirar',
+    CANCELADA: 'Cancelada',
+    FALTANDO_PECA: 'Faltando peca',
+    MONTANDO: 'Montando'
+  };
+
+  return labels[status] || status || '-';
 }
 
 function formatarReferenciaMateriaPrima(item) {

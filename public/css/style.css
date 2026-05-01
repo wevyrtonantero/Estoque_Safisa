@@ -1093,6 +1093,12 @@ textarea {
   font-size: 0.82rem;
 }
 
+.table-print-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 12px;
+}
+
 .icon-btn {
   display: inline-flex;
   align-items: center;
@@ -1127,9 +1133,26 @@ textarea {
 /* Tabelas compactas, sem excesso de colunas. */
 .table-wrapper {
   overflow-x: auto;
+  overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: 18px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(246, 250, 254, 0.98));
+}
+
+.modal-dialog .table-wrapper {
+  max-height: min(430px, 52vh);
+}
+
+.content-card > .table-wrapper {
+  max-height: min(620px, 66vh);
+}
+
+.table-wrapper-compact {
+  border-radius: 14px;
+}
+
+.table-wrapper-compact table {
+  min-width: 980px;
 }
 
 table {
@@ -1147,12 +1170,40 @@ td {
 }
 
 th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
   color: var(--text-soft);
   font-size: 0.78rem;
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   background: linear-gradient(180deg, #edf4fb, #e4eef8);
+}
+
+.table-wrapper-compact th,
+.table-wrapper-compact td {
+  padding: 10px 12px;
+  font-size: 0.92rem;
+  line-height: 1.28;
+}
+
+.table-wrapper-compact th {
+  font-size: 0.72rem;
+}
+
+.dashboard-stock-table .table-description {
+  max-width: 230px;
+}
+
+.dashboard-stock-table .table-compact-text {
+  max-width: 190px;
+}
+
+.dashboard-stock-table .table-description,
+.dashboard-stock-table .table-compact-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 tbody tr:nth-child(even) {
