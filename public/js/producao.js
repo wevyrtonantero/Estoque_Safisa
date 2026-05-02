@@ -8,6 +8,7 @@ const estoquesApiBaseUrl = '/api/estoques';
 const estoqueSaldosApiBaseUrl = '/api/estoque/saldos';
 const estoquePrioridadesApiBaseUrl = '/api/estoque/prioridades';
 const AUTO_REFRESH_MS = 15000;
+const PRODUCAO_CLASSIFICACAO_PADRAO = 'ITEM';
 const ACTIVE_PRODUCTION_REQUEST_STATUSES = ['PENDENTE', 'EM_ANALISE', 'EM_PRODUCAO'];
 const CLOSED_PRODUCTION_REQUEST_STATUSES = ['CONCLUIDA', 'CANCELADA'];
 
@@ -106,7 +107,8 @@ function bindEvents() {
     carregarConsultaEstoques();
   });
   refs.estoquesSetor.addEventListener('change', agendarConsultaEstoques);
-  [refs.estoquesCodigo, refs.estoquesDescricao, refs.estoquesFornecedor, refs.estoquesClassificacao, refs.estoquesEstado, refs.estoquesOrdem].forEach((field) => {
+  refs.estoquesClassificacao.addEventListener('change', agendarConsultaEstoques);
+  [refs.estoquesCodigo, refs.estoquesDescricao, refs.estoquesFornecedor, refs.estoquesEstado, refs.estoquesOrdem].forEach((field) => {
     field.addEventListener('input', renderizarConsultaEstoques);
     field.addEventListener('change', renderizarConsultaEstoques);
   });
@@ -182,7 +184,12 @@ async function carregarSolicitacoesProducao() {
 
 async function carregarPrioridadesAlmox() {
   try {
-    const response = await fetch(`${estoquePrioridadesApiBaseUrl}?estoque_nome=Almoxarifado&modo=todos`);
+    const params = new URLSearchParams({
+      estoque_nome: 'Almoxarifado',
+      modo: 'todos',
+      classificacao: PRODUCAO_CLASSIFICACAO_PADRAO
+    });
+    const response = await fetch(`${estoquePrioridadesApiBaseUrl}?${params.toString()}`);
     const prioridades = await response.json();
 
     if (!response.ok) {
@@ -768,7 +775,7 @@ function limparFiltrosConsultaEstoques() {
   refs.estoquesCodigo.value = '';
   refs.estoquesDescricao.value = '';
   refs.estoquesFornecedor.value = '';
-  refs.estoquesClassificacao.value = '';
+  refs.estoquesClassificacao.value = PRODUCAO_CLASSIFICACAO_PADRAO;
   refs.estoquesEstado.value = '';
   refs.estoquesOrdem.value = '';
   if (almoxStockId) {
@@ -801,6 +808,11 @@ async function carregarConsultaEstoques() {
   const params = new URLSearchParams({
     estoque: refs.estoquesSetor.value
   });
+  const classificacao = String(refs.estoquesClassificacao.value || '').trim().toUpperCase();
+
+  if (classificacao) {
+    params.append('classificacao', classificacao);
+  }
 
   if (aplicaPrioridade) {
     params.append('modo', 'todos');
@@ -899,15 +911,20 @@ function obterConsultaEstoquesFiltrados() {
 }
 
 function normalizarRegistrosConsultaEstoque(items, aplicaPrioridade) {
-  return items.map((item) => ({
-    ...item,
-    quantidade: Number(item.quantidade || 0),
-    quantidade_saida_mes: aplicaPrioridade ? Number(item.quantidade_saida_mes || item.consumo_mensal || 0) : null,
-    dias_cobertura: aplicaPrioridade ? item.dias_cobertura ?? null : null,
-    data_prevista_ruptura: aplicaPrioridade ? item.data_prevista_ruptura ?? null : null,
-    estado_necessidade: aplicaPrioridade ? String(item.estado_necessidade || 'NORMAL').toUpperCase() : '',
-    aplica_prioridade: aplicaPrioridade
-  }));
+  return items.map((item) => {
+    const classificacao = String(item.classificacao || '').toUpperCase();
+    const aplicaPrioridadeOperacional = aplicaPrioridade && classificacao === PRODUCAO_CLASSIFICACAO_PADRAO;
+
+    return {
+      ...item,
+      quantidade: Number(item.quantidade || 0),
+      quantidade_saida_mes: aplicaPrioridadeOperacional ? Number(item.quantidade_saida_mes || item.consumo_mensal || 0) : null,
+      dias_cobertura: aplicaPrioridadeOperacional ? item.dias_cobertura ?? null : null,
+      data_prevista_ruptura: aplicaPrioridadeOperacional ? item.data_prevista_ruptura ?? null : null,
+      estado_necessidade: aplicaPrioridadeOperacional ? String(item.estado_necessidade || 'NORMAL').toUpperCase() : '',
+      aplica_prioridade: aplicaPrioridadeOperacional
+    };
+  });
 }
 
 function atualizarFiltroEstadoConsultaEstoques() {
@@ -1409,7 +1426,10 @@ function renderizarEstadoNecessidade(estado, aplicaPrioridade = true) {
 }
 
 function obterPrioridadesAlmoxOperacionais() {
-  return prioridadesAlmoxCache.filter((item) => String(item.estado_necessidade || '').toUpperCase() !== 'NORMAL');
+  return prioridadesAlmoxCache.filter((item) => (
+    String(item.classificacao || '').toUpperCase() === PRODUCAO_CLASSIFICACAO_PADRAO
+    && String(item.estado_necessidade || '').toUpperCase() !== 'NORMAL'
+  ));
 }
 
 function obterFornecedorLabel(item) {
