@@ -1257,6 +1257,14 @@ tbody tr:hover {
   color: var(--primary-900);
 }
 
+.table-note {
+  margin-top: 4px;
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
 .status-chip {
   display: inline-flex;
   align-items: center;
@@ -1370,6 +1378,15 @@ tbody tr:hover {
 
 .row-menu-item.danger {
   color: var(--danger);
+}
+
+.row-menu-item.is-muted {
+  color: var(--text-soft);
+  cursor: default;
+}
+
+.row-menu-item.is-muted:hover {
+  background: transparent;
 }
 
 .subtle-divider {

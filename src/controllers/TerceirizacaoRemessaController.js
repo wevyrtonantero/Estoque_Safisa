@@ -33,6 +33,7 @@ function buildDispatchPayload(body) {
   return {
     id_peca: normalizeOptionalInteger(body.id_peca),
     id_fornecedor: normalizeOptionalInteger(body.id_fornecedor),
+    empresa_destino: body.empresa_destino ? String(body.empresa_destino).trim() : '',
     quantidade: normalizeDecimal(body.quantidade),
     tipo_tratamento: body.tipo_tratamento ? String(body.tipo_tratamento).trim().toUpperCase() : '',
     servicos: normalizeTextArray(body.servicos).join(', '),
@@ -158,8 +159,12 @@ const TerceirizacaoRemessaController = {
         return res.status(400).json({ message: 'A peca informada deve ser valida.' });
       }
 
-      if (!Number.isInteger(payload.id_fornecedor)) {
-        return res.status(400).json({ message: 'A empresa de tratamento deve ser valida.' });
+      if (!Number.isInteger(payload.id_fornecedor) && !payload.empresa_destino) {
+        return res.status(400).json({ message: 'Informe uma empresa de tratamento valida.' });
+      }
+
+      if (payload.empresa_destino.length > 150) {
+        return res.status(400).json({ message: 'A empresa de tratamento deve ter no maximo 150 caracteres.' });
       }
 
       if (!Number.isFinite(payload.quantidade) || payload.quantidade <= 0) {

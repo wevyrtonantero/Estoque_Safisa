@@ -94,7 +94,6 @@
                 <tr>
                   <th>Codigo</th>
                   <th>Descricao</th>
-                  <th>Maquina</th>
                   <th>Quantidade</th>
                   <th>Ultima Atualizacao</th>
                   <th>Acoes</th>
@@ -102,7 +101,7 @@
               </thead>
               <tbody id="tratamento-externo-tbody">
                 <tr>
-                  <td colspan="6" class="empty-state">Carregando fila de tratamento externo...</td>
+                  <td colspan="5" class="empty-state">Carregando fila de tratamento externo...</td>
                 </tr>
               </tbody>
             </table>
@@ -177,9 +176,8 @@
 
         <div class="field span-8">
           <label for="encaminhamento-fornecedor">Empresa destino</label>
-          <select id="encaminhamento-fornecedor" required>
-            <option value="">Selecione</option>
-          </select>
+          <input id="encaminhamento-fornecedor" type="text" list="encaminhamento-fornecedores-lista" maxlength="150" placeholder="Digite ou selecione" required autocomplete="off">
+          <datalist id="encaminhamento-fornecedores-lista"></datalist>
         </div>
 
         <div id="encaminhamento-servicos-wrap" class="span-12 hidden">

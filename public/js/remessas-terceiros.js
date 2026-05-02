@@ -20,6 +20,7 @@ const refs = {
   nfView: document.getElementById('remessa-nf-view'),
   enderecoView: document.getElementById('remessa-endereco-view'),
   dataEnvioView: document.getElementById('remessa-data-envio-view'),
+  massaTotalView: document.getElementById('remessa-massa-total-view'),
   itensTbody: document.getElementById('remessa-itens-tbody'),
   nfModal: document.getElementById('remessa-nf-modal'),
   nfMensagem: document.getElementById('remessa-nf-mensagem'),
@@ -134,20 +135,17 @@ function renderizarRemessas() {
   refs.total.textContent = `${remessasCache.length} registro(s) encontrado(s)`;
 
   if (remessasCache.length === 0) {
-    refs.tabela.innerHTML = '<tr><td colspan="9" class="empty-state">Nenhuma remessa encontrada.</td></tr>';
+    refs.tabela.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhuma remessa encontrada.</td></tr>';
     return;
   }
 
   refs.tabela.innerHTML = remessasCache.map((remessa) => `
-    <tr class="${remessa.numero_nf ? '' : 'table-row-attention'}">
+    <tr class="${isRemessaForaDaFabrica(remessa) ? 'table-row-attention' : ''}">
       <td class="table-description">${escapeHtml(remessa.nome_empresa)}</td>
-      <td class="table-code">${renderCodigosRemessa(remessa)}</td>
       <td>${renderStatusBadge(remessa.status)}</td>
       <td>${renderNfCell(remessa)}</td>
       <td>${formatarData(remessa.data_envio)}</td>
       <td class="table-quantity">${formatInteger(remessa.total_itens)}</td>
-      <td class="table-quantity">${formatInteger(remessa.quantidade_enviada_total)}</td>
-      <td class="table-quantity">${formatWeight(remessa.peso_total_enviado_kg)}</td>
       <td class="table-actions-cell">
         <details class="row-menu">
           <summary class="row-menu-trigger" aria-label="Abrir acoes">...</summary>
@@ -162,17 +160,18 @@ function renderizarRemessas() {
   `).join('');
 }
 
-function renderCodigosRemessa(remessa) {
-  const codigos = String(remessa.pecas_codigos || '').trim();
-  return escapeHtml(codigos || '-');
-}
-
 function renderNfCell(remessa) {
   if (!remessa.numero_nf) {
     return '<span class="status-chip is-warning">Sem NF</span>';
   }
 
   return escapeHtml(remessa.numero_nf);
+}
+
+function isRemessaForaDaFabrica(remessa) {
+  const status = String(remessa.status || '').toUpperCase();
+  const pendente = Number(remessa.quantidade_pendente_total ?? remessa.quantidade_enviada_total ?? 0);
+  return ['ENVIADA', 'RETORNO_PARCIAL'].includes(status) && pendente > 0;
 }
 
 function atualizarIndicadores() {
@@ -224,9 +223,10 @@ async function abrirModalDetalhe(id) {
   refs.nfView.textContent = result.numero_nf ? `${result.numero_nf} | ${result.data_nf || '-'}` : 'Sem NF';
   refs.enderecoView.textContent = [result.endereco, result.cidade, result.cep].filter(Boolean).join(' | ') || '-';
   refs.dataEnvioView.textContent = formatarData(result.data_envio);
+  refs.massaTotalView.textContent = formatWeight(calcularMassaTotalRemessa(result));
 
   if (!Array.isArray(result.itens) || result.itens.length === 0) {
-    refs.itensTbody.innerHTML = '<tr><td colspan="7" class="empty-state">Nenhum item nesta remessa.</td></tr>';
+    refs.itensTbody.innerHTML = '<tr><td colspan="8" class="empty-state">Nenhum item nesta remessa.</td></tr>';
   } else {
     refs.itensTbody.innerHTML = result.itens.map((item) => `
       <tr>
@@ -238,6 +238,7 @@ async function abrirModalDetalhe(id) {
         <td>${escapeHtml(buildTreatmentLabel(item))}</td>
         <td class="table-quantity">${formatInteger(item.quantidade_enviada)}</td>
         <td class="table-quantity">${formatInteger(item.quantidade_retorno)}</td>
+        <td class="table-quantity">${formatInteger(getQuantidadePendente(item))}</td>
         <td class="table-quantity">${formatWeight(item.peso_total_enviado_kg)}</td>
         <td class="table-actions-cell">
           <details class="row-menu">
@@ -259,7 +260,8 @@ async function abrirModalDetalhe(id) {
 
 function fecharModalDetalhe() {
   remessaSelecionada = null;
-  refs.itensTbody.innerHTML = '<tr><td colspan="7" class="empty-state">Nenhum item carregado.</td></tr>';
+  refs.massaTotalView.textContent = '0 kg';
+  refs.itensTbody.innerHTML = '<tr><td colspan="8" class="empty-state">Nenhum item carregado.</td></tr>';
   closeModal(refs.detalheModal);
 }
 
@@ -308,7 +310,7 @@ function renderizarResumoNf(remessa) {
   refs.nfResumo.classList.add('selected-tags');
   refs.nfResumo.innerHTML = [
     `<span class="selected-tag">${escapeHtml(`${itens.length} item(ns)`)}</span>`,
-    ...itens.map((item) => `<span class="selected-tag">${escapeHtml(`${item.codigo} - ${item.descricao}`)}</span>`)
+    ...itens.map((item) => `<span class="selected-tag">${escapeHtml(item.descricao)}</span>`)
   ].join('');
 }
 
@@ -362,7 +364,7 @@ function handleItemActions(event) {
     refs.retornoMensagem.textContent = '';
     refs.retornoItemId.value = String(item.id);
     refs.retornoQuantidade.value = '1';
-    const pendente = Number(item.quantidade_pendente ?? (Number(item.quantidade_enviada) - Number(item.quantidade_retorno)));
+    const pendente = getQuantidadePendente(item);
     refs.retornoQuantidade.max = String(pendente);
     refs.retornoResumo.classList.remove('empty');
     refs.retornoResumo.classList.add('selected-tags');
@@ -395,7 +397,7 @@ function abrirModalFinalizacao(item) {
   refs.finalizacaoMensagem.textContent = '';
   refs.finalizacaoItemId.value = String(item.id);
   refs.finalizacaoJustificativa.value = '';
-  const pendente = Number(item.quantidade_pendente ?? (Number(item.quantidade_enviada) - Number(item.quantidade_retorno)));
+  const pendente = getQuantidadePendente(item);
   refs.finalizacaoResumo.classList.remove('empty');
   refs.finalizacaoResumo.classList.add('selected-tags');
   refs.finalizacaoResumo.innerHTML = `
@@ -677,10 +679,26 @@ function buildTreatmentLabel(item) {
     return item.servicos || 'Multielos';
   }
 
+  if (item.tipo_tratamento === 'EXTERNO') {
+    return item.servicos || 'Tratamento externo';
+  }
+
   const parts = ['Tratamento termico'];
   if (item.dureza_hrc) parts.push(item.dureza_hrc);
   if (item.profundidade) parts.push(item.profundidade);
   return parts.join(' | ');
+}
+
+function getQuantidadePendente(item) {
+  const enviada = Number(item.quantidade_enviada || 0);
+  const retorno = Number(item.quantidade_retorno || 0);
+  const pendente = item.quantidade_pendente ?? (enviada - retorno);
+  return Math.max(0, Number(Number(pendente || 0).toFixed(2)));
+}
+
+function calcularMassaTotalRemessa(remessa) {
+  const itens = Array.isArray(remessa?.itens) ? remessa.itens : [];
+  return itens.reduce((sum, item) => sum + Number(item.peso_total_enviado_kg || 0), 0);
 }
 
 function formatInteger(value) {

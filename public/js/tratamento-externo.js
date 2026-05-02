@@ -29,6 +29,7 @@ const refs = {
   encaminhamentoIdPeca: document.getElementById('encaminhamento-id-peca'),
   encaminhamentoQuantidade: document.getElementById('encaminhamento-quantidade'),
   encaminhamentoFornecedor: document.getElementById('encaminhamento-fornecedor'),
+  encaminhamentoFornecedoresLista: document.getElementById('encaminhamento-fornecedores-lista'),
   encaminhamentoTipoTratamento: document.getElementById('encaminhamento-tipo-tratamento'),
   encaminhamentoServicosWrap: document.getElementById('encaminhamento-servicos-wrap'),
   encaminhamentoServicosLista: document.getElementById('encaminhamento-servicos-lista'),
@@ -69,6 +70,7 @@ function bindEvents() {
     field.addEventListener('input', agendarFiltroAutomatico);
   });
   refs.tabela.addEventListener('click', handleTabelaActions);
+  refs.encaminhamentoFornecedor.addEventListener('input', handleProviderChange);
   refs.encaminhamentoFornecedor.addEventListener('change', handleProviderChange);
   document.getElementById('btn-fechar-modal-encaminhamento').addEventListener('click', fecharModalEncaminhamento);
   document.getElementById('btn-cancelar-modal-encaminhamento').addEventListener('click', fecharModalEncaminhamento);
@@ -180,10 +182,9 @@ async function carregarProviders() {
     : [];
 
   providersCache = [...specialProviders, ...genericProviders];
-  refs.encaminhamentoFornecedor.innerHTML = `
-    <option value="">Selecione</option>
-    ${providersCache.map((provider) => `<option value="${provider.id}">${escapeHtml(provider.nome)}</option>`).join('')}
-  `;
+  refs.encaminhamentoFornecedoresLista.innerHTML = providersCache
+    .map((provider) => `<option value="${escapeHtml(provider.nome)}"></option>`)
+    .join('');
 }
 async function carregarStocks() {
   const response = await fetch(estoquesApiBaseUrl);
@@ -204,7 +205,7 @@ function renderizarSaldos() {
   refs.total.textContent = `${saldosCache.length} registro(s) encontrado(s)`;
 
   if (saldosCache.length === 0) {
-    refs.tabela.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhuma peca aguardando tratamento externo.</td></tr>';
+    refs.tabela.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhuma peca aguardando tratamento externo.</td></tr>';
     return;
   }
 
@@ -212,7 +213,6 @@ function renderizarSaldos() {
     <tr>
       <td class="table-code">${escapeHtml(item.codigo)}</td>
       <td class="table-description">${escapeHtml(item.descricao)}</td>
-      <td>${escapeHtml(item.maquina_nome)}</td>
       <td class="table-quantity">${formatInteger(item.quantidade)}</td>
       <td>${formatarData(item.updated_at)}</td>
       <td class="table-actions-cell">
@@ -317,12 +317,12 @@ function resetEncaminhamentoModal() {
 }
 
 function handleProviderChange() {
-  const provider = providersCache.find((entry) => Number(entry.id) === Number(refs.encaminhamentoFornecedor.value));
+  const provider = findProviderByTypedName(refs.encaminhamentoFornecedor.value);
 
   refs.encaminhamentoServicosWrap.classList.add('hidden');
   refs.encaminhamentoTemperaWrap.classList.add('hidden');
   refs.encaminhamentoServicosLista.innerHTML = '';
-  refs.encaminhamentoTipoTratamento.value = '';
+  refs.encaminhamentoTipoTratamento.value = SPECIAL_PROVIDER_KEYS.GENERICO;
 
   if (!provider) {
     return;
@@ -351,6 +351,7 @@ async function handleEncaminhamentoSubmit(event) {
   event.preventDefault();
 
   const servicos = Array.from(document.querySelectorAll('[data-service-checkbox]:checked')).map((input) => input.value);
+  const provider = findProviderByTypedName(refs.encaminhamentoFornecedor.value);
 
   try {
     const response = await fetch(`${terceirizacaoApiBaseUrl}/encaminhar`, {
@@ -358,9 +359,10 @@ async function handleEncaminhamentoSubmit(event) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         id_peca: refs.encaminhamentoIdPeca.value,
-        id_fornecedor: refs.encaminhamentoFornecedor.value,
+        id_fornecedor: provider ? provider.id : null,
+        empresa_destino: refs.encaminhamentoFornecedor.value.trim(),
         quantidade: refs.encaminhamentoQuantidade.value,
-        tipo_tratamento: refs.encaminhamentoTipoTratamento.value,
+        tipo_tratamento: refs.encaminhamentoTipoTratamento.value || SPECIAL_PROVIDER_KEYS.GENERICO,
         servicos,
         dureza_hrc: refs.encaminhamentoDureza.value.trim(),
         profundidade: refs.encaminhamentoProfundidade.value.trim(),
@@ -383,6 +385,25 @@ async function handleEncaminhamentoSubmit(event) {
     refs.encaminhamentoMensagem.className = 'message error';
     refs.encaminhamentoMensagem.classList.remove('hidden');
   }
+}
+
+function normalizeProviderName(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase();
+}
+
+function findProviderByTypedName(value) {
+  const typedName = normalizeProviderName(value);
+
+  if (!typedName) {
+    return null;
+  }
+
+  return providersCache.find((provider) => normalizeProviderName(provider.nome) === typedName) || null;
 }
 
 function abrirModalEstoqueDireto(item) {

@@ -171,19 +171,45 @@ class TerceirizacaoRemessaModel {
     return rows[0] || null;
   }
 
-  static async resolveDispatchProvider(connection, idFornecedor) {
-    const providers = await this.ensureDefaultProviders(connection);
-    const specialProvider = providers.find((entry) => Number(entry.id) === Number(idFornecedor));
+  static async findFornecedorByName(nome, connection = pool) {
+    const [rows] = await connection.query(
+      `
+        SELECT
+          id,
+          nome,
+          endereco,
+          cidade,
+          cep,
+          observacao
+        FROM fornecedores
+        WHERE TRIM(nome) = ?
+        ORDER BY id ASC
+        LIMIT 1
+      `,
+      [String(nome || '').trim()]
+    );
 
-    if (specialProvider) {
-      return specialProvider;
-    }
+    return rows[0] || null;
+  }
 
-    const fornecedor = await this.findFornecedorById(idFornecedor, connection);
-    if (!fornecedor) {
-      return null;
-    }
+  static async createFornecedorFromName(connection, nome) {
+    const [result] = await connection.query(
+      `
+        INSERT INTO fornecedores (
+          nome,
+          observacao
+        ) VALUES (?, ?)
+      `,
+      [
+        nome,
+        'Cadastro criado automaticamente pelo encaminhamento de tratamento externo.'
+      ]
+    );
 
+    return this.findFornecedorById(result.insertId, connection);
+  }
+
+  static buildGenericProvider(fornecedor) {
     return {
       id: fornecedor.id,
       key: 'EXTERNO',
@@ -196,6 +222,49 @@ class TerceirizacaoRemessaModel {
       dureza_padrao: '',
       profundidade_padrao: ''
     };
+  }
+
+  static normalizeProviderName(value) {
+    return String(value || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toUpperCase();
+  }
+
+  static async resolveDispatchProvider(connection, idFornecedor, empresaDestino = '') {
+    const providers = await this.ensureDefaultProviders(connection);
+
+    if (Number.isInteger(idFornecedor)) {
+      const specialProvider = providers.find((entry) => Number(entry.id) === Number(idFornecedor));
+
+      if (specialProvider) {
+        return specialProvider;
+      }
+
+      const fornecedor = await this.findFornecedorById(idFornecedor, connection);
+      if (fornecedor) {
+        return this.buildGenericProvider(fornecedor);
+      }
+    }
+
+    const typedName = String(empresaDestino || '').trim();
+    if (!typedName) {
+      return null;
+    }
+
+    const specialProviderByName = providers.find(
+      (entry) => this.normalizeProviderName(entry.nome) === this.normalizeProviderName(typedName)
+    );
+
+    if (specialProviderByName) {
+      return specialProviderByName;
+    }
+
+    const fornecedorPorNome = await this.findFornecedorByName(typedName, connection);
+    const fornecedor = fornecedorPorNome || await this.createFornecedorFromName(connection, typedName);
+    return this.buildGenericProvider(fornecedor);
   }
 
   static buildWeightSnapshot(massaKg, quantidade) {
@@ -295,6 +364,12 @@ class TerceirizacaoRemessaModel {
           COUNT(ri.id) AS total_itens,
           COALESCE(SUM(ri.quantidade_enviada), 0) AS quantidade_enviada_total,
           COALESCE(SUM(ri.quantidade_retorno), 0) AS quantidade_retorno_total,
+          COALESCE(SUM(
+            CASE
+              WHEN COALESCE(ri.encerrado_manualmente, 0) = 1 THEN 0
+              ELSE GREATEST(ri.quantidade_enviada - ri.quantidade_retorno, 0)
+            END
+          ), 0) AS quantidade_pendente_total,
           COALESCE(SUM(CASE WHEN COALESCE(ri.encerrado_manualmente, 0) = 1 THEN 1 ELSE 0 END), 0) AS itens_encerrados_manualmente,
           COALESCE(SUM(ri.peso_total_enviado_kg), 0) AS peso_total_enviado_kg
         FROM terceirizacao_remessas r
@@ -489,7 +564,7 @@ class TerceirizacaoRemessaModel {
     try {
       await connection.beginTransaction();
 
-      const provider = await this.resolveDispatchProvider(connection, data.id_fornecedor);
+      const provider = await this.resolveDispatchProvider(connection, data.id_fornecedor, data.empresa_destino);
 
       if (!provider) {
         throw this.createBusinessError('Empresa de tratamento nao encontrada.');
@@ -506,7 +581,7 @@ class TerceirizacaoRemessaModel {
         observacao: `Encaminhamento para ${provider.nome}.`.slice(0, 255)
       });
 
-      let remessa = await this.findOpenRemessaByProvider(connection, data.id_fornecedor);
+      let remessa = await this.findOpenRemessaByProvider(connection, provider.id);
 
       if (!remessa) {
         const [result] = await connection.query(
@@ -522,7 +597,7 @@ class TerceirizacaoRemessaModel {
             ) VALUES (?, ?, 'ENVIADA', ?, ?, ?, ?)
           `,
           [
-            data.id_fornecedor,
+            provider.id,
             provider.nome,
             data.numero_nf || null,
             data.data_nf || null,

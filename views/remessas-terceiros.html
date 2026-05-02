@@ -109,19 +109,16 @@
               <thead>
                 <tr>
                   <th>Empresa</th>
-                  <th>Codigos</th>
                   <th>Status</th>
                   <th>NF</th>
                   <th>Data Envio</th>
                   <th>Itens</th>
-                  <th>Quantidade</th>
-                  <th>Peso Total</th>
                   <th>Acoes</th>
                 </tr>
               </thead>
               <tbody id="remessas-tbody">
                 <tr>
-                  <td colspan="9" class="empty-state">Carregando remessas...</td>
+                  <td colspan="6" class="empty-state">Carregando remessas...</td>
                 </tr>
               </tbody>
             </table>
@@ -162,6 +159,10 @@
           <span>Data Envio</span>
           <strong id="remessa-data-envio-view">-</strong>
         </div>
+        <div class="view-card">
+          <span>Massa Total</span>
+          <strong id="remessa-massa-total-view">0 kg</strong>
+        </div>
       </div>
 
       <div class="subtle-divider"></div>
@@ -175,13 +176,14 @@
               <th>Tratamento</th>
               <th>Qtd Enviada</th>
               <th>Qtd Retorno</th>
+              <th>Qtd Pendente</th>
               <th>Peso Total</th>
               <th>Acoes</th>
             </tr>
           </thead>
           <tbody id="remessa-itens-tbody">
             <tr>
-              <td colspan="7" class="empty-state">Nenhum item carregado.</td>
+              <td colspan="8" class="empty-state">Nenhum item carregado.</td>
             </tr>
           </tbody>
         </table>
