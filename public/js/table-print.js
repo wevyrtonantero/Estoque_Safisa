@@ -55,7 +55,13 @@
   const getCardContext = (wrapper) => {
     const card = wrapper.closest('.content-card');
     const counter = card ? card.querySelector('p[id]') : null;
-    return counter ? counter.textContent.trim() : '';
+    if (counter) {
+      return counter.textContent.trim();
+    }
+
+    const modal = wrapper.closest('.modal-dialog');
+    const modalCounter = modal ? modal.querySelector('.modal-header p[id]') : null;
+    return modalCounter ? modalCounter.textContent.trim() : '';
   };
 
   const buildPrintTable = (wrapper) => {
