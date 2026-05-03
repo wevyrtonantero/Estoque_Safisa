@@ -678,6 +678,38 @@ textarea {
   line-height: 1.45;
 }
 
+.summary-card .summary-code-list {
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.summary-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.summary-list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.summary-card .summary-list-row span {
+  color: var(--text-main);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.summary-card .summary-list-row strong {
+  margin-top: 0;
+  font-size: 1rem;
+  line-height: 1.2;
+}
+
 .content-card {
   margin-bottom: 18px;
   padding: 20px;
@@ -1223,6 +1255,23 @@ tbody tr:hover {
 .table-code {
   font-weight: 800;
   color: var(--primary-900);
+}
+
+.table-link {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 3px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.table-link:hover .table-code,
+.table-link:focus-visible .table-code {
+  text-decoration: underline;
+}
+
+.table-muted {
+  color: var(--text-soft);
 }
 
 .table-description {

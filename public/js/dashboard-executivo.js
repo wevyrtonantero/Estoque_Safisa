@@ -20,7 +20,8 @@ const refs = {
   cardAndamento: document.getElementById('dashboard-card-andamento'),
   cardFinalizadasHoje: document.getElementById('dashboard-card-finalizadas-hoje'),
   cardCriticos: document.getElementById('dashboard-card-criticos'),
-  cardSemNf: document.getElementById('dashboard-card-sem-nf'),
+  cardTratamento: document.getElementById('dashboard-card-tratamento'),
+  cardTratamentoCodigos: document.getElementById('dashboard-card-tratamento-codigos'),
   producaoTotal: document.getElementById('dashboard-producao-total'),
   producaoTbody: document.getElementById('dashboard-producao-tbody'),
   estoquesModal: document.getElementById('dashboard-estoques-modal'),
@@ -238,11 +239,12 @@ function renderizarPainel() {
   const estoqueMenores = Array.isArray(painelCache?.estoque_menores) ? painelCache.estoque_menores : [];
   const saidasTop = Array.isArray(painelCache?.saidas_top) ? painelCache.saidas_top : [];
   const producaoPorMaquina = Array.isArray(painelCache?.producao_por_maquina) ? painelCache.producao_por_maquina : [];
+  const tratamentoPendentes = Array.isArray(painelCache?.tratamento_pendentes) ? painelCache.tratamento_pendentes : [];
 
   refs.cardAndamento.textContent = formatInteger(producaoEmAndamento.length);
   refs.cardFinalizadasHoje.textContent = formatInteger(painelCache?.indicadores?.producao_hoje?.ordens_finalizadas_hoje || 0);
   refs.cardCriticos.textContent = formatInteger(obterAlertasAlmoxOperacionais().length);
-  refs.cardSemNf.textContent = formatInteger(painelCache?.indicadores?.remessas_sem_nf?.total || 0);
+  renderizarCardTratamento(tratamentoPendentes);
 
   refs.producaoTotal.textContent = `${formatInteger(producaoEmAndamento.length)} ordem(ns) em andamento`;
   renderizarTabelaProducao(producaoEmAndamento);
@@ -270,6 +272,21 @@ function renderizarPainel() {
   renderizarTabelaSaidas(saidasTop);
   renderizarTabelaMaquinas(producaoPorMaquina);
   renderizarTabelaDestaques(estoqueMaiores, estoqueMenores);
+}
+
+function renderizarCardTratamento(items) {
+  const quantidadeTotal = items.reduce((total, item) => total + Number(item.quantidade_pendente || 0), 0);
+  refs.cardTratamento.textContent = formatDecimal(quantidadeTotal);
+
+  if (!items.length) {
+    refs.cardTratamentoCodigos.textContent = 'Nenhum codigo pendente';
+    return;
+  }
+
+  const codigosUnicos = Array.from(new Set(items.map((item) => String(item.codigo || '').trim()).filter(Boolean)));
+  const codigos = codigosUnicos.slice(0, 8);
+  const complemento = codigosUnicos.length > 8 ? ` +${codigosUnicos.length - 8}` : '';
+  refs.cardTratamentoCodigos.textContent = `${codigos.join(', ')}${complemento}`;
 }
 
 function renderizarTabelaProducao(items) {

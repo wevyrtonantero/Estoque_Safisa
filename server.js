@@ -26,8 +26,9 @@ const AuthController = require('./src/controllers/AuthController');
 const UsuarioModel = require('./src/models/UsuarioModel');
 const AuditLogModel = require('./src/models/AuditLogModel');
 const ComposicaoVendaModel = require('./src/models/ComposicaoVendaModel');
+const ExpedicaoSaidaModel = require('./src/models/ExpedicaoSaidaModel');
 const { attachAuthContext, requirePageRoles } = require('./src/middleware/authMiddleware');
-const { ALL_ROLES, ADMIN_READ_ROLES, OPERATION_READ_ROLES, SUPERADMIN_ONLY_ROLES } = require('./src/security/roles');
+const { ALL_ROLES, ADMIN_READ_ROLES, OPERATION_READ_ROLES, SUPERADMIN_ONLY_ROLES, STOCK_READ_ROLES } = require('./src/security/roles');
 const { testConnection } = require('./database/connection');
 const { appConfig } = require('./database/config');
 
@@ -146,6 +147,10 @@ app.get('/pagina-expedicao', requirePageRoles(OPERATION_READ_ROLES), (req, res) 
   sendView(res, 'expedicao.html');
 });
 
+app.get('/pagina-saidas-expedicao', requirePageRoles(STOCK_READ_ROLES), (req, res) => {
+  sendView(res, 'relatorio-saidas-expedicao.html');
+});
+
 app.get('/pagina-submontagens', requirePageRoles(ADMIN_READ_ROLES), (req, res) => {
   sendView(res, 'submontagens.html');
 });
@@ -225,6 +230,7 @@ app.listen(PORT, async () => {
     await UsuarioModel.ensureSchema();
     await AuditLogModel.ensureSchema();
     await ComposicaoVendaModel.ensureSchema();
+    await ExpedicaoSaidaModel.ensureSchema();
   } catch (error) {
     console.error('Nao foi possivel validar a conexao com o MySQL:', error.message);
   }

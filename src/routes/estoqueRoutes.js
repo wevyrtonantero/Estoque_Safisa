@@ -31,8 +31,11 @@ router.post('/estoque/transferencia', requireApiRoles(STOCK_WRITE_ROLES), Estoqu
 // Rota para ajustar manualmente o saldo do estoque.
 router.post('/estoque/ajuste', requireApiRoles(STOCK_WRITE_ROLES), EstoqueController.createAjuste);
 
-// Rota para registrar baixa de venda pela expedicao.
+// Rota para registrar saida final pela expedicao.
 router.post('/estoque/saida', requireApiRoles(STOCK_WRITE_ROLES), EstoqueController.createSaida);
+
+// Rota para listar o relatorio estruturado de saidas da expedicao.
+router.get('/expedicao/saidas', requireApiRoles(STOCK_READ_ROLES), EstoqueController.getSaidasExpedicao);
 
 // Rota para listar historico geral de movimentacoes.
 router.get('/estoque/movimentacoes', requireApiRoles(STOCK_READ_ROLES), EstoqueController.getMovimentacoes);

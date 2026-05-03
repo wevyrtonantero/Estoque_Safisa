@@ -13,7 +13,7 @@
       <div class="topbar-copy">
         <p class="page-kicker">Setor SAFISA</p>
         <h1 class="page-title">Expedicao</h1>
-        <p class="page-subtitle">Acompanhe seu estoque, veja o status dos pedidos ao Almoxarifado e registre a saida de venda.</p>
+        <p class="page-subtitle">Acompanhe seu estoque, veja o status dos pedidos ao Almoxarifado e registre saidas da Expedicao.</p>
       </div>
     </header>
 
@@ -55,13 +55,14 @@
             </div>
 
             <div class="sector-menu-list">
-              <button id="expedicao-btn-saida-menu" class="btn btn-primary" type="button"><span class="btn-label">Baixa de Venda</span></button>
+              <button id="expedicao-btn-saida-menu" class="btn btn-primary" type="button"><span class="btn-label">Registrar Saida</span></button>
               <button id="expedicao-btn-retornar" class="btn btn-neutral" type="button"><span class="btn-label">Devolver Item</span></button>
               <button id="expedicao-btn-desmembrar" class="btn btn-neutral" type="button"><span class="btn-label">Desmembrar</span></button>
               <button id="expedicao-btn-solicitar" class="btn btn-neutral" type="button"><span class="btn-label">Solicitar Pecas</span></button>
               <button id="expedicao-btn-efetuar" class="btn btn-success" type="button"><span class="btn-label">Efetuar Montagem</span></button>
               <button id="expedicao-btn-simular" class="btn btn-secondary" type="button"><span class="btn-label">Simulacao de Montagem</span></button>
               <button id="expedicao-btn-pedidos-menu" class="btn btn-neutral" type="button"><span class="btn-label">Meus Pedidos</span><span id="expedicao-badge-pedidos" class="btn-badge hidden">0</span></button>
+              <a class="btn btn-secondary" href="/pagina-saidas-expedicao"><span class="btn-label">Relatorio de Saidas</span></a>
               <button id="expedicao-btn-historico-menu" class="btn btn-neutral" type="button"><span class="btn-label">Historico de Saidas</span></button>
               <button id="expedicao-btn-producao" class="btn btn-secondary" type="button"><span class="btn-label">Ver Producao</span><span id="expedicao-badge-producao" class="btn-badge hidden">0</span></button>
             </div>
@@ -255,8 +256,8 @@
       <div class="modal-header">
         <div>
           <span class="section-pill">Saida</span>
-          <h2>Baixa de venda</h2>
-          <p>Monte a lista de venda e baixe os itens direto da Expedicao.</p>
+          <h2>Saida da Expedicao</h2>
+          <p>Monte a lista, defina o tipo de saida e baixe os itens direto da Expedicao.</p>
         </div>
 
         <button id="btn-fechar-modal-expedicao-saida" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
@@ -284,14 +285,25 @@
           Selecione um item para ver a disponibilidade atual na Expedicao.
         </div>
 
+        <div class="field span-4">
+          <label for="expedicao-tipo-saida">Tipo de saida</label>
+          <select id="expedicao-tipo-saida" required>
+            <option value="VENDA">Venda</option>
+            <option value="GARANTIA">Garantia</option>
+            <option value="CORTESIA">Cortesia</option>
+            <option value="USO_INTERNO">Uso interno</option>
+            <option value="OUTROS">Outros</option>
+          </select>
+        </div>
+
+        <div class="field span-8">
+          <label for="expedicao-observacao">Observacao geral da saida</label>
+          <input id="expedicao-observacao" type="text" maxlength="255" placeholder="Opcional">
+        </div>
+
         <div class="span-12 modal-actions">
           <button id="expedicao-btn-adicionar" class="btn btn-primary" type="button">Adicionar a lista</button>
           <button id="expedicao-btn-limpar-item" class="btn btn-neutral" type="button">Limpar item</button>
-        </div>
-
-        <div class="field span-12">
-          <label for="expedicao-observacao">Observacao geral da venda</label>
-          <input id="expedicao-observacao" type="text" maxlength="255" placeholder="Opcional">
         </div>
       </form>
 

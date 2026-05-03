@@ -157,6 +157,7 @@ async function main() {
   await ensureEstoqueMateriaPrimaAllowsNegative();
   await runSqlFile('database/schema_tratamento_externo.sql');
   await runSqlFile('database/schema_terceirizacao_remessas.sql');
+  await runSqlFile('database/schema_expedicao_saidas.sql');
   await ensureTerceirizacaoEncerramentoColumns();
   console.log('Infraestrutura de processo aplicada com sucesso.');
 }

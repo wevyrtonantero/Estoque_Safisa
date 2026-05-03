@@ -19,6 +19,7 @@ class PainelModel {
       [topSaidas],
       [producaoPorMaquina],
       [tratamentoStatus],
+      [tratamentoPendentes],
       [producaoEmAndamento]
     ] = await Promise.all([
       pool.query(`
@@ -38,9 +39,12 @@ class PainelModel {
       pool.query(`
         SELECT
           COUNT(*) AS itens_pendentes,
-          COALESCE(SUM(quantidade_enviada - quantidade_retorno), 0) AS quantidade_pendente
-        FROM terceirizacao_remessa_itens
-        WHERE status IN ('ENVIADO', 'RETORNO_PARCIAL')
+          COALESCE(SUM(GREATEST(ri.quantidade_enviada - ri.quantidade_retorno, 0)), 0) AS quantidade_pendente
+        FROM terceirizacao_remessa_itens ri
+        INNER JOIN terceirizacao_remessas r ON r.id = ri.id_remessa
+        WHERE r.status IN ('ENVIADA', 'RETORNO_PARCIAL')
+          AND COALESCE(ri.encerrado_manualmente, 0) = 0
+          AND ri.quantidade_enviada > ri.quantidade_retorno
       `),
       pool.query(`
         SELECT COUNT(*) AS total
@@ -145,6 +149,20 @@ class PainelModel {
       `),
       pool.query(`
         SELECT
+          p.codigo,
+          p.descricao,
+          COALESCE(SUM(GREATEST(ri.quantidade_enviada - ri.quantidade_retorno, 0)), 0) AS quantidade_pendente
+        FROM terceirizacao_remessa_itens ri
+        INNER JOIN terceirizacao_remessas r ON r.id = ri.id_remessa
+        INNER JOIN pecas p ON p.id = ri.id_peca
+        WHERE r.status IN ('ENVIADA', 'RETORNO_PARCIAL')
+          AND COALESCE(ri.encerrado_manualmente, 0) = 0
+          AND ri.quantidade_enviada > ri.quantidade_retorno
+        GROUP BY p.id, p.codigo, p.descricao
+        ORDER BY p.codigo ASC
+      `),
+      pool.query(`
+        SELECT
           po.id,
           po.data_inicio,
           po.quantidade_planejada,
@@ -179,6 +197,7 @@ class PainelModel {
       saidas_top: topSaidas,
       producao_por_maquina: producaoPorMaquina,
       tratamento_status: tratamentoStatus,
+      tratamento_pendentes: tratamentoPendentes,
       producao_em_andamento: producaoEmAndamento
     };
   }

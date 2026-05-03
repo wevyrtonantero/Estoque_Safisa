@@ -1,5 +1,6 @@
 // Controller do modulo de estoque de pecas e submontagens.
 const EstoqueModel = require('../models/EstoqueModel');
+const ExpedicaoSaidaModel = require('../models/ExpedicaoSaidaModel');
 const { recordAuditLog } = require('../audit/auditLogger');
 
 const TIPOS_VALIDOS = ['COMPRADA', 'PRODUZIDA'];
@@ -22,6 +23,15 @@ function normalizeDecimal(value, defaultValue = Number.NaN) {
   }
 
   return Number.parseFloat(value);
+}
+
+function normalizeCodeValue(value) {
+  return String(value || '').trim().toUpperCase().replace(/\s+/g, '_');
+}
+
+function normalizeDateFilter(value) {
+  const normalized = String(value || '').trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : '';
 }
 
 function buildEntradaPayload(body) {
@@ -56,8 +66,10 @@ function buildAjustePayload(body) {
 
 function buildSaidaPayload(body) {
   const itens = Array.isArray(body.itens) ? body.itens : [];
+  const tipoSaida = body.tipo_saida ? normalizeCodeValue(body.tipo_saida) : 'VENDA';
 
   return {
+    tipo_saida: tipoSaida,
     itens: itens.map((item) => ({
       id_peca: normalizeOptionalInteger(item.id_peca),
       quantidade: normalizeDecimal(item.quantidade)
@@ -141,6 +153,14 @@ function validateSaidaPayload(payload) {
   if (!Array.isArray(payload.itens) || payload.itens.length === 0) {
     errors.push('Informe ao menos um item para baixar na venda.');
     return errors;
+  }
+
+  if (!ExpedicaoSaidaModel.TIPOS_SAIDA.includes(payload.tipo_saida)) {
+    errors.push('O tipo de saida informado deve ser valido.');
+  }
+
+  if (payload.tipo_saida === 'OUTROS' && !payload.observacao) {
+    errors.push('A observacao e obrigatoria quando o tipo de saida for Outros.');
   }
 
   payload.itens.forEach((item, index) => {
@@ -358,7 +378,7 @@ const EstoqueController = {
     }
   },
 
-  // Registra uma baixa de venda sempre usando o estoque de expedicao.
+  // Registra uma saida sempre usando o estoque de expedicao.
   async createSaida(req, res) {
     try {
       const payload = buildSaidaPayload(req.body);
@@ -368,13 +388,22 @@ const EstoqueController = {
         return res.status(400).json({ message: 'Dados invalidos.', errors });
       }
 
-      const result = await EstoqueModel.processSaidaLote(payload);
+      const result = await EstoqueModel.processSaidaLote({
+        ...payload,
+        usuario: req.currentUser
+          ? {
+            id: req.currentUser.id,
+            login: req.currentUser.login,
+            nome: req.currentUser.nome
+          }
+          : null
+      });
       await recordAuditLog(req, {
         modulo: 'ESTOQUE',
         acao: 'SAIDA',
-        entidade_tipo: 'MOVIMENTACAO_ESTOQUE',
-        entidade_id: payload.itens?.[0]?.id_peca ?? null,
-        descricao: 'Baixa de venda registrada na expedicao.',
+        entidade_tipo: 'EXPEDICAO_SAIDA',
+        entidade_id: result?.saida?.id ?? payload.itens?.[0]?.id_peca ?? null,
+        descricao: 'Saida da expedicao registrada.',
         depois: {
           payload,
           resultado: result
@@ -382,8 +411,35 @@ const EstoqueController = {
       });
       return res.status(201).json(result);
     } catch (error) {
-      const response = extractErrorResponse(error, 'Erro ao registrar baixa de venda na Expedição.');
+      const response = extractErrorResponse(error, 'Erro ao registrar saida na Expedição.');
       return res.status(response.status).json(response.body);
+    }
+  },
+
+  // Lista o relatorio estruturado de saidas da expedicao.
+  async getSaidasExpedicao(req, res) {
+    try {
+      const tipoSaida = req.query.tipo_saida ? normalizeCodeValue(req.query.tipo_saida) : '';
+      const formaAtendimento = req.query.forma_atendimento ? normalizeCodeValue(req.query.forma_atendimento) : '';
+      const classificacao = req.query.classificacao ? normalizeCodeValue(req.query.classificacao) : '';
+      const limit = normalizeOptionalInteger(req.query.limit);
+
+      const saidas = await ExpedicaoSaidaModel.findAll({
+        data_inicio: normalizeDateFilter(req.query.data_inicio),
+        data_fim: normalizeDateFilter(req.query.data_fim),
+        tipo_saida: ExpedicaoSaidaModel.TIPOS_SAIDA.includes(tipoSaida) ? tipoSaida : '',
+        forma_atendimento: ExpedicaoSaidaModel.FORMAS_ATENDIMENTO.includes(formaAtendimento) ? formaAtendimento : '',
+        classificacao: CLASSIFICACOES_VALIDAS.includes(classificacao) ? classificacao : '',
+        codigo: req.query.codigo ? String(req.query.codigo).trim() : '',
+        descricao: req.query.descricao ? String(req.query.descricao).trim() : '',
+        observacao: req.query.observacao ? String(req.query.observacao).trim() : '',
+        limit: Number.isInteger(limit) && limit > 0 ? limit : null
+      });
+
+      return res.status(200).json(saidas);
+    } catch (error) {
+      console.error('Erro ao listar saidas da expedicao:', error);
+      return res.status(500).json({ message: 'Erro ao listar saidas da expedicao.' });
     }
   },
 

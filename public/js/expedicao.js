@@ -10,6 +10,7 @@ const submontagensApiBaseUrl = '/api/submontagens';
 const composicoesVendaApiBaseUrl = '/api/composicoes-venda';
 const producaoApiBaseUrl = '/api/producao';
 const AUTO_REFRESH_MS = 15000;
+const TIPO_SAIDA_PADRAO = 'VENDA';
 const ACTIVE_REQUEST_STATUSES = ['PENDENTE', 'FALTANDO_PECA', 'MONTANDO', 'EM_SEPARACAO', 'ATENDIDA_PARCIAL'];
 const CLOSED_REQUEST_STATUSES = ['ATENDIDA', 'CANCELADA'];
 
@@ -37,6 +38,7 @@ const refs = {
   itemSugestoes: document.getElementById('expedicao-item-sugestoes'),
   itemResumo: document.getElementById('expedicao-item-resumo'),
   quantidade: document.getElementById('expedicao-quantidade'),
+  tipoSaida: document.getElementById('expedicao-tipo-saida'),
   observacao: document.getElementById('expedicao-observacao'),
   listaTbody: document.getElementById('expedicao-lista-tbody'),
   pedidosTbody: document.getElementById('expedicao-pedidos-tbody'),
@@ -177,6 +179,7 @@ function bindEvents() {
   });
   document.getElementById('expedicao-btn-limpar-item').addEventListener('click', limparItemAtual);
   document.getElementById('expedicao-btn-baixar').addEventListener('click', baixarSaida);
+  refs.tipoSaida.addEventListener('change', atualizarObrigatoriedadeObservacaoSaida);
   refs.listaTbody.addEventListener('click', handleListaActions);
 
   document.getElementById('expedicao-btn-saida-menu').addEventListener('click', abrirModalSaida);
@@ -584,11 +587,22 @@ function abrirModalSolicitacao(prefill = null) {
 }
 
 function abrirModalSaida() {
+  if (!refs.tipoSaida.value) {
+    refs.tipoSaida.value = TIPO_SAIDA_PADRAO;
+  }
+
+  atualizarObrigatoriedadeObservacaoSaida();
   openModal(refs.saidaModal);
 }
 
 function fecharModalSaida() {
   closeModal(refs.saidaModal);
+}
+
+function atualizarObrigatoriedadeObservacaoSaida() {
+  const exigeObservacao = refs.tipoSaida.value === 'OUTROS';
+  refs.observacao.required = exigeObservacao;
+  refs.observacao.placeholder = exigeObservacao ? 'Obrigatoria para Outros' : 'Opcional';
 }
 
 async function abrirModalEstrutura(submontagemId) {
@@ -1981,11 +1995,18 @@ async function baixarSaida() {
     return;
   }
 
+  if (refs.tipoSaida.value === 'OUTROS' && !refs.observacao.value.trim()) {
+    mostrarMensagemSaida('Informe a observacao quando o tipo de saida for Outros.', 'error');
+    refs.observacao.focus();
+    return;
+  }
+
   try {
     const response = await fetch(saidaApiBaseUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        tipo_saida: refs.tipoSaida.value || TIPO_SAIDA_PADRAO,
         itens: saidaLista.map((item) => ({
           id_peca: item.id_peca,
           quantidade: item.quantidade
@@ -2000,7 +2021,9 @@ async function baixarSaida() {
     }
 
     saidaLista = [];
+    refs.tipoSaida.value = TIPO_SAIDA_PADRAO;
     refs.observacao.value = '';
+    atualizarObrigatoriedadeObservacaoSaida();
     renderizarLista();
     mostrarMensagemSaida('Saida registrada com sucesso.', 'success');
     await Promise.all([

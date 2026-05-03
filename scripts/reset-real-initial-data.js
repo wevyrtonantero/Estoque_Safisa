@@ -16,6 +16,7 @@ const schemaFiles = [
   'schema_estoques.sql',
   'schema_estoque_saldos.sql',
   'schema_estoque_movimentacoes.sql',
+  'schema_expedicao_saidas.sql',
   'schema_producao_ordens.sql',
   'schema_estrutura_submontagem.sql',
   'schema_solicitacoes_estoque.sql',
@@ -283,6 +284,9 @@ async function main() {
     await connection.query(
       `
         SET FOREIGN_KEY_CHECKS = 0;
+        DROP TABLE IF EXISTS expedicao_saida_baixas;
+        DROP TABLE IF EXISTS expedicao_saida_itens;
+        DROP TABLE IF EXISTS expedicao_saidas;
         DROP TABLE IF EXISTS estoque_movimentacoes;
         DROP TABLE IF EXISTS estoque_saldos;
         DROP TABLE IF EXISTS producao_ordens;

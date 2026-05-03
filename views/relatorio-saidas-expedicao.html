@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="/img/icon-safisa.ico" type="image/x-icon">
+  <title>SAFISA | Saidas da Expedicao</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <main class="workspace">
+    <header class="topbar">
+      <div class="topbar-copy">
+        <p class="page-kicker">Relatorio SAFISA</p>
+        <h1 class="page-title">Saidas da Expedicao</h1>
+        <p class="page-subtitle">Consulte vendas, garantias, cortesias, uso interno e outras saidas baixadas pela Expedicao.</p>
+      </div>
+
+    </header>
+
+    <section class="summary-row">
+      <article class="summary-card">
+        <span>Registros</span>
+        <strong id="relatorio-saidas-card-registros">0</strong>
+      </article>
+
+      <article class="summary-card">
+        <span>Tipo de saida</span>
+        <div id="relatorio-saidas-card-tipos" class="summary-list">
+          <small>Sem saidas</small>
+        </div>
+      </article>
+
+      <article class="summary-card">
+        <span>Quantidade</span>
+        <strong id="relatorio-saidas-card-quantidade">0</strong>
+      </article>
+    </section>
+
+    <div id="relatorio-saidas-mensagem" class="message hidden"></div>
+
+    <section class="content-card">
+      <div class="card-top">
+        <div>
+          <span class="section-pill">Consulta</span>
+          <h2>Historico estruturado</h2>
+          <p id="relatorio-saidas-total">0 registro(s) encontrado(s)</p>
+        </div>
+      </div>
+
+      <form id="relatorio-saidas-filtros" class="toolbar-form stock-toolbar">
+        <div class="field">
+          <label for="relatorio-saidas-data-inicio">Data inicial</label>
+          <input id="relatorio-saidas-data-inicio" type="date">
+        </div>
+
+        <div class="field">
+          <label for="relatorio-saidas-data-fim">Data final</label>
+          <input id="relatorio-saidas-data-fim" type="date">
+        </div>
+
+        <div class="field">
+          <label for="relatorio-saidas-tipo">Tipo</label>
+          <select id="relatorio-saidas-tipo">
+            <option value="">Todos</option>
+            <option value="VENDA">Venda</option>
+            <option value="GARANTIA">Garantia</option>
+            <option value="CORTESIA">Cortesia</option>
+            <option value="USO_INTERNO">Uso interno</option>
+            <option value="OUTROS">Outros</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="relatorio-saidas-classificacao">Classificacao</label>
+          <select id="relatorio-saidas-classificacao">
+            <option value="">Todas</option>
+            <option value="ITEM">Itens</option>
+            <option value="SUBMONTAGEM">Submontagens</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="relatorio-saidas-forma">Atendimento</label>
+          <select id="relatorio-saidas-forma">
+            <option value="">Todos</option>
+            <option value="PRONTO">Pronto</option>
+            <option value="COMPOSICAO_VENDA">Composicao de venda</option>
+            <option value="COMPONENTE_SUBMONTAGEM">Componente de submontagem</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="relatorio-saidas-codigo">Codigo</label>
+          <input id="relatorio-saidas-codigo" type="text" placeholder="Codigo vendido ou baixado">
+        </div>
+
+        <div class="field">
+          <label for="relatorio-saidas-descricao">Descricao</label>
+          <input id="relatorio-saidas-descricao" type="text" placeholder="Parte da descricao">
+        </div>
+
+        <div class="field">
+          <label for="relatorio-saidas-observacao">Observacao</label>
+          <input id="relatorio-saidas-observacao" type="text" placeholder="Parte da observacao">
+        </div>
+
+        <button class="btn btn-primary" type="submit">Buscar</button>
+        <button id="relatorio-saidas-limpar" class="btn btn-neutral" type="button">Limpar</button>
+      </form>
+
+      <div class="table-wrapper" data-print-table data-print-title="Saidas da Expedicao">
+        <table>
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Tipo</th>
+              <th>Cod / Descricao</th>
+              <th>Qtd.</th>
+              <th>Observacao</th>
+            </tr>
+          </thead>
+          <tbody id="relatorio-saidas-tbody">
+            <tr>
+              <td colspan="5" class="empty-state">Carregando saidas...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <div id="relatorio-saidas-estrutura-modal" class="modal hidden" aria-hidden="true">
+      <div class="modal-backdrop" data-close-modal="relatorio-saidas-estrutura"></div>
+
+      <div class="modal-dialog modal-wide">
+        <div class="modal-header">
+          <div>
+            <span class="section-pill">Submontagem</span>
+            <h2 id="relatorio-saidas-estrutura-titulo">Estrutura da submontagem</h2>
+            <p id="relatorio-saidas-estrutura-subtitulo">Veja os componentes que entram nesta submontagem.</p>
+          </div>
+
+          <button id="btn-fechar-relatorio-saidas-estrutura" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+        </div>
+
+        <div id="relatorio-saidas-estrutura-mensagem" class="message hidden"></div>
+
+        <div class="table-wrapper" data-print-table data-print-title="Estrutura da submontagem">
+          <table>
+            <thead>
+              <tr>
+                <th>Codigo</th>
+                <th>Descricao</th>
+                <th>Qtd na estrutura</th>
+              </tr>
+            </thead>
+            <tbody id="relatorio-saidas-estrutura-tbody">
+              <tr>
+                <td colspan="3" class="empty-state">Selecione uma submontagem para visualizar a estrutura.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/js/table-print.js"></script>
+  <script src="/js/relatorio-saidas-expedicao.js"></script>
+</body>
+</html>

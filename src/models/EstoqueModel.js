@@ -1,6 +1,7 @@
 // Model principal do controle de estoque de pecas e submontagens.
 const { pool } = require('../../database/connection');
 const ComposicaoVendaModel = require('./ComposicaoVendaModel');
+const ExpedicaoSaidaModel = require('./ExpedicaoSaidaModel');
 
 class EstoqueModel {
   static supplierSummarySubquery() {
@@ -473,7 +474,7 @@ class EstoqueModel {
     return rows[0] || null;
   }
 
-  // Lista os componentes de uma submontagem para expandir a baixa de venda.
+  // Lista os componentes de uma submontagem para expandir a saida.
   static async findSubmontagemComponents(submontagemId, connection = pool) {
     const [rows] = await connection.query(
       `
@@ -703,7 +704,8 @@ class EstoqueModel {
     idEstoqueOrigem,
     reservasPorItem,
     observacaoBase,
-    movimentosPlanejados
+    movimentosPlanejados,
+    contextoSaida = {}
   ) {
     const composicao = await ComposicaoVendaModel.findByItemVenda(item.id, connection);
 
@@ -766,7 +768,10 @@ class EstoqueModel {
       movimentosPlanejados.push({
         id_peca: capacidade.linha.id_item_atende,
         quantidade: quantidadeConsumida,
-        observacao: `${observacaoBase || 'Baixa de venda pela Expedicao.'} Atendimento alternativo de ${item.codigo} via ${capacidade.linha.item_atende_codigo}.`.slice(0, 255)
+        observacao: `${observacaoBase || 'Saida da Expedicao.'} Atendimento alternativo de ${item.codigo} via ${capacidade.linha.item_atende_codigo}.`.slice(0, 255),
+        solicitacao_ref: contextoSaida.solicitacao_ref,
+        id_peca_solicitada: item.id,
+        forma_atendimento: 'COMPOSICAO_VENDA'
       });
       itensConsumidos.push({
         id_peca: capacidade.linha.id_item_atende,
@@ -1200,7 +1205,7 @@ class EstoqueModel {
     }
   }
 
-  // Realiza a saida de venda sempre a partir do estoque final de expedicao.
+  // Realiza a saida final sempre a partir do estoque da expedicao.
   static async processSaidaLote(data) {
     const connection = await pool.getConnection();
 
@@ -1210,7 +1215,7 @@ class EstoqueModel {
       const expedicao = await this.findStockByName(this.EXPEDICAO_NOME, connection);
 
       if (!expedicao || Number(expedicao.ativo) !== 1) {
-        throw this.createBusinessError('O estoque de Expedição nao esta disponivel para realizar a baixa de venda.');
+        throw this.createBusinessError('O estoque de Expedição nao esta disponivel para realizar a saida.');
       }
 
       const reservasPorItem = new Map();
@@ -1221,12 +1226,14 @@ class EstoqueModel {
         const idPeca = Number(itemSolicitado.id_peca);
         const quantidadeSolicitada = Number(itemSolicitado.quantidade);
         const item = await this.findItemById(idPeca, connection);
+        const solicitacaoRef = solicitacoes.length + 1;
 
         if (!item) {
-          throw this.createBusinessError('Um dos itens informados nao foi encontrado para a baixa de venda.');
+          throw this.createBusinessError('Um dos itens informados nao foi encontrado para a saida.');
         }
 
         solicitacoes.push({
+          solicitacao_ref: solicitacaoRef,
           id_peca: idPeca,
           codigo: item.codigo,
           descricao: item.descricao,
@@ -1251,7 +1258,10 @@ class EstoqueModel {
           movimentosPlanejados.push({
             id_peca: idPeca,
             quantidade: quantidadeProntaConsumida,
-            observacao: `${data.observacao || 'Baixa de venda pela Expedicao.'} Saida do item pronto ${item.codigo}.`.slice(0, 255)
+            observacao: `${data.observacao || 'Saida da Expedicao.'} Saida do item pronto ${item.codigo}.`.slice(0, 255),
+            solicitacao_ref: solicitacaoRef,
+            id_peca_solicitada: idPeca,
+            forma_atendimento: 'PRONTO'
           });
         }
 
@@ -1267,7 +1277,10 @@ class EstoqueModel {
             expedicao.id,
             reservasPorItem,
             data.observacao,
-            movimentosPlanejados
+            movimentosPlanejados,
+            {
+              solicitacao_ref: solicitacaoRef
+            }
           )
           : {
             possui_composicao: false,
@@ -1325,7 +1338,10 @@ class EstoqueModel {
             movimentosPlanejados.push({
               id_peca: idComponente,
               quantidade: quantidadeComponente,
-              observacao: `${data.observacao || 'Baixa de venda pela Expedicao.'} Complemento da submontagem ${item.codigo}.`.slice(0, 255)
+              observacao: `${data.observacao || 'Saida da Expedicao.'} Complemento da submontagem ${item.codigo}.`.slice(0, 255),
+              solicitacao_ref: solicitacaoRef,
+              id_peca_solicitada: idPeca,
+              forma_atendimento: 'COMPONENTE_SUBMONTAGEM'
             });
           }
 
@@ -1358,7 +1374,7 @@ class EstoqueModel {
         const item = await this.findItemById(idPeca, connection);
 
         if (!item) {
-          throw this.createBusinessError('Um dos itens informados nao foi encontrado para a baixa de venda.');
+          throw this.createBusinessError('Um dos itens informados nao foi encontrado para a saida.');
         }
 
         const saldoExpedicao = await this.findSaldoForUpdate(connection, expedicao.id, idPeca);
@@ -1381,7 +1397,7 @@ class EstoqueModel {
       }
 
       for (const movimento of movimentosPlanejados) {
-        await this.createMovimentacao(connection, {
+        const idMovimentacao = await this.createMovimentacao(connection, {
           id_peca: movimento.id_peca,
           id_estoque_origem: expedicao.id,
           id_estoque_destino: null,
@@ -1389,11 +1405,22 @@ class EstoqueModel {
           quantidade: movimento.quantidade,
           observacao: movimento.observacao
         });
+
+        movimento.id_movimentacao_estoque = idMovimentacao;
       }
+
+      const saida = await ExpedicaoSaidaModel.createFromProcess(connection, {
+        tipo_saida: data.tipo_saida,
+        observacao: data.observacao,
+        usuario: data.usuario,
+        solicitacoes,
+        movimentos: movimentosPlanejados
+      });
 
       await connection.commit();
 
       return {
+        saida,
         estoque_origem: expedicao,
         itens: resultados,
         solicitacoes
