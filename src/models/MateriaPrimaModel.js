@@ -2,6 +2,25 @@
 const { pool } = require('../../database/connection');
 
 class MateriaPrimaModel {
+  static categorySelectExpression(alias = 'mp') {
+    return `CASE WHEN ${alias}.categoria = 'LAMINADO' THEN 'TREFILADO' ELSE ${alias}.categoria END`;
+  }
+
+  static addCategoryFilter(conditions, values, categoria) {
+    if (!categoria) {
+      return;
+    }
+
+    if (categoria === 'TREFILADO') {
+      conditions.push('mp.categoria IN (?, ?)');
+      values.push('TREFILADO', 'LAMINADO');
+      return;
+    }
+
+    conditions.push('mp.categoria = ?');
+    values.push(categoria);
+  }
+
   static supplierSummarySubquery() {
     return `
       SELECT
@@ -33,10 +52,7 @@ class MateriaPrimaModel {
       values.push(`%${filters.material}%`);
     }
 
-    if (filters.categoria) {
-      conditions.push('mp.categoria = ?');
-      values.push(filters.categoria);
-    }
+    this.addCategoryFilter(conditions, values, filters.categoria);
 
     if (filters.geometria) {
       conditions.push('mp.geometria LIKE ?');
@@ -66,7 +82,7 @@ class MateriaPrimaModel {
           mp.id,
           mp.codigo,
           mp.nome,
-          mp.categoria,
+          ${this.categorySelectExpression()} AS categoria,
           mp.material,
           mp.liga,
           mp.geometria,
@@ -104,7 +120,7 @@ class MateriaPrimaModel {
           mp.id,
           mp.codigo,
           mp.nome,
-          mp.categoria,
+          ${this.categorySelectExpression()} AS categoria,
           mp.material,
           mp.liga,
           mp.geometria,
@@ -141,7 +157,7 @@ class MateriaPrimaModel {
           mp.id,
           mp.codigo,
           mp.nome,
-          mp.categoria,
+          ${this.categorySelectExpression()} AS categoria,
           mp.material,
           mp.liga,
           mp.geometria,

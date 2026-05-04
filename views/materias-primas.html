@@ -53,7 +53,7 @@
         <div class="topbar-copy">
           <p class="page-kicker">Area Administrativa SAFISA</p>
           <h1 class="page-title">Materias-primas</h1>
-          <p class="page-subtitle">CRUD enxuto para laminados e fundidos com fornecedores multiplos.</p>
+          <p class="page-subtitle">CRUD enxuto para trefilados e fundidos com fornecedores multiplos.</p>
         </div>
       </div>
 
@@ -69,8 +69,8 @@
       </article>
 
       <article class="summary-card">
-        <span>Laminados</span>
-        <strong id="metric-laminados">0</strong>
+        <span>Trefilados</span>
+        <strong id="metric-trefilados">0</strong>
       </article>
 
       <article class="summary-card">
@@ -128,7 +128,7 @@
             <tr>
               <th>ID</th>
               <th>Descricao</th>
-              <th>Categoria</th>
+              <th>Categ.</th>
               <th>Liga</th>
               <th>Referencia</th>
               <th>Fornecedores</th>
@@ -153,7 +153,7 @@
         <div>
           <span class="section-pill">Cadastro</span>
           <h2 id="materia-prima-modal-title">Nova Materia-prima</h2>
-          <p>Mesmo cadastro, com formularios diferentes para laminado e fundido.</p>
+          <p>Mesmo cadastro, com formularios diferentes para trefilado e fundido.</p>
         </div>
 
         <button id="btn-fechar-modal-mp" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
@@ -163,11 +163,11 @@
 
       <form id="materia-prima-form" class="form-grid">
         <input type="hidden" id="materia-prima-id">
-        <input type="hidden" id="mp-categoria" value="LAMINADO">
+        <input type="hidden" id="mp-categoria" value="TREFILADO">
 
         <div class="span-12">
           <div class="mode-switch" role="radiogroup" aria-label="Categoria da materia-prima">
-            <button type="button" class="mode-switch-btn is-active" data-categoria="LAMINADO">Laminado</button>
+            <button type="button" class="mode-switch-btn is-active" data-categoria="TREFILADO">Trefilado</button>
             <button type="button" class="mode-switch-btn" data-categoria="FUNDIDO">Fundido</button>
           </div>
         </div>
@@ -207,7 +207,7 @@
           <span>Nenhum fornecedor selecionado.</span>
         </div>
 
-        <section id="mp-laminado-section" class="span-12 mode-panel">
+        <section id="mp-trefilado-section" class="span-12 mode-panel">
           <div class="form-grid">
             <div class="field span-6">
               <label for="mp-material">Descricao tecnica</label>

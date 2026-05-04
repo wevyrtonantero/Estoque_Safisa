@@ -1,14 +1,14 @@
-// Controller do cadastro de materia-prima com modos de laminado e fundido.
+// Controller do cadastro de materia-prima com modos de trefilado e fundido.
 const MateriaPrimaModel = require('../models/MateriaPrimaModel');
 const FornecedorModel = require('../models/FornecedorModel');
 const MateriaPrimaFornecedorModel = require('../models/MateriaPrimaFornecedorModel');
 const { recordAuditLog } = require('../audit/auditLogger');
 
-const CATEGORIAS_VALIDAS = ['LAMINADO', 'FUNDIDO'];
-const GEOMETRIAS_LAMINADO = ['REDONDO', 'QUADRADO', 'SEXTAVADO', 'FITA / BOBINA'];
-const UNIDADES_LAMINADO = ['KG'];
+const CATEGORIAS_VALIDAS = ['TREFILADO', 'FUNDIDO'];
+const GEOMETRIAS_TREFILADO = ['REDONDO', 'QUADRADO', 'SEXTAVADO', 'FITA / BOBINA'];
+const UNIDADES_TREFILADO = ['KG'];
 const UNIDADES_FUNDIDO = ['UN'];
-const ESTOQUE_MINIMO_PADRAO_LAMINADO = 60;
+const ESTOQUE_MINIMO_PADRAO_TREFILADO = 60;
 const ESTOQUE_MINIMO_PADRAO_FUNDIDO = 50;
 
 function parseLocaleDecimal(value) {
@@ -85,11 +85,16 @@ function normalizeSupplierIds(value) {
 function getDefaultEstoqueMinimo(categoria) {
   return categoria === 'FUNDIDO'
     ? ESTOQUE_MINIMO_PADRAO_FUNDIDO
-    : ESTOQUE_MINIMO_PADRAO_LAMINADO;
+    : ESTOQUE_MINIMO_PADRAO_TREFILADO;
+}
+
+function normalizeCategoria(value) {
+  const categoria = String(value || '').trim().toUpperCase();
+  return categoria === 'LAMINADO' ? 'TREFILADO' : categoria;
 }
 
 function buildPayload(body) {
-  const categoria = String(body.categoria || '').trim().toUpperCase() || 'LAMINADO';
+  const categoria = normalizeCategoria(body.categoria) || 'TREFILADO';
   const isFundido = categoria === 'FUNDIDO';
   const comprimentoPadraoMetros = normalizeOptionalDecimal(body.comprimento_padrao_m);
   const estoqueMinimoInformado = normalizeOptionalDecimal(body.estoque_minimo);
@@ -133,7 +138,7 @@ function validatePayload(payload) {
   }
 
   if (!CATEGORIAS_VALIDAS.includes(payload.categoria)) {
-    errors.push('O tipo de materia-prima deve ser LAMINADO ou FUNDIDO.');
+    errors.push('O tipo de materia-prima deve ser TREFILADO ou FUNDIDO.');
   }
 
   if (!payload.liga) {
@@ -144,15 +149,15 @@ function validatePayload(payload) {
     errors.push('Selecione pelo menos um fornecedor.');
   }
 
-  if (payload.categoria === 'LAMINADO' && !payload.material) {
-    errors.push('Informe a descricao tecnica do laminado.');
+  if (payload.categoria === 'TREFILADO' && !payload.material) {
+    errors.push('Informe a descricao tecnica do trefilado.');
   }
 
-  if (payload.categoria === 'LAMINADO' && !GEOMETRIAS_LAMINADO.includes(payload.geometria)) {
-    errors.push('Selecione uma geometria valida para o laminado.');
+  if (payload.categoria === 'TREFILADO' && !GEOMETRIAS_TREFILADO.includes(payload.geometria)) {
+    errors.push('Selecione uma geometria valida para o trefilado.');
   }
 
-  if (payload.categoria === 'LAMINADO' && !payload.bitola && payload.bitola_mm === null) {
+  if (payload.categoria === 'TREFILADO' && !payload.bitola && payload.bitola_mm === null) {
     errors.push('Informe a bitola em polegada ou em mm.');
   }
 
@@ -161,7 +166,7 @@ function validatePayload(payload) {
   }
 
   if (
-    payload.categoria === 'LAMINADO'
+    payload.categoria === 'TREFILADO'
     && payload.geometria !== 'FITA / BOBINA'
     && (!Number.isFinite(payload.comprimento_padrao_mm) || payload.comprimento_padrao_mm <= 0)
   ) {
@@ -169,10 +174,10 @@ function validatePayload(payload) {
   }
 
   if (
-    payload.categoria === 'LAMINADO'
+    payload.categoria === 'TREFILADO'
     && (!Number.isFinite(payload.peso_por_metro) || payload.peso_por_metro <= 0)
   ) {
-    errors.push('Informe o peso por metro do laminado.');
+    errors.push('Informe o peso por metro do trefilado.');
   }
 
   if (
@@ -186,8 +191,8 @@ function validatePayload(payload) {
     errors.push('O estoque minimo deve ser maior ou igual a zero.');
   }
 
-  if (payload.categoria === 'LAMINADO' && !UNIDADES_LAMINADO.includes(payload.unidade_estoque)) {
-    errors.push('O laminado deve usar unidade de controle KG.');
+  if (payload.categoria === 'TREFILADO' && !UNIDADES_TREFILADO.includes(payload.unidade_estoque)) {
+    errors.push('O trefilado deve usar unidade de controle KG.');
   }
 
   if (payload.categoria === 'FUNDIDO' && !UNIDADES_FUNDIDO.includes(payload.unidade_estoque)) {
@@ -220,7 +225,7 @@ const MateriaPrimaController = {
         codigo: req.query.codigo ? String(req.query.codigo).trim() : '',
         nome: req.query.nome ? String(req.query.nome).trim() : '',
         material: req.query.material ? String(req.query.material).trim() : '',
-        categoria: req.query.categoria ? String(req.query.categoria).trim().toUpperCase() : '',
+        categoria: req.query.categoria ? normalizeCategoria(req.query.categoria) : '',
         geometria: req.query.geometria ? String(req.query.geometria).trim() : '',
         bitola: req.query.bitola ? String(req.query.bitola).trim() : '',
         id_fornecedor: normalizeOptionalInteger(req.query.id_fornecedor_principal || req.query.id_fornecedor)

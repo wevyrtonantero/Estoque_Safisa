@@ -1,7 +1,7 @@
 const materiasPrimasApiBaseUrl = '/api/materias-primas';
 const fornecedoresAutocompleteApiUrl = '/api/fornecedores-autocomplete';
 
-const descricoesTecnicasLaminado = [
+const descricoesTecnicasTrefilado = [
   'Aco carbono SAE 1020',
   'Aco carbono SAE 1045',
   'Aco inoxidavel AISI 316 / UNS S31600',
@@ -11,7 +11,7 @@ const descricoesTecnicasLaminado = [
   'Aluminio'
 ];
 
-const ligasLaminado = [
+const ligasTrefilado = [
   'ACO',
   'ACO INOXIDAVEL',
   'INOX',
@@ -27,7 +27,7 @@ const ligasFundido = [
   'NODULAR',
   'FERRO FUNDIDO'
 ];
-const ESTOQUE_MINIMO_PADRAO_LAMINADO = 60;
+const ESTOQUE_MINIMO_PADRAO_TREFILADO = 60;
 const ESTOQUE_MINIMO_PADRAO_FUNDIDO = 50;
 
 let editingMateriaPrimaId = null;
@@ -76,7 +76,7 @@ const refs = {
   comprimentoInput: document.getElementById('mp-comprimento-padrao-m'),
   pesoMetroInput: document.getElementById('mp-peso-por-metro'),
   pesoUnitarioInput: document.getElementById('mp-peso-unitario-kg'),
-  laminadoSection: document.getElementById('mp-laminado-section'),
+  trefiladoSection: document.getElementById('mp-trefilado-section'),
   fundidoSection: document.getElementById('mp-fundido-section'),
   filtroGeometria: document.getElementById('filtro-mp-geometria'),
   filtroBitola: document.getElementById('filtro-mp-bitola'),
@@ -92,11 +92,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   try {
     preencherOpcoesBitola();
     preencherOpcoesDescricaoTecnica();
-    preencherOpcoesLiga('LAMINADO');
+    preencherOpcoesLiga('TREFILADO');
     bindEvents();
     await carregarFornecedores();
     await carregarMateriasPrimas();
-    setCategoria('LAMINADO');
+    setCategoria('TREFILADO');
   } catch (error) {
     mostrarMensagemMateriaPrima(error.message || 'Nao foi possivel inicializar a tela de materias-primas.', 'error');
   }
@@ -117,7 +117,7 @@ function bindEvents() {
   refs.imprimirButton.addEventListener('click', imprimirMateriaPrimaVisualizada);
   refs.fecharVisualizarButton.addEventListener('click', fecharModalVisualizarMateriaPrima);
   refs.categoriaButtons.forEach((button) => {
-    button.addEventListener('click', () => setCategoria(button.dataset.categoria || 'LAMINADO'));
+    button.addEventListener('click', () => setCategoria(button.dataset.categoria || 'TREFILADO'));
   });
   refs.adicionarFornecedorButton.addEventListener('click', adicionarFornecedorSelecionado);
   refs.fornecedoresLista.addEventListener('click', handleFornecedorChipClick);
@@ -134,13 +134,13 @@ function bindEvents() {
 }
 
 function preencherOpcoesDescricaoTecnica() {
-  refs.materialDatalist.innerHTML = descricoesTecnicasLaminado
+  refs.materialDatalist.innerHTML = descricoesTecnicasTrefilado
     .map((value) => `<option value="${escapeHtml(value)}"></option>`)
     .join('');
 }
 
 function preencherOpcoesLiga(categoria) {
-  const opcoes = categoria === 'FUNDIDO' ? ligasFundido : ligasLaminado;
+  const opcoes = categoria === 'FUNDIDO' ? ligasFundido : ligasTrefilado;
   refs.ligaDatalist.innerHTML = opcoes
     .map((value) => `<option value="${escapeHtml(value)}"></option>`)
     .join('');
@@ -249,7 +249,7 @@ function renderizarTabelaMateriasPrimas(materiasPrimas) {
     <tr>
       <td class="table-code">${escapeHtml(materiaPrima.codigo)}</td>
       <td class="table-description">${escapeHtml(materiaPrima.nome)}</td>
-      <td>${escapeHtml(materiaPrima.categoria || '-')}</td>
+      <td>${renderizarCategoriaGeometria(materiaPrima)}</td>
       <td>${escapeHtml(materiaPrima.liga || '-')}</td>
       <td>${escapeHtml(formatarReferencia(materiaPrima))}</td>
       <td>${escapeHtml(materiaPrima.fornecedores_nomes || materiaPrima.fornecedor_principal_nome || '-')}</td>
@@ -269,11 +269,11 @@ function renderizarTabelaMateriasPrimas(materiasPrimas) {
 
 function atualizarIndicadores(materiasPrimas) {
   const fundidos = materiasPrimas.filter((item) => String(item.categoria || '').toUpperCase() === 'FUNDIDO').length;
-  const laminados = materiasPrimas.filter((item) => String(item.categoria || '').toUpperCase() === 'LAMINADO').length;
+  const trefilados = materiasPrimas.filter((item) => String(item.categoria || '').toUpperCase() === 'TREFILADO').length;
 
   document.getElementById('metric-total-materias-primas').textContent = String(materiasPrimas.length);
   document.getElementById('metric-fundidos').textContent = String(fundidos);
-  document.getElementById('metric-laminados').textContent = String(laminados);
+  document.getElementById('metric-trefilados').textContent = String(trefilados);
 }
 
 function abrirNovaMateriaPrimaModal() {
@@ -337,7 +337,7 @@ async function handleUpdateMateriaPrima() {
 }
 
 function montarPayloadMateriaPrima() {
-  const categoria = refs.categoriaInput.value || 'LAMINADO';
+  const categoria = refs.categoriaInput.value || 'TREFILADO';
   const isFundido = categoria === 'FUNDIDO';
 
   return {
@@ -381,7 +381,7 @@ async function carregarMateriaPrimaParaEdicao(id) {
     refs.nomeInput.value = materiaPrima.nome || '';
     refs.ligaInput.value = materiaPrima.liga || '';
 
-    setCategoria(materiaPrima.categoria || 'LAMINADO');
+    setCategoria(materiaPrima.categoria || 'TREFILADO');
     refs.materialInput.value = materiaPrima.material || '';
     refs.geometriaSelect.value = materiaPrima.geometria || 'REDONDO';
     refs.bitolaPolegadaInput.value = materiaPrima.bitola || '';
@@ -448,7 +448,7 @@ function montarVisualizacaoMateriaPrima(materiaPrima, fornecedores) {
       : (materiaPrima.fornecedores_nomes || materiaPrima.fornecedor_principal_nome || '-')]
   ];
 
-  if (String(materiaPrima.categoria || '').toUpperCase() === 'LAMINADO') {
+  if (String(materiaPrima.categoria || '').toUpperCase() === 'TREFILADO') {
     linhas.push(['Descricao tecnica', materiaPrima.material || '-']);
     linhas.push(['Geometria', materiaPrima.geometria || '-']);
     linhas.push(['Bitola', formatarBitolaVisualizacao(materiaPrima)]);
@@ -567,7 +567,7 @@ async function handleMateriaPrimaTableActions(event) {
 }
 
 function setCategoria(categoria) {
-  const categoriaFinal = categoria === 'FUNDIDO' ? 'FUNDIDO' : 'LAMINADO';
+  const categoriaFinal = categoria === 'FUNDIDO' ? 'FUNDIDO' : 'TREFILADO';
   const isFundido = categoriaFinal === 'FUNDIDO';
 
   refs.categoriaInput.value = categoriaFinal;
@@ -575,7 +575,7 @@ function setCategoria(categoria) {
     button.classList.toggle('is-active', button.dataset.categoria === categoriaFinal);
   });
 
-  refs.laminadoSection.classList.toggle('hidden', isFundido);
+  refs.trefiladoSection.classList.toggle('hidden', isFundido);
   refs.fundidoSection.classList.toggle('hidden', !isFundido);
   refs.materialInput.required = !isFundido;
   refs.geometriaSelect.required = !isFundido;
@@ -595,7 +595,7 @@ function setCategoria(categoria) {
   preencherOpcoesLiga(categoriaFinal);
   refs.estoqueMinimoInput.placeholder = isFundido ? 'Padrao: 50 pc' : 'Padrao: 60 kg';
   if (!editingMateriaPrimaId || !refs.estoqueMinimoInput.value.trim()) {
-    refs.estoqueMinimoInput.value = String(isFundido ? ESTOQUE_MINIMO_PADRAO_FUNDIDO : ESTOQUE_MINIMO_PADRAO_LAMINADO);
+    refs.estoqueMinimoInput.value = String(isFundido ? ESTOQUE_MINIMO_PADRAO_FUNDIDO : ESTOQUE_MINIMO_PADRAO_TREFILADO);
   }
   atualizarModoBitola();
   renderizarAjudaBitola();
@@ -711,7 +711,7 @@ function resetMateriaPrimaForm() {
   refs.comprimentoInput.value = '3';
   refs.bitolaMmCheckbox.checked = false;
   renderizarFornecedoresSelecionados();
-  setCategoria('LAMINADO');
+  setCategoria('TREFILADO');
   esconderMensagemModalMateriaPrima();
 }
 
@@ -723,7 +723,7 @@ function obterEstoqueMinimoMateriaPrima(materiaPrima) {
 
   return String(materiaPrima?.categoria || '').toUpperCase() === 'FUNDIDO'
     ? ESTOQUE_MINIMO_PADRAO_FUNDIDO
-    : ESTOQUE_MINIMO_PADRAO_LAMINADO;
+    : ESTOQUE_MINIMO_PADRAO_TREFILADO;
 }
 
 function limparFiltrosMateriaPrima() {
@@ -847,6 +847,44 @@ function formatarReferencia(materiaPrima) {
   }
 
   return '-';
+}
+
+function renderizarCategoriaGeometria(materiaPrima) {
+  const categoria = String(materiaPrima.categoria || '').toUpperCase();
+
+  if (categoria === 'FUNDIDO') {
+    return '<span class="category-geometry-chip is-fundido"><span>Fund.</span></span>';
+  }
+
+  if (categoria !== 'TREFILADO') {
+    return `<span class="category-geometry-chip"><span>${escapeHtml(categoria || '-')}</span></span>`;
+  }
+
+  const geometria = obterGeometriaVisual(materiaPrima.geometria);
+
+  return `
+    <span class="category-geometry-chip is-trefilado" title="${escapeHtml(`Trefilado - ${geometria.titulo}`)}">
+      <span class="geometry-symbol ${geometria.classe}" aria-hidden="true"></span>
+      <span>Tref.</span>
+      <small>${escapeHtml(geometria.label)}</small>
+    </span>
+  `;
+}
+
+function obterGeometriaVisual(value) {
+  const geometria = String(value || '').trim().toUpperCase();
+  const geometriaMap = {
+    REDONDO: { classe: 'is-round', label: 'Red.', titulo: 'REDONDO' },
+    QUADRADO: { classe: 'is-square', label: 'Quad.', titulo: 'QUADRADO' },
+    SEXTAVADO: { classe: 'is-hex', label: 'Sext.', titulo: 'SEXTAVADO' },
+    'FITA / BOBINA': { classe: 'is-strip', label: 'Fita', titulo: 'FITA / BOBINA' }
+  };
+
+  return geometriaMap[geometria] || {
+    classe: 'is-generic',
+    label: geometria ? geometria.slice(0, 5) : '-',
+    titulo: geometria || '-'
+  };
 }
 
 function parseDecimalInput(value) {

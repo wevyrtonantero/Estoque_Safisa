@@ -1,6 +1,25 @@
 const { pool } = require('../../database/connection');
 
 class EstoqueMateriaPrimaModel {
+  static categorySelectExpression(alias = 'mp') {
+    return `CASE WHEN ${alias}.categoria = 'LAMINADO' THEN 'TREFILADO' ELSE ${alias}.categoria END`;
+  }
+
+  static addCategoryFilter(conditions, values, categoria) {
+    if (!categoria) {
+      return;
+    }
+
+    if (categoria === 'TREFILADO') {
+      conditions.push('mp.categoria IN (?, ?)');
+      values.push('TREFILADO', 'LAMINADO');
+      return;
+    }
+
+    conditions.push('mp.categoria = ?');
+    values.push(categoria);
+  }
+
   static supplierSummarySubquery() {
     return `
       SELECT
@@ -25,7 +44,7 @@ class EstoqueMateriaPrimaModel {
           mp.id,
           mp.codigo,
           mp.nome,
-          mp.categoria,
+          ${this.categorySelectExpression()} AS categoria,
           mp.material,
           mp.liga,
           mp.geometria,
@@ -54,7 +73,7 @@ class EstoqueMateriaPrimaModel {
           mp.id,
           mp.codigo,
           mp.nome,
-          mp.categoria,
+          ${this.categorySelectExpression()} AS categoria,
           mp.material,
           mp.liga,
           mp.geometria,
@@ -87,7 +106,7 @@ class EstoqueMateriaPrimaModel {
           s.updated_at,
           mp.codigo,
           mp.nome,
-          mp.categoria,
+          ${this.categorySelectExpression()} AS categoria,
           mp.liga,
           mp.geometria,
           mp.bitola,
@@ -113,7 +132,7 @@ class EstoqueMateriaPrimaModel {
           mp.id AS id_materia_prima,
           mp.codigo,
           mp.nome,
-          mp.categoria,
+          ${this.categorySelectExpression()} AS categoria,
           mp.material,
           mp.liga,
           mp.geometria,
@@ -157,10 +176,7 @@ class EstoqueMateriaPrimaModel {
       values.push(`%${filters.nome}%`);
     }
 
-    if (filters.categoria) {
-      conditions.push('mp.categoria = ?');
-      values.push(filters.categoria);
-    }
+    this.addCategoryFilter(conditions, values, filters.categoria);
 
     if (filters.geometria) {
       conditions.push('mp.geometria = ?');
@@ -179,7 +195,7 @@ class EstoqueMateriaPrimaModel {
           mp.id AS id_materia_prima,
           mp.codigo,
           mp.nome,
-          mp.categoria,
+          ${this.categorySelectExpression()} AS categoria,
           mp.material,
           mp.liga,
           mp.geometria,
@@ -230,7 +246,7 @@ class EstoqueMateriaPrimaModel {
           mov.data_movimentacao,
           mp.codigo,
           mp.nome,
-          mp.categoria,
+          ${this.categorySelectExpression()} AS categoria,
           mp.unidade_estoque
         FROM estoque_materias_primas_movimentacoes mov
         INNER JOIN materias_primas mp ON mp.id = mov.id_materia_prima

@@ -248,8 +248,8 @@
           <strong id="dashboard-mp-total-quantidade">0</strong>
         </div>
         <div class="view-card">
-          <span>Laminados</span>
-          <strong id="dashboard-mp-total-laminados">0</strong>
+          <span>Trefilados</span>
+          <strong id="dashboard-mp-total-trefilados">0</strong>
         </div>
         <div class="view-card">
           <span>Fundidos</span>
@@ -271,17 +271,24 @@
         </div>
 
         <div class="field">
-          <label for="dashboard-mp-filtro-categoria">Categoria</label>
+          <label for="dashboard-mp-filtro-categoria">Categ.</label>
           <select id="dashboard-mp-filtro-categoria">
             <option value="">Todas</option>
-            <option value="LAMINADO">Laminado</option>
-            <option value="FUNDIDO">Fundido</option>
+            <option value="TREFILADO">Tref.</option>
+            <option value="FUNDIDO">Fund.</option>
           </select>
         </div>
 
         <div class="field">
           <label for="dashboard-mp-filtro-geometria">Geometria</label>
-          <input id="dashboard-mp-filtro-geometria" type="text" placeholder="Ex.: REDONDO">
+          <select id="dashboard-mp-filtro-geometria">
+            <option value="">Todas</option>
+            <option value="REDONDO">REDONDO</option>
+            <option value="QUADRADO">QUADRADO</option>
+            <option value="SEXTAVADO">SEXTAVADO</option>
+            <option value="FUNDIDO">FUNDIDO</option>
+            <option value="FITA / BOBINA">FITA / BOBINA</option>
+          </select>
         </div>
 
         <div class="field">
@@ -304,20 +311,19 @@
         <table>
           <thead>
             <tr>
-              <th colspan="6">Estoque de materia-prima</th>
+              <th colspan="5">Estoque de materia-prima</th>
             </tr>
             <tr>
               <th>Codigo</th>
               <th>Nome</th>
-              <th>Categoria</th>
-              <th>Geometria</th>
+              <th>Categ.</th>
               <th>Bitola</th>
               <th>Quantidade</th>
             </tr>
           </thead>
           <tbody id="dashboard-mp-tbody">
             <tr>
-              <td colspan="6" class="empty-state">Carregando estoque de materia-prima...</td>
+              <td colspan="5" class="empty-state">Carregando estoque de materia-prima...</td>
             </tr>
           </tbody>
         </table>

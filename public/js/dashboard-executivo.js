@@ -57,7 +57,7 @@ const refs = {
   estoquesTotalSubmontagens: document.getElementById('dashboard-estoques-total-submontagens'),
   mpTotalItens: document.getElementById('dashboard-mp-total-itens'),
   mpTotalQuantidade: document.getElementById('dashboard-mp-total-quantidade'),
-  mpTotalLaminados: document.getElementById('dashboard-mp-total-laminados'),
+  mpTotalTrefilados: document.getElementById('dashboard-mp-total-trefilados'),
   mpTotalFundidos: document.getElementById('dashboard-mp-total-fundidos'),
   simulacaoModal: document.getElementById('dashboard-simulacao-modal'),
   simulacaoMensagem: document.getElementById('dashboard-simulacao-mensagem'),
@@ -251,7 +251,7 @@ function renderizarPainel() {
 
   const depositosMonitorados = new Set(estoquesDetalhadosCache.map((item) => String(item.estoque_nome || '').trim()).filter(Boolean)).size;
   const submontagensComSaldo = estoquesDetalhadosCache.filter((item) => String(item.classificacao || '').toUpperCase() === 'SUBMONTAGEM').length;
-  const materiasPrimasLaminadas = materiasPrimasCache.filter((item) => String(item.categoria || '').toUpperCase() === 'LAMINADO').length;
+  const materiasPrimasTrefiladas = materiasPrimasCache.filter((item) => String(item.categoria || '').toUpperCase() === 'TREFILADO').length;
   const materiasPrimasFundidas = materiasPrimasCache.filter((item) => String(item.categoria || '').toUpperCase() === 'FUNDIDO').length;
 
   refs.estoquesTotalItens.textContent = formatInteger(painelCache?.indicadores?.estoque?.registros || 0);
@@ -260,7 +260,7 @@ function renderizarPainel() {
   refs.estoquesTotalSubmontagens.textContent = formatInteger(submontagensComSaldo);
   refs.mpTotalItens.textContent = formatInteger(painelCache?.indicadores?.materia_prima?.registros || 0);
   refs.mpTotalQuantidade.textContent = formatInteger(painelCache?.indicadores?.materia_prima?.quantidade_total || 0);
-  refs.mpTotalLaminados.textContent = formatInteger(materiasPrimasLaminadas);
+  refs.mpTotalTrefilados.textContent = formatInteger(materiasPrimasTrefiladas);
   refs.mpTotalFundidos.textContent = formatInteger(materiasPrimasFundidas);
   renderizarTabelaEstoquesDetalhados();
   renderizarTabelaMateriaPrima();
@@ -350,7 +350,7 @@ function renderizarTabelaMateriaPrima() {
   const items = obterMateriasPrimasFiltradas();
 
   if (!items.length) {
-    refs.mpTbody.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhuma materia-prima encontrada com os filtros informados.</td></tr>';
+    refs.mpTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhuma materia-prima encontrada com os filtros informados.</td></tr>';
     return;
   }
 
@@ -358,8 +358,7 @@ function renderizarTabelaMateriaPrima() {
     <tr>
       <td class="table-code">${escapeHtml(item.codigo)}</td>
       <td class="table-description">${escapeHtml(item.nome)}</td>
-      <td>${escapeHtml(item.categoria || '-')}</td>
-      <td>${escapeHtml(item.geometria || '-')}</td>
+      <td>${renderizarCategoriaGeometria(item)}</td>
       <td>${escapeHtml(buildBitolaLabel(item))}</td>
       <td class="table-quantity">${formatMpQuantity(item.quantidade, item.unidade_controle)}</td>
     </tr>
@@ -946,6 +945,44 @@ function buildBitolaLabel(item) {
   }
 
   return '-';
+}
+
+function renderizarCategoriaGeometria(item) {
+  const categoria = String(item.categoria || '').toUpperCase();
+
+  if (categoria === 'FUNDIDO') {
+    return '<span class="category-geometry-chip is-fundido"><span>Fund.</span></span>';
+  }
+
+  if (categoria !== 'TREFILADO') {
+    return `<span class="category-geometry-chip"><span>${escapeHtml(categoria || '-')}</span></span>`;
+  }
+
+  const geometria = obterGeometriaVisual(item.geometria);
+
+  return `
+    <span class="category-geometry-chip is-trefilado" title="${escapeHtml(`Trefilado - ${geometria.titulo}`)}">
+      <span class="geometry-symbol ${geometria.classe}" aria-hidden="true"></span>
+      <span>Tref.</span>
+      <small>${escapeHtml(geometria.label)}</small>
+    </span>
+  `;
+}
+
+function obterGeometriaVisual(value) {
+  const geometria = String(value || '').trim().toUpperCase();
+  const geometriaMap = {
+    REDONDO: { classe: 'is-round', label: 'Red.', titulo: 'REDONDO' },
+    QUADRADO: { classe: 'is-square', label: 'Quad.', titulo: 'QUADRADO' },
+    SEXTAVADO: { classe: 'is-hex', label: 'Sext.', titulo: 'SEXTAVADO' },
+    'FITA / BOBINA': { classe: 'is-strip', label: 'Fita', titulo: 'FITA / BOBINA' }
+  };
+
+  return geometriaMap[geometria] || {
+    classe: 'is-generic',
+    label: geometria ? geometria.slice(0, 5) : '-',
+    titulo: geometria || '-'
+  };
 }
 
 function formatMpQuantity(value, unidadeControle) {

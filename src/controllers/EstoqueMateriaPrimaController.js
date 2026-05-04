@@ -33,6 +33,11 @@ function buildAjustePayload(body) {
   };
 }
 
+function normalizeCategoria(value) {
+  const categoria = String(value || '').trim().toUpperCase();
+  return categoria === 'LAMINADO' ? 'TREFILADO' : categoria;
+}
+
 function validateEntradaPayload(payload) {
   const errors = [];
 
@@ -76,7 +81,7 @@ const EstoqueMateriaPrimaController = {
       const saldos = await EstoqueMateriaPrimaModel.findSaldos({
         codigo: req.query.codigo ? String(req.query.codigo).trim() : '',
         nome: req.query.nome ? String(req.query.nome).trim() : '',
-        categoria: req.query.categoria ? String(req.query.categoria).trim().toUpperCase() : '',
+        categoria: req.query.categoria ? normalizeCategoria(req.query.categoria) : '',
         geometria: req.query.geometria ? String(req.query.geometria).trim().toUpperCase() : '',
         bitola: req.query.bitola ? String(req.query.bitola).trim() : '',
         mostrar_todos: String(req.query.modo || '').trim().toUpperCase() === 'TODOS'

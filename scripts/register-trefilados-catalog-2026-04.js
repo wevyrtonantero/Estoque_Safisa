@@ -406,7 +406,7 @@ async function upsertMateriaPrima(connection, supplierMap, record) {
   const values = [
     record.codigo,
     record.nome,
-    'LAMINADO',
+    'TREFILADO',
     record.material,
     record.liga,
     record.geometria,
@@ -530,7 +530,7 @@ async function main() {
     console.table(summary);
   } catch (error) {
     await connection.rollback();
-    console.error('Falha ao cadastrar materias-primas laminadas.');
+    console.error('Falha ao cadastrar materias-primas trefiladas.');
     console.error(error);
     process.exit(1);
   } finally {

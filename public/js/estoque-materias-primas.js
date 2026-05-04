@@ -1,6 +1,6 @@
 const estoqueMateriaPrimaApiBaseUrl = '/api/estoque-materias-primas';
 const materiasPrimasAutocompleteApiBaseUrl = '/api/materias-primas-autocomplete';
-const ESTOQUE_MINIMO_PADRAO_LAMINADO = 60;
+const ESTOQUE_MINIMO_PADRAO_TREFILADO = 60;
 const ESTOQUE_MINIMO_PADRAO_FUNDIDO = 50;
 
 let saldosCache = [];
@@ -175,7 +175,7 @@ function renderizarSaldos() {
     <tr class="${obterClasseLinhaEstoque(item)}">
       <td class="table-code">${escapeHtml(item.codigo)}</td>
       <td class="table-description">${escapeHtml(item.nome)}</td>
-      <td>${escapeHtml(item.categoria)}</td>
+      <td>${renderizarCategoriaGeometria(item)}</td>
       <td>${escapeHtml(formatarReferencia(item))}</td>
       <td>${escapeHtml(item.unidade_estoque)}</td>
       <td class="table-quantity">${renderizarQuantidadeEstoque(item)}</td>
@@ -219,13 +219,13 @@ function renderizarMovimentacoes() {
 }
 
 function atualizarIndicadores() {
-  const laminados = saldosCache.filter((item) => item.categoria === 'LAMINADO').length;
+  const trefilados = saldosCache.filter((item) => item.categoria === 'TREFILADO').length;
   const fundidos = saldosCache.filter((item) => item.categoria === 'FUNDIDO').length;
   const alertas = saldosCache.filter((item) => isMateriaPrimaEmAlerta(item)).length;
   const criticos = saldosCache.filter((item) => obterStatusEstoqueKey(item) === 'CRITICO').length;
 
   document.getElementById('metric-mp-com-saldo').textContent = String(saldosCache.length);
-  document.getElementById('metric-mp-laminados').textContent = String(laminados);
+  document.getElementById('metric-mp-trefilados').textContent = String(trefilados);
   document.getElementById('metric-mp-fundidos').textContent = String(fundidos);
   refs.totalAlertas.textContent = String(alertas);
   refs.totalCriticos.textContent = `${criticos} criticos`;
@@ -561,6 +561,44 @@ function formatarReferencia(item) {
   return formatarBitolaAutocomplete(item);
 }
 
+function renderizarCategoriaGeometria(item) {
+  const categoria = String(item.categoria || '').toUpperCase();
+
+  if (categoria === 'FUNDIDO') {
+    return '<span class="category-geometry-chip is-fundido"><span>Fund.</span></span>';
+  }
+
+  if (categoria !== 'TREFILADO') {
+    return `<span class="category-geometry-chip"><span>${escapeHtml(categoria || '-')}</span></span>`;
+  }
+
+  const geometria = obterGeometriaVisual(item.geometria);
+
+  return `
+    <span class="category-geometry-chip is-trefilado" title="${escapeHtml(`Trefilado - ${geometria.titulo}`)}">
+      <span class="geometry-symbol ${geometria.classe}" aria-hidden="true"></span>
+      <span>Tref.</span>
+      <small>${escapeHtml(geometria.label)}</small>
+    </span>
+  `;
+}
+
+function obterGeometriaVisual(value) {
+  const geometria = String(value || '').trim().toUpperCase();
+  const geometriaMap = {
+    REDONDO: { classe: 'is-round', label: 'Red.', titulo: 'REDONDO' },
+    QUADRADO: { classe: 'is-square', label: 'Quad.', titulo: 'QUADRADO' },
+    SEXTAVADO: { classe: 'is-hex', label: 'Sext.', titulo: 'SEXTAVADO' },
+    'FITA / BOBINA': { classe: 'is-strip', label: 'Fita', titulo: 'FITA / BOBINA' }
+  };
+
+  return geometriaMap[geometria] || {
+    classe: 'is-generic',
+    label: geometria ? geometria.slice(0, 5) : '-',
+    titulo: geometria || '-'
+  };
+}
+
 function formatarBitolaAutocomplete(item) {
   if (item.bitola && item.bitola_mm) {
     return `${item.bitola} | ${formatQuantity(item.bitola_mm)} mm`;
@@ -580,7 +618,7 @@ function formatarBitolaAutocomplete(item) {
 function getEstoqueMinimoPadrao(item) {
   return String(item?.unidade_estoque || '').toUpperCase() === 'UN'
     ? ESTOQUE_MINIMO_PADRAO_FUNDIDO
-    : ESTOQUE_MINIMO_PADRAO_LAMINADO;
+    : ESTOQUE_MINIMO_PADRAO_TREFILADO;
 }
 
 function getEstoqueMinimoEfetivo(item) {
