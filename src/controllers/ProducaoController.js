@@ -187,12 +187,15 @@ const ProducaoController = {
     try {
       const producaoAnterior = await ProducaoModel.findById(req.params.id);
       const producao = await ProducaoModel.delete(req.params.id);
+      const isCancelamento = producaoAnterior?.status === 'EM_ANDAMENTO' && producao?.status === 'CANCELADA';
       await recordAuditLog(req, {
         modulo: 'PRODUCAO',
-        acao: 'DELETE',
+        acao: isCancelamento ? 'CANCELAR' : 'DELETE',
         entidade_tipo: 'ORDEM_PRODUCAO',
         entidade_id: producaoAnterior?.id ?? req.params.id,
-        descricao: producaoAnterior
+        descricao: isCancelamento
+          ? `Ordem de producao ${producaoAnterior.id} cancelada.`
+          : producaoAnterior
           ? `Ordem de producao ${producaoAnterior.id} excluida.`
           : 'Ordem de producao excluida.',
         antes: producaoAnterior,

@@ -13,7 +13,7 @@
       <div class="topbar-copy">
         <p class="page-kicker">Setor SAFISA</p>
         <h1 class="page-title">Producao</h1>
-        <p class="page-subtitle">Inicie a ordem, finalize com produzido e refugo, baixe a materia-prima e acompanhe as ordens sem sair da tela.</p>
+        <p class="page-subtitle">Inicie a ordem com baixa antecipada de materia-prima, finalize com produzido e refugo e acompanhe as ordens sem sair da tela.</p>
       </div>
     </header>
 
@@ -275,7 +275,7 @@
         <div>
           <span class="section-pill">Inicio</span>
           <h2>Nova Producao</h2>
-          <p>Selecione a maquina, a peca e a quantidade planejada.</p>
+          <p>Selecione a maquina, a peca e a quantidade planejada. A materia-prima prevista sera baixada ao iniciar.</p>
         </div>
 
         <button id="btn-fechar-modal-producao" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
@@ -304,7 +304,7 @@
             <input id="producao-peca-busca" type="text" placeholder="Digite codigo ou descricao da peca">
             <div id="producao-peca-sugestoes" class="autocomplete-panel hidden"></div>
           </div>
-          <span class="form-hint">A materia-prima da peca precisa estar vinculada para a finalizacao baixar o estoque.</span>
+          <span class="form-hint">A materia-prima da peca precisa estar vinculada para iniciar a producao.</span>
         </div>
 
         <div class="field span-8">
@@ -363,7 +363,7 @@
         <div>
           <span class="section-pill">Finalizacao</span>
           <h2>Finalizar Producao</h2>
-          <p>Informe o que foi produzido, o eventual refugo e ajuste o comprimento se necessario.</p>
+          <p>Informe o total real produzido, o eventual refugo e ajuste o comprimento se necessario. O sistema complementa ou devolve materia-prima automaticamente.</p>
         </div>
 
         <button id="btn-fechar-modal-finalizacao" class="icon-btn" type="button" aria-label="Fechar modal">X</button>

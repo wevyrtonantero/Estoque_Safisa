@@ -301,8 +301,10 @@ function renderizarTabela() {
           <div class="row-menu-panel">
             ${producao.status === 'EM_ANDAMENTO'
               ? `<button type="button" class="row-menu-item" data-action="finalizar" data-id="${producao.id}">Finalizar</button>`
-              : '<span class="row-menu-item">Finalizada</span>'}
-            <button type="button" class="row-menu-item danger" data-action="excluir" data-id="${producao.id}">Excluir producao</button>
+              : `<span class="row-menu-item">${producao.status === 'CANCELADA' ? 'Cancelada' : 'Finalizada'}</span>`}
+            <button type="button" class="row-menu-item danger" data-action="excluir" data-id="${producao.id}">
+              ${producao.status === 'EM_ANDAMENTO' ? 'Cancelar producao' : 'Excluir producao'}
+            </button>
           </div>
         </details>
       </td>
@@ -1023,8 +1025,9 @@ function handleKeyboardShortcuts(event) {
 }
 
 async function excluirProducao(producao) {
+  const isCancelamento = producao.status === 'EM_ANDAMENTO';
   const confirmed = window.confirm(
-    `Excluir a ordem ${producao.id} de ${producao.peca_codigo} - ${producao.peca_descricao}?`
+    `${isCancelamento ? 'Cancelar' : 'Excluir'} a ordem ${producao.id} de ${producao.peca_codigo} - ${producao.peca_descricao}?`
   );
 
   if (!confirmed) {
@@ -1041,7 +1044,10 @@ async function excluirProducao(producao) {
       throw new Error(extractErrorMessage(result));
     }
 
-    mostrarMensagem('Ordem de producao excluida com sucesso.', 'success');
+    mostrarMensagem(
+      isCancelamento ? 'Ordem de producao cancelada e materia-prima devolvida.' : 'Ordem de producao excluida com sucesso.',
+      'success'
+    );
     await Promise.all([carregarProducoes(), carregarSolicitacoesProducao()]);
   } catch (error) {
     mostrarMensagem(error.message, 'error');
@@ -1313,13 +1319,13 @@ function construirAlertaPlanejamentoMateriaPrima({ materiaPrima, saldoQuantidade
   if (!consumoPrevisto) {
     if (String(materiaPrima.categoria || '').toUpperCase() === 'FUNDIDO') {
       return {
-        message: 'Planejamento em modo de acompanhamento. A finalizacao nao sera bloqueada por falta de saldo.',
+        message: 'Ao iniciar, a materia-prima planejada sera baixada imediatamente do estoque.',
         tone: 'info'
       };
     }
 
     return {
-      message: 'ATENCAO: defina o comprimento de corte para ver a previsao de consumo desta ordem. A finalizacao nao sera bloqueada por falta de saldo.',
+      message: 'ATENCAO: defina o comprimento de corte para o sistema validar e baixar a materia-prima ao iniciar.',
       tone: 'warning'
     };
   }
@@ -1333,7 +1339,7 @@ function construirAlertaPlanejamentoMateriaPrima({ materiaPrima, saldoQuantidade
 
   if (consumoComparavel > saldoComparavel) {
     return {
-      message: 'ATENCAO: a previsao desta ordem consome mais do que o saldo atual. O sistema vai permitir finalizar mesmo assim e o estoque da MP podera ficar negativo ate a reposicao.',
+      message: 'ATENCAO: a previsao desta ordem consome mais do que o saldo atual. O sistema nao vai iniciar a producao sem materia-prima suficiente.',
       tone: 'warning'
     };
   }
@@ -1346,7 +1352,7 @@ function construirAlertaPlanejamentoMateriaPrima({ materiaPrima, saldoQuantidade
   }
 
   return {
-    message: 'Saldo suficiente para a previsao desta ordem no planejamento atual.',
+    message: 'Saldo suficiente. Ao iniciar, esse consumo sera baixado imediatamente da materia-prima.',
     tone: 'success'
   };
 }

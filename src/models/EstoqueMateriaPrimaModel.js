@@ -417,6 +417,12 @@ class EstoqueMateriaPrimaModel {
       };
     }
 
+    if (data.preventNegative && quantidadeConsumida > quantidadeAtual) {
+      throw this.createBusinessError(
+        `Saldo insuficiente de materia-prima. Disponivel: ${quantidadeAtual.toLocaleString('pt-BR')}; necessario: ${quantidadeConsumida.toLocaleString('pt-BR')}.`
+      );
+    }
+
     const novoSaldo = Number((quantidadeAtual - quantidadeConsumida).toFixed(4));
 
     await this.persistSaldo(connection, data.id_materia_prima, novoSaldo, saldoAtual);

@@ -199,6 +199,74 @@ class ProducaoModel {
     return rows[0] || null;
   }
 
+  static isFundido(materiaPrima) {
+    const categoria = String(materiaPrima?.categoria || materiaPrima?.materia_prima_categoria || '').toUpperCase();
+    const geometria = String(materiaPrima?.geometria || materiaPrima?.materia_prima_geometria || '').toUpperCase();
+    return categoria === 'FUNDIDO' || geometria === 'FUNDIDO';
+  }
+
+  static getStockConsumptionUnit(materiaPrima) {
+    return this.isFundido(materiaPrima) ? 'UN' : 'KG';
+  }
+
+  static getCommittedStockConsumption(ordem) {
+    if (!ordem || !Number(ordem.quantidade_consumida_materia_prima)) {
+      return 0;
+    }
+
+    if (this.isFundido(ordem)) {
+      return Number(ordem.quantidade_consumida_materia_prima || 0);
+    }
+
+    return Number(ordem.peso_consumido_kg || 0);
+  }
+
+  static calculateMateriaPrimaConsumption({ materiaPrima, peca = {}, quantidadeTotal, comprimentoCorteMm = null }) {
+    const total = Number(quantidadeTotal || 0);
+    if (!Number.isFinite(total) || total <= 0) {
+      throw this.createBusinessError('A quantidade total da producao deve ser maior que zero.');
+    }
+
+    if (this.isFundido(materiaPrima)) {
+      const pesoUnitario = Number(materiaPrima.peso_unitario_kg || 0);
+      return {
+        quantidadeConsumida: total,
+        unidadeConsumo: 'UN',
+        pesoConsumido: pesoUnitario > 0
+          ? Number((total * pesoUnitario).toFixed(4))
+          : null,
+        comprimentoCorteUsado: null,
+        quantidadeBaixadaEstoque: total,
+        unidadeBaixaEstoque: 'UN'
+      };
+    }
+
+    const comprimentoCorteUsado = comprimentoCorteMm && Number(comprimentoCorteMm) > 0
+      ? Number(comprimentoCorteMm)
+      : Number(peca.comprimento_mm || peca.peca_comprimento_mm || materiaPrima.comprimento_corte_mm || 0);
+
+    if (!comprimentoCorteUsado || comprimentoCorteUsado <= 0) {
+      throw this.createBusinessError('A peca nao possui comprimento de corte em mm. Preencha isso na peca antes de iniciar a producao.');
+    }
+
+    const pesoPorMetro = Number(materiaPrima.peso_por_metro || 0);
+    if (!pesoPorMetro || pesoPorMetro <= 0) {
+      throw this.createBusinessError('A materia-prima nao possui peso por metro. Ajuste a materia-prima antes de iniciar a producao.');
+    }
+
+    const quantidadeConsumida = Number(((total * comprimentoCorteUsado) / 1000).toFixed(4));
+    const pesoConsumido = Number((quantidadeConsumida * pesoPorMetro).toFixed(4));
+
+    return {
+      quantidadeConsumida,
+      unidadeConsumo: 'M',
+      pesoConsumido,
+      comprimentoCorteUsado,
+      quantidadeBaixadaEstoque: pesoConsumido,
+      unidadeBaixaEstoque: 'KG'
+    };
+  }
+
   static async create(data) {
     const connection = await pool.getConnection();
 
@@ -216,9 +284,10 @@ class ProducaoModel {
       }
 
       let materiaPrimaId = peca.id_materia_prima || null;
+      let materiaPrima = null;
 
       if (data.id_materia_prima) {
-        const materiaPrima = await this.findMateriaPrimaById(data.id_materia_prima, connection);
+        materiaPrima = await this.findMateriaPrimaById(data.id_materia_prima, connection);
         if (!materiaPrima) {
           throw this.createBusinessError('A materia-prima selecionada para a ordem nao foi encontrada.');
         }
@@ -226,9 +295,27 @@ class ProducaoModel {
         materiaPrimaId = materiaPrima.id;
       }
 
+      if (!materiaPrimaId) {
+        throw this.createBusinessError('A peca nao possui materia-prima vinculada. Ajuste a peca antes de iniciar a producao.');
+      }
+
+      if (!materiaPrima) {
+        materiaPrima = await this.findMateriaPrimaById(materiaPrimaId, connection);
+      }
+
+      if (!materiaPrima) {
+        throw this.createBusinessError('A materia-prima selecionada para a ordem nao foi encontrada.');
+      }
+
       const comprimentoCorte = data.comprimento_corte_mm && Number(data.comprimento_corte_mm) > 0
         ? Number(data.comprimento_corte_mm)
         : (peca.comprimento_mm || null);
+      const consumoPlanejado = this.calculateMateriaPrimaConsumption({
+        materiaPrima,
+        peca,
+        quantidadeTotal: data.quantidade_planejada,
+        comprimentoCorteMm: comprimentoCorte
+      });
 
       const [result] = await connection.query(
         `
@@ -237,19 +324,34 @@ class ProducaoModel {
             id_peca,
             id_materia_prima,
             quantidade_planejada,
+            quantidade_consumida_materia_prima,
+            unidade_consumo,
+            peso_consumido_kg,
             comprimento_corte_mm,
             observacao_inicio
-          ) VALUES (?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         [
           data.id_maquina,
           data.id_peca,
           materiaPrimaId,
           data.quantidade_planejada,
-          comprimentoCorte,
+          consumoPlanejado.quantidadeConsumida,
+          consumoPlanejado.unidadeConsumo,
+          consumoPlanejado.pesoConsumido,
+          consumoPlanejado.comprimentoCorteUsado,
           data.observacao_inicio || null
         ]
       );
+
+      await EstoqueMateriaPrimaModel.registerConsumption(connection, {
+        id_materia_prima: materiaPrimaId,
+        id_producao_ordem: result.insertId,
+        quantidade: consumoPlanejado.quantidadeBaixadaEstoque,
+        unidade: consumoPlanejado.unidadeBaixaEstoque,
+        preventNegative: true,
+        observacao: `Consumo antecipado da producao ${peca.codigo} - ${peca.descricao}.`.slice(0, 255)
+      });
 
       await connection.commit();
       return this.findById(result.insertId, connection);
@@ -285,50 +387,33 @@ class ProducaoModel {
         throw this.createBusinessError('A peca nao possui materia-prima vinculada. Ajuste a peca antes de finalizar a producao.');
       }
 
-      let quantidadeConsumida = null;
-      let unidadeConsumo = null;
-      let pesoConsumido = null;
-      let comprimentoCorteUsado = null;
-      let quantidadeBaixadaEstoque = null;
-      let unidadeBaixaEstoque = null;
-
-      if (String(ordem.materia_prima_geometria || '').toUpperCase() === 'FUNDIDO') {
-        quantidadeConsumida = totalFinal;
-        unidadeConsumo = 'UN';
-        pesoConsumido = ordem.peso_unitario_kg
-          ? Number((totalFinal * Number(ordem.peso_unitario_kg)).toFixed(4))
-          : null;
-        quantidadeBaixadaEstoque = quantidadeConsumida;
-        unidadeBaixaEstoque = 'UN';
-      } else {
-        comprimentoCorteUsado = data.comprimento_corte_mm && Number(data.comprimento_corte_mm) > 0
-          ? Number(data.comprimento_corte_mm)
-          : Number(ordem.comprimento_corte_mm || ordem.peca_comprimento_mm || 0);
-
-        if (!comprimentoCorteUsado || comprimentoCorteUsado <= 0) {
-          throw this.createBusinessError('A peca nao possui comprimento de corte em mm. Preencha isso na peca antes de finalizar a producao.');
-        }
-
-        if (!ordem.peso_por_metro || Number(ordem.peso_por_metro) <= 0) {
-          throw this.createBusinessError('A materia-prima nao possui peso por metro. Ajuste a materia-prima antes de finalizar a producao.');
-        }
-
-        quantidadeConsumida = Number(
-          (((totalFinal * comprimentoCorteUsado) / 1000)).toFixed(4)
-        );
-        unidadeConsumo = 'M';
-        pesoConsumido = Number((quantidadeConsumida * Number(ordem.peso_por_metro)).toFixed(4));
-        quantidadeBaixadaEstoque = pesoConsumido;
-        unidadeBaixaEstoque = 'KG';
-      }
-
-      await EstoqueMateriaPrimaModel.registerConsumption(connection, {
-        id_materia_prima: ordem.id_materia_prima,
-        id_producao_ordem: id,
-        quantidade: quantidadeBaixadaEstoque,
-        unidade: unidadeBaixaEstoque,
-        observacao: `Consumo da producao ${ordem.peca_codigo} - ${ordem.peca_descricao}.`.slice(0, 255)
+      const consumoFinal = this.calculateMateriaPrimaConsumption({
+        materiaPrima: ordem,
+        peca: ordem,
+        quantidadeTotal: totalFinal,
+        comprimentoCorteMm: data.comprimento_corte_mm
       });
+      const quantidadeJaBaixadaEstoque = this.getCommittedStockConsumption(ordem);
+      const diferencaBaixaEstoque = Number((consumoFinal.quantidadeBaixadaEstoque - quantidadeJaBaixadaEstoque).toFixed(4));
+
+      if (diferencaBaixaEstoque > 0) {
+        await EstoqueMateriaPrimaModel.registerConsumption(connection, {
+          id_materia_prima: ordem.id_materia_prima,
+          id_producao_ordem: id,
+          quantidade: diferencaBaixaEstoque,
+          unidade: consumoFinal.unidadeBaixaEstoque,
+          preventNegative: true,
+          observacao: `Complemento de consumo da producao ${ordem.peca_codigo} - ${ordem.peca_descricao}.`.slice(0, 255)
+        });
+      } else if (diferencaBaixaEstoque < 0) {
+        await EstoqueMateriaPrimaModel.registerReturnFromProductionDelete(connection, {
+          id_materia_prima: ordem.id_materia_prima,
+          id_producao_ordem: id,
+          quantidade: Math.abs(diferencaBaixaEstoque),
+          unidade: consumoFinal.unidadeBaixaEstoque,
+          observacao: `Devolucao de materia-prima da producao ${ordem.peca_codigo} - ${ordem.peca_descricao}.`.slice(0, 255)
+        });
+      }
 
       await connection.query(
         `
@@ -348,23 +433,23 @@ class ProducaoModel {
         [
           data.quantidade_produzida,
           data.quantidade_refugo,
-          quantidadeConsumida,
-          unidadeConsumo,
-          pesoConsumido,
-          comprimentoCorteUsado,
+          consumoFinal.quantidadeConsumida,
+          consumoFinal.unidadeConsumo,
+          consumoFinal.pesoConsumido,
+          consumoFinal.comprimentoCorteUsado,
           data.observacao_fim || null,
           id
         ]
       );
 
-      if (comprimentoCorteUsado && Number(comprimentoCorteUsado) > 0) {
+      if (consumoFinal.comprimentoCorteUsado && Number(consumoFinal.comprimentoCorteUsado) > 0) {
         await connection.query(
           `
             UPDATE pecas
             SET comprimento_mm = ?
             WHERE id = ?
           `,
-          [comprimentoCorteUsado, ordem.id_peca]
+          [consumoFinal.comprimentoCorteUsado, ordem.id_peca]
         );
       }
 
@@ -401,11 +486,8 @@ class ProducaoModel {
           throw this.createBusinessError('A ordem finalizada nao possui materia-prima vinculada para estorno.');
         }
 
-        const isFundido = String(ordem.materia_prima_geometria || '').toUpperCase() === 'FUNDIDO';
-        const quantidadeEstornoMp = isFundido
-          ? Number(ordem.quantidade_consumida_materia_prima || 0)
-          : Number(ordem.peso_consumido_kg || 0);
-        const unidadeEstorno = isFundido ? 'UN' : 'KG';
+        const quantidadeEstornoMp = this.getCommittedStockConsumption(ordem);
+        const unidadeEstorno = this.getStockConsumptionUnit(ordem);
 
         await TratamentoExternoModel.removeProducedEntry(connection, {
           id_peca: ordem.id_peca,
@@ -423,6 +505,35 @@ class ProducaoModel {
             observacao: `Estorno da ordem de producao ${ordem.id}.`
           });
         }
+      }
+
+      if (ordem.status === 'EM_ANDAMENTO') {
+        const quantidadeEstornoMp = this.getCommittedStockConsumption(ordem);
+
+        if (quantidadeEstornoMp > 0) {
+          await EstoqueMateriaPrimaModel.registerReturnFromProductionDelete(connection, {
+            id_materia_prima: ordem.id_materia_prima,
+            id_producao_ordem: ordem.id,
+            quantidade: quantidadeEstornoMp,
+            unidade: this.getStockConsumptionUnit(ordem),
+            observacao: `Cancelamento da ordem de producao ${ordem.id}.`
+          });
+        }
+
+        await connection.query(
+          `
+            UPDATE producao_ordens
+            SET
+              status = 'CANCELADA',
+              observacao_fim = COALESCE(observacao_fim, 'Ordem cancelada.'),
+              data_fim = NOW()
+            WHERE id = ?
+          `,
+          [id]
+        );
+
+        await connection.commit();
+        return this.findById(id, connection);
       }
 
       await connection.query(
