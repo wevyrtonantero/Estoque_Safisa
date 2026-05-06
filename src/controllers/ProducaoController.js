@@ -34,7 +34,22 @@ function buildFinishPayload(body) {
     quantidade_produzida: normalizeOptionalInteger(body.quantidade_produzida),
     quantidade_refugo: normalizeOptionalInteger(body.quantidade_refugo ?? 0),
     comprimento_corte_mm: normalizeOptionalDecimal(body.comprimento_corte_mm),
+    destinos: Array.isArray(body.destinos)
+      ? body.destinos.map((destino) => ({
+        destino: destino.destino ? String(destino.destino).trim().toUpperCase() : '',
+        quantidade: normalizeOptionalDecimal(destino.quantidade),
+        observacao: destino.observacao ? String(destino.observacao).trim() : null
+      }))
+      : [],
     observacao_fim: body.observacao_fim ? String(body.observacao_fim).trim() : null
+  };
+}
+
+function buildDestinationPayload(body) {
+  return {
+    destino: body.destino ? String(body.destino).trim().toUpperCase() : '',
+    quantidade: normalizeOptionalDecimal(body.quantidade),
+    observacao: body.observacao ? String(body.observacao).trim() : null
   };
 }
 
@@ -88,6 +103,30 @@ function validateFinishPayload(payload) {
     errors.push('O comprimento de corte em mm deve ser maior que zero.');
   }
 
+  payload.destinos.forEach((destino, index) => {
+    if (!destino.destino) {
+      errors.push(`Informe o destino da linha ${index + 1}.`);
+    }
+
+    if (!Number.isFinite(destino.quantidade) || destino.quantidade <= 0) {
+      errors.push(`A quantidade do destino ${index + 1} deve ser maior que zero.`);
+    }
+  });
+
+  return errors;
+}
+
+function validateDestinationPayload(payload) {
+  const errors = [];
+
+  if (!payload.destino) {
+    errors.push('Informe o destino da producao.');
+  }
+
+  if (!Number.isFinite(payload.quantidade) || payload.quantidade <= 0) {
+    errors.push('A quantidade deve ser maior que zero.');
+  }
+
   return errors;
 }
 
@@ -128,6 +167,22 @@ const ProducaoController = {
     } catch (error) {
       console.error('Erro ao buscar producao:', error);
       return res.status(500).json({ message: 'Erro ao buscar producao.' });
+    }
+  },
+
+  async getDestinations(req, res) {
+    try {
+      const producao = await ProducaoModel.findById(req.params.id);
+
+      if (!producao) {
+        return res.status(404).json({ message: 'Ordem de producao nao encontrada.' });
+      }
+
+      const destinos = await ProducaoModel.findDestinations(req.params.id);
+      return res.status(200).json(destinos);
+    } catch (error) {
+      console.error('Erro ao listar destinos da producao:', error);
+      return res.status(500).json({ message: 'Erro ao listar destinos da producao.' });
     }
   },
 
@@ -179,6 +234,33 @@ const ProducaoController = {
       return res.status(200).json(producao);
     } catch (error) {
       const response = extractErrorResponse(error, 'Erro ao finalizar producao.');
+      return res.status(response.status).json(response.body);
+    }
+  },
+
+  async allocateDestination(req, res) {
+    try {
+      const payload = buildDestinationPayload(req.body);
+      const errors = validateDestinationPayload(payload);
+
+      if (errors.length > 0) {
+        return res.status(400).json({ message: 'Dados invalidos.', errors });
+      }
+
+      const producaoAnterior = await ProducaoModel.findById(req.params.id);
+      const producao = await ProducaoModel.allocateDestination(req.params.id, payload);
+      await recordAuditLog(req, {
+        modulo: 'PRODUCAO',
+        acao: 'DESTINAR',
+        entidade_tipo: 'ORDEM_PRODUCAO',
+        entidade_id: producao.id,
+        descricao: `Ordem de producao ${producao.id} destinada para ${payload.destino}.`,
+        antes: producaoAnterior,
+        depois: producao
+      });
+      return res.status(200).json(producao);
+    } catch (error) {
+      const response = extractErrorResponse(error, 'Erro ao destinar producao.');
       return res.status(response.status).json(response.body);
     }
   },

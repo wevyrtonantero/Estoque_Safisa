@@ -27,6 +27,7 @@ const UsuarioModel = require('./src/models/UsuarioModel');
 const AuditLogModel = require('./src/models/AuditLogModel');
 const ComposicaoVendaModel = require('./src/models/ComposicaoVendaModel');
 const ExpedicaoSaidaModel = require('./src/models/ExpedicaoSaidaModel');
+const ProducaoModel = require('./src/models/ProducaoModel');
 const { attachAuthContext, requirePageRoles } = require('./src/middleware/authMiddleware');
 const { ALL_ROLES, ADMIN_READ_ROLES, OPERATION_READ_ROLES, SUPERADMIN_ONLY_ROLES, STOCK_READ_ROLES } = require('./src/security/roles');
 const { testConnection } = require('./database/connection');
@@ -231,6 +232,7 @@ app.listen(PORT, async () => {
     await AuditLogModel.ensureSchema();
     await ComposicaoVendaModel.ensureSchema();
     await ExpedicaoSaidaModel.ensureSchema();
+    await ProducaoModel.ensureSchema();
   } catch (error) {
     console.error('Nao foi possivel validar a conexao com o MySQL:', error.message);
   }

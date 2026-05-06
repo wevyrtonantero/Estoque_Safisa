@@ -1,12 +1,93 @@
 const { pool } = require('../../database/connection');
 const EstoqueMateriaPrimaModel = require('./EstoqueMateriaPrimaModel');
+const EstoqueModel = require('./EstoqueModel');
 const TratamentoExternoModel = require('./TratamentoExternoModel');
 
 class ProducaoModel {
+  static DESTINOS = Object.freeze({
+    TRATAMENTO_EXTERNO: 'TRATAMENTO_EXTERNO',
+    MONTAGEM: 'MONTAGEM',
+    EXPEDICAO: 'EXPEDICAO',
+    PECAS_INACABADAS: 'PECAS_INACABADAS',
+    RETRABALHO: 'RETRABALHO'
+  });
+
+  static STOCK_DESTINOS = Object.freeze({
+    MONTAGEM: 'Montagem',
+    EXPEDICAO: 'Expedi\u00e7\u00e3o',
+    PECAS_INACABADAS: 'Pe\u00e7as Inacabadas',
+    RETRABALHO: 'Retrabalho'
+  });
+
   static createBusinessError(message) {
     const error = new Error(message);
     error.statusCode = 400;
     return error;
+  }
+
+  static async ensureSchema(db = pool) {
+    await db.query(
+      `
+        CREATE TABLE IF NOT EXISTS producao_destinos (
+          id BIGINT AUTO_INCREMENT PRIMARY KEY,
+          id_producao_ordem INT NOT NULL,
+          destino VARCHAR(40) NOT NULL,
+          id_estoque_destino INT NULL,
+          quantidade DECIMAL(12, 2) NOT NULL,
+          observacao VARCHAR(255) NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT fk_producao_destinos_ordem
+            FOREIGN KEY (id_producao_ordem) REFERENCES producao_ordens(id)
+            ON DELETE CASCADE,
+          CONSTRAINT fk_producao_destinos_estoque
+            FOREIGN KEY (id_estoque_destino) REFERENCES estoques(id)
+            ON DELETE SET NULL,
+          INDEX idx_producao_destinos_ordem (id_producao_ordem),
+          INDEX idx_producao_destinos_destino (destino),
+          INDEX idx_producao_destinos_estoque (id_estoque_destino)
+        ) ENGINE = InnoDB
+          DEFAULT CHARSET = utf8mb4
+          COLLATE = utf8mb4_unicode_ci
+      `
+    );
+
+    await this.ensureSupportStocks(db);
+  }
+
+  static async ensureSupportStocks(db = pool) {
+    const stocks = [
+      {
+        nome: this.STOCK_DESTINOS.PECAS_INACABADAS,
+        descricao: 'Pecas produzidas que ainda nao seguiram para o destino final.'
+      },
+      {
+        nome: this.STOCK_DESTINOS.RETRABALHO,
+        descricao: 'Pecas separadas para retrabalho antes de voltar ao fluxo.'
+      }
+    ];
+
+    for (const stock of stocks) {
+      await db.query(
+        `
+          INSERT INTO estoques (nome, descricao, ativo)
+          VALUES (?, ?, 1)
+          ON DUPLICATE KEY UPDATE
+            ativo = 1,
+            updated_at = CURRENT_TIMESTAMP
+        `,
+        [stock.nome, stock.descricao]
+      );
+    }
+  }
+
+  static destinationSummarySubquery() {
+    return `
+      SELECT
+        id_producao_ordem,
+        SUM(quantidade) AS quantidade_destinada
+      FROM producao_destinos
+      GROUP BY id_producao_ordem
+    `;
   }
 
   static async findAll(filters = {}) {
@@ -52,6 +133,20 @@ class ProducaoModel {
           po.data_fim,
           po.created_at,
           po.updated_at,
+          COALESCE(pd.quantidade_destinada, 0) AS quantidade_destinada,
+          CASE
+            WHEN po.quantidade_produzida IS NULL THEN po.quantidade_planejada
+            ELSE po.quantidade_produzida
+          END AS quantidade_base_destino,
+          GREATEST(
+            0,
+            (
+              CASE
+                WHEN po.quantidade_produzida IS NULL THEN po.quantidade_planejada
+                ELSE po.quantidade_produzida
+              END
+            ) - COALESCE(pd.quantidade_destinada, 0)
+          ) AS quantidade_pendente_destino,
           m.nome AS maquina_nome,
           m.tipo AS maquina_tipo,
           p.codigo AS peca_codigo,
@@ -71,6 +166,7 @@ class ProducaoModel {
         INNER JOIN maquinas m ON m.id = po.id_maquina
         INNER JOIN pecas p ON p.id = po.id_peca
         LEFT JOIN materias_primas mp ON mp.id = po.id_materia_prima
+        LEFT JOIN (${this.destinationSummarySubquery()}) pd ON pd.id_producao_ordem = po.id
         WHERE ${conditions.join(' AND ')}
         ORDER BY
           CASE po.status
@@ -108,6 +204,20 @@ class ProducaoModel {
           po.data_fim,
           po.created_at,
           po.updated_at,
+          COALESCE(pd.quantidade_destinada, 0) AS quantidade_destinada,
+          CASE
+            WHEN po.quantidade_produzida IS NULL THEN po.quantidade_planejada
+            ELSE po.quantidade_produzida
+          END AS quantidade_base_destino,
+          GREATEST(
+            0,
+            (
+              CASE
+                WHEN po.quantidade_produzida IS NULL THEN po.quantidade_planejada
+                ELSE po.quantidade_produzida
+              END
+            ) - COALESCE(pd.quantidade_destinada, 0)
+          ) AS quantidade_pendente_destino,
           m.nome AS maquina_nome,
           m.tipo AS maquina_tipo,
           p.codigo AS peca_codigo,
@@ -129,6 +239,7 @@ class ProducaoModel {
         INNER JOIN maquinas m ON m.id = po.id_maquina
         INNER JOIN pecas p ON p.id = po.id_peca
         LEFT JOIN materias_primas mp ON mp.id = po.id_materia_prima
+        LEFT JOIN (${this.destinationSummarySubquery()}) pd ON pd.id_producao_ordem = po.id
         WHERE po.id = ?
       `,
       [id]
@@ -267,6 +378,228 @@ class ProducaoModel {
     };
   }
 
+  static normalizeDestination(destino) {
+    const normalized = String(destino || '').trim().toUpperCase();
+    if (!Object.values(this.DESTINOS).includes(normalized)) {
+      throw this.createBusinessError('Destino de producao invalido.');
+    }
+
+    return normalized;
+  }
+
+  static normalizeDestinationQuantity(value) {
+    const quantidade = Number(Number(value || 0).toFixed(2));
+    if (!Number.isFinite(quantidade) || quantidade <= 0) {
+      throw this.createBusinessError('A quantidade destinada deve ser maior que zero.');
+    }
+
+    return quantidade;
+  }
+
+  static getDestinationBaseQuantity(ordem) {
+    if (ordem.quantidade_produzida !== null && ordem.quantidade_produzida !== undefined) {
+      return Number(ordem.quantidade_produzida || 0);
+    }
+
+    return Number(ordem.quantidade_planejada || 0);
+  }
+
+  static async getTotalDestinado(idProducaoOrdem, connection = pool) {
+    const [rows] = await connection.query(
+      `
+        SELECT COALESCE(SUM(quantidade), 0) AS total
+        FROM producao_destinos
+        WHERE id_producao_ordem = ?
+      `,
+      [idProducaoOrdem]
+    );
+
+    return Number(rows[0]?.total || 0);
+  }
+
+  static async findDestinations(idProducaoOrdem, connection = pool) {
+    const [rows] = await connection.query(
+      `
+        SELECT
+          pd.id,
+          pd.id_producao_ordem,
+          pd.destino,
+          pd.id_estoque_destino,
+          pd.quantidade,
+          pd.observacao,
+          pd.created_at,
+          e.nome AS estoque_destino_nome
+        FROM producao_destinos pd
+        LEFT JOIN estoques e ON e.id = pd.id_estoque_destino
+        WHERE pd.id_producao_ordem = ?
+        ORDER BY pd.created_at ASC, pd.id ASC
+      `,
+      [idProducaoOrdem]
+    );
+
+    return rows;
+  }
+
+  static async resolveDestinationStock(connection, destino) {
+    const stockName = this.STOCK_DESTINOS[destino];
+    if (!stockName) {
+      return null;
+    }
+
+    const stock = await EstoqueModel.findStockByName(stockName, connection);
+    if (!stock || Number(stock.ativo) !== 1) {
+      throw this.createBusinessError(`Estoque de destino ${stockName} nao encontrado ou inativo.`);
+    }
+
+    return stock;
+  }
+
+  static async registerStockDestination(connection, ordem, stock, quantidade, observacao) {
+    const saldoAtual = await EstoqueModel.findSaldoForUpdate(connection, stock.id, ordem.id_peca);
+    const quantidadeAtual = saldoAtual ? Number(saldoAtual.quantidade) : 0;
+    const novoSaldo = Number((quantidadeAtual + quantidade).toFixed(2));
+
+    await EstoqueModel.persistSaldo(connection, stock.id, ordem.id_peca, novoSaldo, saldoAtual);
+    await EstoqueModel.createMovimentacao(connection, {
+      id_peca: ordem.id_peca,
+      id_estoque_origem: null,
+      id_estoque_destino: stock.id,
+      tipo_movimentacao: 'ENTRADA_INICIAL',
+      quantidade,
+      observacao: observacao || `Entrada vinda da producao OP ${ordem.id}.`
+    });
+  }
+
+  static async persistDestinationRecord(connection, ordem, destino, quantidade, observacao, stock = null) {
+    await connection.query(
+      `
+        INSERT INTO producao_destinos (
+          id_producao_ordem,
+          destino,
+          id_estoque_destino,
+          quantidade,
+          observacao
+        ) VALUES (?, ?, ?, ?, ?)
+      `,
+      [
+        ordem.id,
+        destino,
+        stock?.id || null,
+        quantidade,
+        observacao || null
+      ]
+    );
+  }
+
+  static async applyDestination(connection, ordem, data) {
+    const destino = this.normalizeDestination(data.destino);
+    const quantidade = this.normalizeDestinationQuantity(data.quantidade);
+    const observacao = (data.observacao || `Destino da producao OP ${ordem.id}.`).slice(0, 255);
+    let stock = null;
+
+    if (destino === this.DESTINOS.TRATAMENTO_EXTERNO) {
+      await TratamentoExternoModel.registerEntradaProducao(connection, {
+        id_peca: ordem.id_peca,
+        id_producao_ordem: ordem.id,
+        quantidade,
+        observacao
+      });
+    } else {
+      stock = await this.resolveDestinationStock(connection, destino);
+      await this.registerStockDestination(connection, ordem, stock, quantidade, observacao);
+    }
+
+    await this.persistDestinationRecord(connection, ordem, destino, quantidade, observacao, stock);
+
+    return {
+      destino,
+      quantidade,
+      estoque_destino: stock
+    };
+  }
+
+  static async updateFinalizationStatusIfComplete(connection, ordem) {
+    const ordemAtual = await this.findById(ordem.id, connection);
+    if (!ordemAtual || ordemAtual.status !== 'EM_ANDAMENTO') {
+      return ordemAtual;
+    }
+
+    if (ordemAtual.quantidade_produzida === null || ordemAtual.quantidade_produzida === undefined) {
+      return ordemAtual;
+    }
+
+    const quantidadeProduzida = Number(ordemAtual.quantidade_produzida || 0);
+    const quantidadeDestinada = Number(ordemAtual.quantidade_destinada || 0);
+    if (quantidadeDestinada < quantidadeProduzida) {
+      return ordemAtual;
+    }
+
+    await connection.query(
+      `
+        UPDATE producao_ordens
+        SET
+          status = 'FINALIZADA',
+          data_fim = COALESCE(data_fim, NOW())
+        WHERE id = ?
+      `,
+      [ordem.id]
+    );
+
+    return this.findById(ordem.id, connection);
+  }
+
+  static async reverseDestination(connection, ordem, destino) {
+    const quantidade = Number(destino.quantidade || 0);
+    if (quantidade <= 0) {
+      return;
+    }
+
+    if (destino.destino === this.DESTINOS.TRATAMENTO_EXTERNO) {
+      await TratamentoExternoModel.removeProducedEntry(connection, {
+        id_peca: ordem.id_peca,
+        id_producao_ordem: ordem.id,
+        quantidade,
+        observacao: `Estorno do destino da ordem de producao ${ordem.id}.`
+      });
+      return;
+    }
+
+    if (!destino.id_estoque_destino) {
+      throw this.createBusinessError('Destino de estoque da producao nao encontrado para estorno.');
+    }
+
+    const saldoAtual = await EstoqueModel.findSaldoForUpdate(
+      connection,
+      destino.id_estoque_destino,
+      ordem.id_peca
+    );
+    const quantidadeAtual = saldoAtual ? Number(saldoAtual.quantidade) : 0;
+
+    if (quantidade > quantidadeAtual) {
+      throw this.createBusinessError(
+        'Nao foi possivel excluir a producao porque uma quantidade destinada ja foi movimentada.'
+      );
+    }
+
+    const novoSaldo = Number((quantidadeAtual - quantidade).toFixed(2));
+    await EstoqueModel.persistSaldo(
+      connection,
+      destino.id_estoque_destino,
+      ordem.id_peca,
+      novoSaldo,
+      saldoAtual
+    );
+
+    await EstoqueModel.createMovimentacao(connection, {
+      id_peca: ordem.id_peca,
+      id_estoque_origem: destino.id_estoque_destino,
+      id_estoque_destino: null,
+      tipo_movimentacao: 'AJUSTE',
+      quantidade,
+      observacao: `Estorno do destino da ordem de producao ${ordem.id}.`
+    });
+  }
+
   static async create(data) {
     const connection = await pool.getConnection();
 
@@ -387,6 +720,13 @@ class ProducaoModel {
         throw this.createBusinessError('A peca nao possui materia-prima vinculada. Ajuste a peca antes de finalizar a producao.');
       }
 
+      const quantidadeJaDestinada = await this.getTotalDestinado(id, connection);
+      if (quantidadeJaDestinada > Number(data.quantidade_produzida)) {
+        throw this.createBusinessError(
+          `Ja foram destinados ${quantidadeJaDestinada.toLocaleString('pt-BR')} item(ns). A quantidade produzida nao pode ser menor que isso.`
+        );
+      }
+
       const consumoFinal = this.calculateMateriaPrimaConsumption({
         materiaPrima: ordem,
         peca: ordem,
@@ -425,9 +765,8 @@ class ProducaoModel {
             unidade_consumo = ?,
             peso_consumido_kg = ?,
             comprimento_corte_mm = ?,
-            status = 'FINALIZADA',
             observacao_fim = ?,
-            data_fim = NOW()
+            data_fim = NULL
           WHERE id = ?
         `,
         [
@@ -453,15 +792,72 @@ class ProducaoModel {
         );
       }
 
-      await TratamentoExternoModel.registerEntradaProducao(connection, {
-        id_peca: ordem.id_peca,
-        id_producao_ordem: id,
-        quantidade: data.quantidade_produzida,
-        observacao: `Entrada vinda da producao ${ordem.peca_codigo} - ${ordem.peca_descricao}.`.slice(0, 255)
-      });
+      let ordemAtualizada = await this.findById(id, connection);
+      const destinos = Array.isArray(data.destinos) ? data.destinos : [];
+      for (const destino of destinos) {
+        const totalAntes = await this.getTotalDestinado(id, connection);
+        const quantidadeDestino = this.normalizeDestinationQuantity(destino.quantidade);
+        const disponivel = Number((Number(data.quantidade_produzida) - totalAntes).toFixed(2));
+
+        if (quantidadeDestino > disponivel) {
+          throw this.createBusinessError('A soma dos destinos ultrapassa a quantidade produzida disponivel.');
+        }
+
+        await this.applyDestination(connection, ordemAtualizada, {
+          destino: destino.destino,
+          quantidade: quantidadeDestino,
+          observacao: destino.observacao || data.observacao_fim || null
+        });
+      }
+
+      ordemAtualizada = await this.updateFinalizationStatusIfComplete(connection, ordemAtualizada);
 
       await connection.commit();
-      return this.findById(id, connection);
+      return ordemAtualizada;
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }
+
+  static async allocateDestination(id, data) {
+    const connection = await pool.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      const ordem = await this.findById(id, connection);
+      if (!ordem) {
+        throw this.createBusinessError('Ordem de producao nao encontrada.');
+      }
+
+      if (ordem.status !== 'EM_ANDAMENTO') {
+        throw this.createBusinessError('Somente ordens em andamento podem receber destinos.');
+      }
+
+      const quantidade = this.normalizeDestinationQuantity(data.quantidade);
+      const totalDestinado = await this.getTotalDestinado(id, connection);
+      const quantidadeBase = this.getDestinationBaseQuantity(ordem);
+      const quantidadeDisponivel = Number((quantidadeBase - totalDestinado).toFixed(2));
+
+      if (quantidade > quantidadeDisponivel) {
+        throw this.createBusinessError(
+          `Quantidade maior que a disponivel na producao. Disponivel: ${quantidadeDisponivel.toLocaleString('pt-BR')}.`
+        );
+      }
+
+      await this.applyDestination(connection, ordem, {
+        destino: data.destino,
+        quantidade,
+        observacao: data.observacao || null
+      });
+
+      const ordemAtualizada = await this.updateFinalizationStatusIfComplete(connection, ordem);
+
+      await connection.commit();
+      return ordemAtualizada;
     } catch (error) {
       await connection.rollback();
       throw error;
@@ -488,13 +884,11 @@ class ProducaoModel {
 
         const quantidadeEstornoMp = this.getCommittedStockConsumption(ordem);
         const unidadeEstorno = this.getStockConsumptionUnit(ordem);
+        const destinos = await this.findDestinations(ordem.id, connection);
 
-        await TratamentoExternoModel.removeProducedEntry(connection, {
-          id_peca: ordem.id_peca,
-          id_producao_ordem: ordem.id,
-          quantidade: Number(ordem.quantidade_produzida || 0),
-          observacao: `Estorno da ordem de producao ${ordem.id}.`
-        });
+        for (const destino of destinos) {
+          await this.reverseDestination(connection, ordem, destino);
+        }
 
         if (quantidadeEstornoMp > 0) {
           await EstoqueMateriaPrimaModel.registerReturnFromProductionDelete(connection, {
@@ -508,6 +902,11 @@ class ProducaoModel {
       }
 
       if (ordem.status === 'EM_ANDAMENTO') {
+        const totalDestinado = await this.getTotalDestinado(ordem.id, connection);
+        if (totalDestinado > 0) {
+          throw this.createBusinessError('Nao e possivel cancelar uma ordem que ja teve pecas retiradas da producao.');
+        }
+
         const quantidadeEstornoMp = this.getCommittedStockConsumption(ordem);
 
         if (quantidadeEstornoMp > 0) {

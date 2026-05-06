@@ -66,7 +66,7 @@
               <button id="montagem-btn-simular" class="btn btn-secondary" type="button"><span class="btn-label">Simulacao de Montagem</span></button>
               <button id="montagem-btn-pedidos-menu" class="btn btn-neutral" type="button"><span class="btn-label">Meus Pedidos</span><span id="montagem-badge-pedidos" class="btn-badge hidden">0</span></button>
               <button id="montagem-btn-recebidos-menu" class="btn btn-neutral" type="button"><span class="btn-label">Pedidos da Expedicao</span><span id="montagem-badge-recebidos" class="btn-badge hidden">0</span></button>
-              <button id="montagem-btn-producao" class="btn btn-secondary" type="button"><span class="btn-label">Ver Producao</span><span id="montagem-badge-producao" class="btn-badge hidden">0</span></button>
+              <button id="montagem-btn-producao" class="btn btn-secondary" type="button"><span class="btn-label">Consumir da Producao</span><span id="montagem-badge-producao" class="btn-badge hidden">0</span></button>
             </div>
           </div>
         </details>
@@ -411,7 +411,7 @@
         <div>
           <span class="section-pill">Producao</span>
           <h2>O que esta sendo produzido</h2>
-          <p>Consulta somente leitura das ordens em andamento.</p>
+          <p>Retire somente a quantidade que a Montagem pegou fisicamente da maquina. Ela entra direto no estoque da Montagem.</p>
         </div>
 
         <button id="btn-fechar-modal-montagem-producao" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
@@ -428,13 +428,16 @@
               <th>Codigo</th>
               <th>Descricao</th>
               <th>Planejada</th>
+              <th>Ja retirada</th>
+              <th>Disponivel</th>
               <th>Materia-prima</th>
               <th>Inicio</th>
+              <th>Acoes</th>
             </tr>
           </thead>
           <tbody id="montagem-producao-tbody">
             <tr>
-              <td colspan="7" class="empty-state">Carregando producao...</td>
+              <td colspan="10" class="empty-state">Carregando producao...</td>
             </tr>
           </tbody>
         </table>
@@ -443,6 +446,47 @@
       <div class="modal-actions">
         <button id="btn-fechar-modal-montagem-producao-rodape" class="btn btn-neutral" type="button">Fechar</button>
       </div>
+    </div>
+  </div>
+
+  <div id="montagem-consumir-producao-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="montagem-consumir-producao"></div>
+
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Producao</span>
+          <h2>Consumir da Producao</h2>
+          <p>A quantidade informada entra imediatamente no estoque da Montagem e fica abatida da ordem.</p>
+        </div>
+
+        <button id="btn-fechar-modal-montagem-consumir-producao" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="montagem-consumir-producao-mensagem" class="message hidden"></div>
+
+      <form id="montagem-consumir-producao-form" class="form-grid">
+        <input type="hidden" id="montagem-consumir-producao-id">
+
+        <div id="montagem-consumir-producao-resumo" class="span-12 selected-tags empty">
+          Selecione uma ordem em andamento.
+        </div>
+
+        <div class="field span-4">
+          <label for="montagem-consumir-producao-quantidade">Quantidade retirada</label>
+          <input id="montagem-consumir-producao-quantidade" type="number" min="1" step="1" value="1" required>
+        </div>
+
+        <div class="field span-8">
+          <label for="montagem-consumir-producao-observacao">Observacao</label>
+          <input id="montagem-consumir-producao-observacao" type="text" maxlength="255" placeholder="Opcional">
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button id="btn-cancelar-modal-montagem-consumir-producao" class="btn btn-neutral" type="button">Cancelar</button>
+          <button class="btn btn-primary" type="submit">Transferir para Montagem</button>
+        </div>
+      </form>
     </div>
   </div>
 

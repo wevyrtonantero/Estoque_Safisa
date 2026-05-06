@@ -64,7 +64,7 @@
               <button id="expedicao-btn-pedidos-menu" class="btn btn-neutral" type="button"><span class="btn-label">Meus Pedidos</span><span id="expedicao-badge-pedidos" class="btn-badge hidden">0</span></button>
               <a class="btn btn-secondary" href="/pagina-saidas-expedicao"><span class="btn-label">Relatorio de Saidas</span></a>
               <button id="expedicao-btn-historico-menu" class="btn btn-neutral" type="button"><span class="btn-label">Historico de Saidas</span></button>
-              <button id="expedicao-btn-producao" class="btn btn-secondary" type="button"><span class="btn-label">Ver Producao</span><span id="expedicao-badge-producao" class="btn-badge hidden">0</span></button>
+              <button id="expedicao-btn-producao" class="btn btn-secondary" type="button"><span class="btn-label">Consumir da Producao</span><span id="expedicao-badge-producao" class="btn-badge hidden">0</span></button>
             </div>
           </div>
         </details>
@@ -492,7 +492,7 @@
         <div>
           <span class="section-pill">Producao</span>
           <h2>O que esta sendo produzido</h2>
-          <p>Consulta somente leitura das ordens em andamento.</p>
+          <p>Retire somente a quantidade que a Expedicao pegou fisicamente da maquina. Ela entra direto no estoque da Expedicao.</p>
         </div>
 
         <button id="btn-fechar-modal-expedicao-producao" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
@@ -509,13 +509,16 @@
               <th>Codigo</th>
               <th>Descricao</th>
               <th>Planejada</th>
+              <th>Ja retirada</th>
+              <th>Disponivel</th>
               <th>Materia-prima</th>
               <th>Inicio</th>
+              <th>Acoes</th>
             </tr>
           </thead>
           <tbody id="expedicao-producao-tbody">
             <tr>
-              <td colspan="7" class="empty-state">Carregando producao...</td>
+              <td colspan="10" class="empty-state">Carregando producao...</td>
             </tr>
           </tbody>
         </table>
@@ -524,6 +527,47 @@
       <div class="modal-actions">
         <button id="btn-fechar-modal-expedicao-producao-rodape" class="btn btn-neutral" type="button">Fechar</button>
       </div>
+    </div>
+  </div>
+
+  <div id="expedicao-consumir-producao-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="expedicao-consumir-producao"></div>
+
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Producao</span>
+          <h2>Consumir da Producao</h2>
+          <p>A quantidade informada entra imediatamente no estoque da Expedicao e fica abatida da ordem.</p>
+        </div>
+
+        <button id="btn-fechar-modal-expedicao-consumir-producao" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="expedicao-consumir-producao-mensagem" class="message hidden"></div>
+
+      <form id="expedicao-consumir-producao-form" class="form-grid">
+        <input type="hidden" id="expedicao-consumir-producao-id">
+
+        <div id="expedicao-consumir-producao-resumo" class="span-12 selected-tags empty">
+          Selecione uma ordem em andamento.
+        </div>
+
+        <div class="field span-4">
+          <label for="expedicao-consumir-producao-quantidade">Quantidade retirada</label>
+          <input id="expedicao-consumir-producao-quantidade" type="number" min="1" step="1" value="1" required>
+        </div>
+
+        <div class="field span-8">
+          <label for="expedicao-consumir-producao-observacao">Observacao</label>
+          <input id="expedicao-consumir-producao-observacao" type="text" maxlength="255" placeholder="Opcional">
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button id="btn-cancelar-modal-expedicao-consumir-producao" class="btn btn-neutral" type="button">Cancelar</button>
+          <button class="btn btn-primary" type="submit">Transferir para Expedicao</button>
+        </div>
+      </form>
     </div>
   </div>
 

@@ -89,9 +89,9 @@
               <label for="filtro-producao-status">Status</label>
               <select id="filtro-producao-status">
                 <option value="">Todos</option>
-                <option value="EM_ANDAMENTO">EM_ANDAMENTO</option>
-                <option value="FINALIZADA">FINALIZADA</option>
-                <option value="CANCELADA">CANCELADA</option>
+                <option value="EM_ANDAMENTO">Em andamento</option>
+                <option value="FINALIZADA">Finalizada</option>
+                <option value="CANCELADA">Cancelada</option>
               </select>
             </div>
 
@@ -100,25 +100,27 @@
 
           <div class="subtle-divider"></div>
 
-          <div class="table-wrapper" data-print-table data-print-title="Producao">
+          <div class="table-wrapper production-orders-table" data-print-table data-print-title="Producao">
             <table>
               <thead>
                 <tr>
                   <th>Status</th>
                   <th>Maquina</th>
                   <th>Peca</th>
-                  <th>Planejada</th>
-                  <th>Produzida</th>
+                  <th title="Planejada">Planj.</th>
+                  <th title="Produzida">Produ.</th>
                   <th>Refugo</th>
-                  <th>Materia-prima</th>
-                  <th>Consumo</th>
+                  <th title="Destinada">Dest.</th>
+                  <th title="A destinar">A dest.</th>
+                  <th title="Materia-prima">Mat.-prima</th>
+                  <th title="Consumo">Cons.</th>
                   <th>Inicio</th>
                   <th>Acoes</th>
                 </tr>
               </thead>
               <tbody id="producao-tbody">
                 <tr>
-                  <td colspan="10" class="empty-state">Carregando ordens de producao...</td>
+                  <td colspan="12" class="empty-state">Carregando ordens de producao...</td>
                 </tr>
               </tbody>
             </table>
@@ -384,6 +386,8 @@
 
             <div class="structure-kpis">
               <span id="finalizacao-planejada-chip" class="mini-chip">Planejada: 0</span>
+              <span id="finalizacao-ja-destinado-chip" class="mini-chip">Ja destinado: 0</span>
+              <span id="finalizacao-pendente-chip" class="mini-chip">A destinar: 0</span>
               <span id="finalizacao-mp-chip" class="mini-chip">Materia-prima: -</span>
               <span id="finalizacao-especificacao-chip" class="mini-chip">Especificacao: -</span>
               <span id="finalizacao-regra-chip" class="mini-chip">Regra: aguardando</span>
@@ -410,6 +414,45 @@
         <div class="field span-12">
           <label for="finalizacao-observacao">Observacao de finalizacao</label>
           <input id="finalizacao-observacao" type="text" maxlength="255" placeholder="Opcional">
+        </div>
+
+        <div class="span-12 embedded-section">
+          <div class="section-header-inline">
+            <div>
+              <p class="page-kicker">Destino das pecas boas</p>
+              <h3>Distribua somente o saldo que ainda esta na producao</h3>
+            </div>
+            <p id="finalizacao-destinos-resumo">Informe a quantidade produzida para calcular.</p>
+          </div>
+
+          <div class="form-grid compact-form">
+            <div class="field span-4">
+              <label for="finalizacao-destino-tratamento">Tratamento Externo</label>
+              <input id="finalizacao-destino-tratamento" type="number" min="0" step="1" value="0">
+            </div>
+
+            <div class="field span-4">
+              <label for="finalizacao-destino-inacabadas">Pecas Inacabadas</label>
+              <input id="finalizacao-destino-inacabadas" type="number" min="0" step="1" value="0">
+            </div>
+
+            <div class="field span-4">
+              <label for="finalizacao-destino-retrabalho">Retrabalho</label>
+              <input id="finalizacao-destino-retrabalho" type="number" min="0" step="1" value="0">
+            </div>
+
+            <div class="field span-6">
+              <label for="finalizacao-destino-montagem">Montagem</label>
+              <input id="finalizacao-destino-montagem" type="number" min="0" step="1" value="0">
+            </div>
+
+            <div class="field span-6">
+              <label for="finalizacao-destino-expedicao">Expedicao</label>
+              <input id="finalizacao-destino-expedicao" type="number" min="0" step="1" value="0">
+            </div>
+          </div>
+
+          <div id="finalizacao-destinos-alerta" class="inline-note hidden"></div>
         </div>
 
         <div class="span-12 modal-actions">

@@ -27,6 +27,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
+document.addEventListener('DOMContentLoaded', () => {
+  document.addEventListener('click', handleRowMenuDirection);
+});
+
 function resolveIndicatorHost() {
   const topbarActions = document.querySelector('.topbar-actions');
   if (topbarActions) {
@@ -85,4 +89,51 @@ function formatRole(role) {
   };
 
   return labels[role] || role || '-';
+}
+
+function handleRowMenuDirection(event) {
+  const trigger = event.target.closest('.row-menu-trigger');
+
+  if (!trigger) {
+    window.requestAnimationFrame(clearClosedDropUpMenus);
+    return;
+  }
+
+  const menu = trigger.closest('.row-menu');
+  window.requestAnimationFrame(() => {
+    clearClosedDropUpMenus();
+
+    if (menu && menu.hasAttribute('open')) {
+      adjustRowMenuDirection(menu);
+    }
+  });
+}
+
+function adjustRowMenuDirection(menu) {
+  menu.classList.remove('drop-up');
+
+  const trigger = menu.querySelector('.row-menu-trigger');
+  const panel = menu.querySelector('.row-menu-panel');
+  if (!trigger || !panel) {
+    return;
+  }
+
+  const wrapper = menu.closest('.table-wrapper');
+  const triggerRect = trigger.getBoundingClientRect();
+  const wrapperRect = wrapper ? wrapper.getBoundingClientRect() : null;
+  const limitTop = Math.max(0, wrapperRect ? wrapperRect.top : 0);
+  const limitBottom = Math.min(window.innerHeight, wrapperRect ? wrapperRect.bottom : window.innerHeight);
+  const panelHeight = panel.offsetHeight || 180;
+  const spaceBelow = limitBottom - triggerRect.bottom;
+  const spaceAbove = triggerRect.top - limitTop;
+
+  if (spaceBelow < panelHeight + 12 && spaceAbove > spaceBelow) {
+    menu.classList.add('drop-up');
+  }
+}
+
+function clearClosedDropUpMenus() {
+  document.querySelectorAll('.row-menu.drop-up:not([open])').forEach((menu) => {
+    menu.classList.remove('drop-up');
+  });
 }

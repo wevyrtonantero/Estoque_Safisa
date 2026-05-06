@@ -25,11 +25,23 @@ let almoxStockId = null;
 let estoqueConsultaDebounceTimer = null;
 let filtroDebounceTimer = null;
 let autoRefreshHandle = null;
+let finalizacaoContexto = null;
 
 const refs = {
   mensagem: document.getElementById('producao-mensagem'),
   modalMensagem: document.getElementById('producao-modal-mensagem'),
   finalizacaoMensagem: document.getElementById('finalizacao-mensagem'),
+  finalizacaoQuantidadeProduzida: document.getElementById('finalizacao-quantidade-produzida'),
+  finalizacaoQuantidadeRefugo: document.getElementById('finalizacao-quantidade-refugo'),
+  finalizacaoJaDestinadoChip: document.getElementById('finalizacao-ja-destinado-chip'),
+  finalizacaoPendenteChip: document.getElementById('finalizacao-pendente-chip'),
+  finalizacaoDestinosResumo: document.getElementById('finalizacao-destinos-resumo'),
+  finalizacaoDestinoTratamento: document.getElementById('finalizacao-destino-tratamento'),
+  finalizacaoDestinoInacabadas: document.getElementById('finalizacao-destino-inacabadas'),
+  finalizacaoDestinoRetrabalho: document.getElementById('finalizacao-destino-retrabalho'),
+  finalizacaoDestinoMontagem: document.getElementById('finalizacao-destino-montagem'),
+  finalizacaoDestinoExpedicao: document.getElementById('finalizacao-destino-expedicao'),
+  finalizacaoDestinosAlerta: document.getElementById('finalizacao-destinos-alerta'),
   tabela: document.getElementById('producao-tbody'),
   total: document.getElementById('total-producao'),
   solicitacoesTotal: document.getElementById('total-solicitacoes-producao'),
@@ -133,6 +145,16 @@ function bindEvents() {
   refs.materiaPrimaSelect.addEventListener('change', handleMateriaPrimaOrdemChange);
   document.getElementById('producao-quantidade-planejada').addEventListener('input', handlePlanejamentoMateriaPrimaChange);
   refs.comprimentoInicialInput.addEventListener('input', handlePlanejamentoMateriaPrimaChange);
+  [
+    refs.finalizacaoQuantidadeProduzida,
+    refs.finalizacaoDestinoTratamento,
+    refs.finalizacaoDestinoInacabadas,
+    refs.finalizacaoDestinoRetrabalho,
+    refs.finalizacaoDestinoMontagem,
+    refs.finalizacaoDestinoExpedicao
+  ].forEach((field) => {
+    field.addEventListener('input', atualizarResumoDestinosFinalizacao);
+  });
   document.addEventListener('click', handleGlobalClick);
   document.addEventListener('keydown', handleKeyboardShortcuts);
 }
@@ -280,7 +302,7 @@ function renderizarTabela() {
   refs.total.textContent = `${producoesCache.length} registro(s) encontrado(s)`;
 
   if (producoesCache.length === 0) {
-    refs.tabela.innerHTML = '<tr><td colspan="10" class="empty-state">Nenhuma ordem de producao encontrada.</td></tr>';
+    refs.tabela.innerHTML = '<tr><td colspan="12" class="empty-state">Nenhuma ordem de producao encontrada.</td></tr>';
     return;
   }
 
@@ -292,6 +314,8 @@ function renderizarTabela() {
       <td class="table-quantity">${formatInteger(producao.quantidade_planejada)}</td>
       <td class="table-quantity">${formatInteger(producao.quantidade_produzida || 0)}</td>
       <td class="table-quantity">${formatInteger(producao.quantidade_refugo || 0)}</td>
+      <td class="table-quantity">${formatInteger(producao.quantidade_destinada || 0)}</td>
+      <td class="table-quantity">${formatInteger(producao.quantidade_pendente_destino || 0)}</td>
       <td>${renderMateriaPrimaCelula(producao)}</td>
       <td>${escapeHtml(formatarConsumo(producao))}</td>
       <td>${formatarData(producao.data_inicio)}</td>
@@ -539,15 +563,22 @@ async function handleCriarProducao(event) {
 async function handleFinalizarProducao(event) {
   event.preventDefault();
   const id = document.getElementById('finalizacao-id').value;
+  const resumoDestinos = calcularResumoDestinosFinalizacao();
+
+  if (resumoDestinos.totalNovosDestinos > resumoDestinos.quantidadeDisponivel) {
+    mostrarMensagemFinalizacao('A soma dos destinos ultrapassa a quantidade disponivel para destinar.', 'error');
+    return;
+  }
 
   try {
     const response = await fetch(`${producaoApiBaseUrl}/${id}/finalizar`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        quantidade_produzida: document.getElementById('finalizacao-quantidade-produzida').value,
-        quantidade_refugo: document.getElementById('finalizacao-quantidade-refugo').value,
+        quantidade_produzida: refs.finalizacaoQuantidadeProduzida.value,
+        quantidade_refugo: refs.finalizacaoQuantidadeRefugo.value,
         comprimento_corte_mm: refs.finalizacaoComprimentoInput.value.trim(),
+        destinos: montarDestinosFinalizacao(),
         observacao_fim: document.getElementById('finalizacao-observacao').value.trim()
       })
     });
@@ -558,7 +589,12 @@ async function handleFinalizarProducao(event) {
     }
 
     fecharModalFinalizacao();
-    mostrarMensagem('Ordem de producao finalizada com sucesso.', 'success');
+    mostrarMensagem(
+      result.status === 'FINALIZADA'
+        ? 'Ordem de producao finalizada com todos os destinos registrados.'
+        : 'Quantidade final registrada. A ordem continua em andamento ate zerar os destinos.',
+      'success'
+    );
     await Promise.all([carregarProducoes(), carregarSolicitacoesProducao()]);
   } catch (error) {
     mostrarMensagemFinalizacao(error.message, 'error');
@@ -628,16 +664,25 @@ function fecharModalProducao() {
 }
 
 function abrirModalFinalizacao(producao) {
+  finalizacaoContexto = {
+    id: producao.id,
+    quantidadePlanejada: Number(producao.quantidade_planejada || 0),
+    quantidadeJaDestinada: Number(producao.quantidade_destinada || 0)
+  };
   document.getElementById('finalizacao-id').value = producao.id;
   document.getElementById('finalizacao-titulo').textContent = `${producao.peca_codigo} - ${producao.peca_descricao}`;
   document.getElementById('finalizacao-subtitulo').textContent = `${producao.maquina_nome} | ${formatarMateriaPrimaTitulo(producao)}`;
   document.getElementById('finalizacao-planejada-chip').textContent = `Planejada: ${formatInteger(producao.quantidade_planejada)}`;
+  refs.finalizacaoJaDestinadoChip.textContent = `Ja destinado: ${formatInteger(producao.quantidade_destinada || 0)}`;
+  refs.finalizacaoPendenteChip.textContent = `A destinar: ${formatInteger(producao.quantidade_pendente_destino || 0)}`;
   document.getElementById('finalizacao-mp-chip').textContent = `Materia-prima: ${formatarMateriaPrimaTitulo(producao)}`;
   refs.finalizacaoEspecificacaoChip.textContent = `Especificacao: ${formatarResumoTecnicoMateriaPrima(producao)}`;
   document.getElementById('finalizacao-regra-chip').textContent = `Regra: ${producao.materia_prima_geometria === 'FUNDIDO' ? 'consumo unitario' : 'consumo por comprimento'}`;
-  document.getElementById('finalizacao-quantidade-produzida').value = '0';
-  document.getElementById('finalizacao-quantidade-refugo').value = '0';
+  refs.finalizacaoQuantidadeProduzida.value = String(Number(producao.quantidade_produzida ?? producao.quantidade_planejada ?? 0));
+  refs.finalizacaoQuantidadeRefugo.value = String(Number(producao.quantidade_refugo || 0));
   refs.finalizacaoComprimentoInput.value = producao.comprimento_corte_mm ? formatInputDecimal(producao.comprimento_corte_mm) : '';
+  zerarDestinosFinalizacao();
+  atualizarResumoDestinosFinalizacao();
   refs.finalizacaoComprimentoWrapper.classList.toggle(
     'hidden',
     String(producao.materia_prima_geometria || '').toUpperCase() === 'FUNDIDO'
@@ -648,18 +693,121 @@ function abrirModalFinalizacao(producao) {
 }
 
 function fecharModalFinalizacao() {
+  finalizacaoContexto = null;
   document.getElementById('finalizacao-form').reset();
   document.getElementById('finalizacao-id').value = '';
   document.getElementById('finalizacao-titulo').textContent = 'Nenhuma ordem selecionada';
   document.getElementById('finalizacao-subtitulo').textContent = 'Selecione uma ordem em andamento na tabela.';
   document.getElementById('finalizacao-planejada-chip').textContent = 'Planejada: 0';
+  refs.finalizacaoJaDestinadoChip.textContent = 'Ja destinado: 0';
+  refs.finalizacaoPendenteChip.textContent = 'A destinar: 0';
   document.getElementById('finalizacao-mp-chip').textContent = 'Materia-prima: -';
   refs.finalizacaoEspecificacaoChip.textContent = 'Especificacao: -';
   document.getElementById('finalizacao-regra-chip').textContent = 'Regra: aguardando';
   refs.finalizacaoComprimentoInput.value = '';
+  zerarDestinosFinalizacao();
+  refs.finalizacaoDestinosResumo.textContent = 'Informe a quantidade produzida para calcular.';
+  refs.finalizacaoDestinosAlerta.className = 'inline-note hidden';
+  refs.finalizacaoDestinosAlerta.textContent = '';
   refs.finalizacaoComprimentoWrapper.classList.remove('hidden');
   esconderMensagemFinalizacao();
   closeModal(refs.finalizacaoModal);
+}
+
+function obterCamposDestinoFinalizacao() {
+  return [
+    {
+      destino: 'TRATAMENTO_EXTERNO',
+      label: 'Tratamento Externo',
+      field: refs.finalizacaoDestinoTratamento
+    },
+    {
+      destino: 'PECAS_INACABADAS',
+      label: 'Pecas Inacabadas',
+      field: refs.finalizacaoDestinoInacabadas
+    },
+    {
+      destino: 'RETRABALHO',
+      label: 'Retrabalho',
+      field: refs.finalizacaoDestinoRetrabalho
+    },
+    {
+      destino: 'MONTAGEM',
+      label: 'Montagem',
+      field: refs.finalizacaoDestinoMontagem
+    },
+    {
+      destino: 'EXPEDICAO',
+      label: 'Expedicao',
+      field: refs.finalizacaoDestinoExpedicao
+    }
+  ];
+}
+
+function zerarDestinosFinalizacao() {
+  obterCamposDestinoFinalizacao().forEach((item) => {
+    item.field.value = '0';
+  });
+}
+
+function calcularResumoDestinosFinalizacao() {
+  const quantidadeProduzida = Number.parseFloat(refs.finalizacaoQuantidadeProduzida.value || '0') || 0;
+  const quantidadeJaDestinada = Number(finalizacaoContexto?.quantidadeJaDestinada || 0);
+  const quantidadeDisponivel = Math.max(0, Number((quantidadeProduzida - quantidadeJaDestinada).toFixed(2)));
+  const totalNovosDestinos = obterCamposDestinoFinalizacao().reduce((total, item) => {
+    const quantidade = Number.parseFloat(item.field.value || '0') || 0;
+    return total + Math.max(0, quantidade);
+  }, 0);
+
+  return {
+    quantidadeProduzida,
+    quantidadeJaDestinada,
+    quantidadeDisponivel,
+    totalNovosDestinos: Number(totalNovosDestinos.toFixed(2)),
+    quantidadeRestante: Number((quantidadeDisponivel - totalNovosDestinos).toFixed(2))
+  };
+}
+
+function atualizarResumoDestinosFinalizacao() {
+  if (!finalizacaoContexto) {
+    return;
+  }
+
+  const resumo = calcularResumoDestinosFinalizacao();
+  refs.finalizacaoJaDestinadoChip.textContent = `Ja destinado: ${formatInteger(resumo.quantidadeJaDestinada)}`;
+  refs.finalizacaoPendenteChip.textContent = `A destinar: ${formatInteger(Math.max(0, resumo.quantidadeRestante))}`;
+  refs.finalizacaoDestinosResumo.textContent = `Produzidas: ${formatInteger(resumo.quantidadeProduzida)} | ja destinadas: ${formatInteger(resumo.quantidadeJaDestinada)} | novos destinos: ${formatInteger(resumo.totalNovosDestinos)} | restante: ${formatInteger(Math.max(0, resumo.quantidadeRestante))}`;
+
+  if (resumo.quantidadeProduzida < resumo.quantidadeJaDestinada) {
+    refs.finalizacaoDestinosAlerta.textContent = 'A quantidade produzida nao pode ser menor que o que ja saiu da producao.';
+    refs.finalizacaoDestinosAlerta.className = 'inline-note is-warning';
+    return;
+  }
+
+  if (resumo.totalNovosDestinos > resumo.quantidadeDisponivel) {
+    refs.finalizacaoDestinosAlerta.textContent = 'A soma dos destinos ultrapassa o saldo que ainda esta na producao.';
+    refs.finalizacaoDestinosAlerta.className = 'inline-note is-warning';
+    return;
+  }
+
+  if (resumo.quantidadeRestante > 0) {
+    refs.finalizacaoDestinosAlerta.textContent = 'A ordem continuara em andamento enquanto restar quantidade sem destino.';
+    refs.finalizacaoDestinosAlerta.className = 'inline-note is-info';
+    return;
+  }
+
+  refs.finalizacaoDestinosAlerta.textContent = 'Toda a quantidade produzida ficara destinada e a ordem sera finalizada.';
+  refs.finalizacaoDestinosAlerta.className = 'inline-note is-success';
+}
+
+function montarDestinosFinalizacao() {
+  return obterCamposDestinoFinalizacao()
+    .map((item) => ({
+      destino: item.destino,
+      quantidade: Number.parseFloat(item.field.value || '0') || 0,
+      observacao: `Destino informado na finalizacao: ${item.label}.`
+    }))
+    .filter((item) => item.quantidade > 0);
 }
 
 function resetFormProducao() {
@@ -945,6 +1093,9 @@ function handleGlobalClick(event) {
     window.requestAnimationFrame(() => {
       const shouldKeepOpen = currentMenu && currentMenu.hasAttribute('open');
       closeAllRowMenus(shouldKeepOpen ? currentMenu : null);
+      if (shouldKeepOpen) {
+        ajustarDirecaoRowMenu(currentMenu);
+      }
     });
     return;
   }
@@ -968,8 +1119,36 @@ function closeAllRowMenus(exceptMenu = null) {
       return;
     }
 
+    menu.classList.remove('drop-up');
     menu.removeAttribute('open');
   });
+}
+
+function ajustarDirecaoRowMenu(menu) {
+  if (!menu) {
+    return;
+  }
+
+  menu.classList.remove('drop-up');
+
+  const panel = menu.querySelector('.row-menu-panel');
+  const trigger = menu.querySelector('.row-menu-trigger');
+
+  if (!panel || !trigger) {
+    return;
+  }
+
+  const wrapper = menu.closest('.table-wrapper');
+  const triggerRect = trigger.getBoundingClientRect();
+  const panelHeight = panel.offsetHeight || 180;
+  const limiteInferior = wrapper ? wrapper.getBoundingClientRect().bottom : window.innerHeight;
+  const limiteSuperior = wrapper ? wrapper.getBoundingClientRect().top : 0;
+  const espacoAbaixo = limiteInferior - triggerRect.bottom;
+  const espacoAcima = triggerRect.top - limiteSuperior;
+
+  if (espacoAbaixo < panelHeight + 12 && espacoAcima > espacoAbaixo) {
+    menu.classList.add('drop-up');
+  }
 }
 
 function esconderSugestoes() {
@@ -1146,6 +1325,16 @@ function extractErrorMessage(result) {
 function renderStatusBadge(status) {
   const normalized = String(status || '').toUpperCase();
   let cssClass = 'status-chip';
+  const labels = {
+    EM_ANDAMENTO: 'Andam.',
+    FINALIZADA: 'Final.',
+    CANCELADA: 'Canc.'
+  };
+  const fullLabels = {
+    EM_ANDAMENTO: 'Em andamento',
+    FINALIZADA: 'Finalizada',
+    CANCELADA: 'Cancelada'
+  };
 
   if (normalized === 'FINALIZADA') {
     cssClass += ' is-success';
@@ -1155,7 +1344,7 @@ function renderStatusBadge(status) {
     cssClass += ' is-danger';
   }
 
-  return `<span class="${cssClass}">${escapeHtml(status || '-')}</span>`;
+  return `<span class="${cssClass}" title="${escapeHtml(fullLabels[normalized] || normalized || '-')}">${escapeHtml(labels[normalized] || status || '-')}</span>`;
 }
 
 function renderSolicitacaoStatusBadge(status) {

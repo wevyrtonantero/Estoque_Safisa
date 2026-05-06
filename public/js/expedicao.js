@@ -82,6 +82,13 @@ const refs = {
   producaoModal: document.getElementById('expedicao-producao-modal'),
   producaoMensagem: document.getElementById('expedicao-producao-mensagem'),
   producaoTbody: document.getElementById('expedicao-producao-tbody'),
+  consumirProducaoModal: document.getElementById('expedicao-consumir-producao-modal'),
+  consumirProducaoMensagem: document.getElementById('expedicao-consumir-producao-mensagem'),
+  consumirProducaoForm: document.getElementById('expedicao-consumir-producao-form'),
+  consumirProducaoId: document.getElementById('expedicao-consumir-producao-id'),
+  consumirProducaoResumo: document.getElementById('expedicao-consumir-producao-resumo'),
+  consumirProducaoQuantidade: document.getElementById('expedicao-consumir-producao-quantidade'),
+  consumirProducaoObservacao: document.getElementById('expedicao-consumir-producao-observacao'),
   solicitacaoModal: document.getElementById('expedicao-solicitacao-modal'),
   solicitacaoMensagem: document.getElementById('expedicao-solicitacao-mensagem'),
   solicitacaoForm: document.getElementById('expedicao-solicitacao-form'),
@@ -208,6 +215,10 @@ function bindEvents() {
   document.getElementById('btn-fechar-modal-expedicao-historico').addEventListener('click', fecharModalHistorico);
   document.getElementById('btn-fechar-modal-expedicao-producao').addEventListener('click', fecharModalProducao);
   document.getElementById('btn-fechar-modal-expedicao-producao-rodape').addEventListener('click', fecharModalProducao);
+  document.getElementById('btn-fechar-modal-expedicao-consumir-producao').addEventListener('click', fecharModalConsumirProducao);
+  document.getElementById('btn-cancelar-modal-expedicao-consumir-producao').addEventListener('click', fecharModalConsumirProducao);
+  refs.producaoTbody.addEventListener('click', handleProducaoActions);
+  refs.consumirProducaoForm.addEventListener('submit', handleConsumirProducao);
   document.getElementById('btn-fechar-modal-expedicao-historico-item').addEventListener('click', fecharModalHistoricoItem);
   document.getElementById('btn-fechar-modal-expedicao-saldos-item').addEventListener('click', fecharModalSaldosItem);
   document.getElementById('btn-fechar-modal-expedicao-solicitacao').addEventListener('click', fecharModalSolicitacao);
@@ -307,6 +318,7 @@ function bindEvents() {
     refs.pedidosModal,
     refs.historicoModal,
     refs.producaoModal,
+    refs.consumirProducaoModal,
     refs.solicitacaoModal,
     refs.efetuarModal,
     refs.desmembrarModal,
@@ -2038,7 +2050,7 @@ async function baixarSaida() {
 async function abrirModalProducao() {
   refs.producaoMensagem.className = 'message hidden';
   refs.producaoMensagem.textContent = '';
-  refs.producaoTbody.innerHTML = '<tr><td colspan="7" class="empty-state">Carregando producao...</td></tr>';
+  refs.producaoTbody.innerHTML = '<tr><td colspan="10" class="empty-state">Carregando producao...</td></tr>';
   openModal(refs.producaoModal);
 
   try {
@@ -2047,7 +2059,7 @@ async function abrirModalProducao() {
     refs.producaoMensagem.textContent = error.message;
     refs.producaoMensagem.className = 'message error';
     refs.producaoMensagem.classList.remove('hidden');
-    refs.producaoTbody.innerHTML = '<tr><td colspan="7" class="empty-state">Nao foi possivel carregar a producao.</td></tr>';
+    refs.producaoTbody.innerHTML = '<tr><td colspan="10" class="empty-state">Nao foi possivel carregar a producao.</td></tr>';
   }
 }
 
@@ -2055,9 +2067,75 @@ function fecharModalProducao() {
   closeModal(refs.producaoModal);
 }
 
+function handleProducaoActions(event) {
+  const button = event.target.closest('button[data-action="consumir-producao"]');
+  if (!button) {
+    return;
+  }
+
+  const producao = producaoEmAndamentoCache.find((item) => Number(item.id) === Number(button.dataset.id));
+  if (!producao) {
+    return;
+  }
+
+  abrirModalConsumirProducao(producao);
+}
+
+function abrirModalConsumirProducao(producao) {
+  refs.consumirProducaoId.value = String(producao.id);
+  refs.consumirProducaoQuantidade.value = '1';
+  refs.consumirProducaoQuantidade.max = String(Math.max(1, Number(producao.quantidade_pendente_destino || 0)));
+  refs.consumirProducaoObservacao.value = '';
+  refs.consumirProducaoResumo.className = 'span-12 selected-tags';
+  refs.consumirProducaoResumo.textContent = `OP ${producao.id} | ${producao.peca_codigo} - ${producao.peca_descricao} | disponivel para retirada: ${formatInteger(producao.quantidade_pendente_destino || 0)}`;
+  refs.consumirProducaoMensagem.className = 'message hidden';
+  refs.consumirProducaoMensagem.textContent = '';
+  openModal(refs.consumirProducaoModal);
+}
+
+function fecharModalConsumirProducao() {
+  refs.consumirProducaoForm.reset();
+  refs.consumirProducaoId.value = '';
+  refs.consumirProducaoResumo.className = 'span-12 selected-tags empty';
+  refs.consumirProducaoResumo.textContent = 'Selecione uma ordem em andamento.';
+  refs.consumirProducaoMensagem.className = 'message hidden';
+  refs.consumirProducaoMensagem.textContent = '';
+  closeModal(refs.consumirProducaoModal);
+}
+
+async function handleConsumirProducao(event) {
+  event.preventDefault();
+  const id = refs.consumirProducaoId.value;
+
+  try {
+    const response = await fetch(`${producaoApiBaseUrl}/${id}/destinos`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        destino: 'EXPEDICAO',
+        quantidade: refs.consumirProducaoQuantidade.value,
+        observacao: refs.consumirProducaoObservacao.value.trim() || 'Retirada da producao pela Expedicao.'
+      })
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.message || 'Nao foi possivel consumir da producao.');
+    }
+
+    fecharModalConsumirProducao();
+    mostrarMensagem('Quantidade transferida da producao para a Expedicao.', 'success');
+    await Promise.all([carregarProducaoEmAndamento(), carregarEstoqueExpedicao()]);
+  } catch (error) {
+    refs.consumirProducaoMensagem.textContent = error.message;
+    refs.consumirProducaoMensagem.className = 'message error';
+    refs.consumirProducaoMensagem.classList.remove('hidden');
+  }
+}
+
 function renderizarProducao(producoes) {
   if (!Array.isArray(producoes) || !producoes.length) {
-    refs.producaoTbody.innerHTML = '<tr><td colspan="7" class="empty-state">Nenhuma ordem em andamento no momento.</td></tr>';
+    refs.producaoTbody.innerHTML = '<tr><td colspan="10" class="empty-state">Nenhuma ordem em andamento no momento.</td></tr>';
     return;
   }
 
@@ -2068,8 +2146,13 @@ function renderizarProducao(producoes) {
       <td class="table-code">${escapeHtml(item.peca_codigo || '-')}</td>
       <td class="table-description">${escapeHtml(item.peca_descricao || '-')}</td>
       <td class="table-quantity">${formatInteger(item.quantidade_planejada)}</td>
+      <td class="table-quantity">${formatInteger(item.quantidade_destinada || 0)}</td>
+      <td class="table-quantity">${formatInteger(item.quantidade_pendente_destino || 0)}</td>
       <td>${escapeHtml(formatMateriaPrima(item))}</td>
       <td>${formatDate(item.data_inicio)}</td>
+      <td class="table-actions-cell">
+        <button type="button" class="btn btn-primary btn-small" data-action="consumir-producao" data-id="${item.id}">Consumir</button>
+      </td>
     </tr>
   `).join('');
 }
@@ -2464,6 +2547,7 @@ function handleModalBackdrop(event) {
   if (event.target.dataset.closeModal === 'expedicao-pedidos') fecharModalPedidos();
   if (event.target.dataset.closeModal === 'expedicao-historico') fecharModalHistorico();
   if (event.target.dataset.closeModal === 'expedicao-producao') fecharModalProducao();
+  if (event.target.dataset.closeModal === 'expedicao-consumir-producao') fecharModalConsumirProducao();
   if (event.target.dataset.closeModal === 'expedicao-solicitacao') fecharModalSolicitacao();
   if (event.target.dataset.closeModal === 'expedicao-efetuar') fecharModalEfetuarMontagem();
   if (event.target.dataset.closeModal === 'expedicao-desmembrar') fecharModalDesmembrar();
@@ -2544,6 +2628,11 @@ function handleKeyboardShortcuts(event) {
     return;
   }
 
+  if (!refs.consumirProducaoModal.classList.contains('hidden')) {
+    fecharModalConsumirProducao();
+    return;
+  }
+
   if (!refs.producaoModal.classList.contains('hidden')) {
     fecharModalProducao();
   }
@@ -2567,6 +2656,7 @@ function closeModal(modal) {
     refs.pedidosModal,
     refs.historicoModal,
     refs.producaoModal,
+    refs.consumirProducaoModal,
     refs.solicitacaoModal,
     refs.efetuarModal,
     refs.desmembrarModal,
