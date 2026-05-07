@@ -63,7 +63,7 @@
       <div class="topbar-actions actions-row">
         <button type="button" id="btn-nova-entrada" class="btn btn-success">Entrada de Pecas</button>
         <button type="button" id="btn-nova-transferencia" class="btn btn-secondary">Transferencia entre Estoques</button>
-        <button type="button" id="btn-nova-saida" class="btn btn-primary">Saida de Venda</button>
+        <button type="button" id="btn-nova-saida" class="btn btn-primary">Consumo Interno</button>
       </div>
     </header>
 
@@ -358,7 +358,7 @@
     </div>
   </div>
 
-  <!-- Modal de saida de venda pela expedicao -->
+  <!-- Modal de consumo interno pelo almoxarifado -->
   <div id="saida-modal" class="modal hidden" aria-hidden="true">
     <div class="modal-backdrop" data-close-modal="saida"></div>
 
@@ -366,8 +366,8 @@
       <div class="modal-header">
         <div>
           <span class="section-pill">Saida</span>
-          <h2>Baixa de Venda pela Expedição</h2>
-          <p>A lista abaixo baixa somente do estoque final de expedição.</p>
+          <h2>Consumo Interno do Almoxarifado</h2>
+          <p>A lista abaixo baixa do Almoxarifado e registra a saida como uso interno.</p>
         </div>
 
         <button id="btn-fechar-modal-saida" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
@@ -377,9 +377,9 @@
 
       <div class="structure-highlight">
         <div>
-          <p class="page-kicker">Estoque Final de Saida</p>
-          <h3 id="saida-estoque-titulo">Expedição</h3>
-          <p id="saida-estoque-subtitulo">Monte a lista de venda e baixe tudo de uma vez.</p>
+          <p class="page-kicker">Estoque de Consumo</p>
+          <h3 id="saida-estoque-titulo">Almoxarifado</h3>
+          <p id="saida-estoque-subtitulo">Informe quem consumiu, monte a lista e confirme a baixa.</p>
         </div>
 
         <div class="structure-kpis">
@@ -388,7 +388,7 @@
         </div>
       </div>
 
-      <!-- Lista de saida de venda montada pela expedicao -->
+      <!-- Lista de consumo interno montada pelo almoxarifado -->
       <form id="saida-form" class="form-grid">
         <input type="hidden" id="saida-item-id">
 
@@ -410,14 +410,19 @@
           <input id="saida-saldo-disponivel" type="text" value="0" readonly>
         </div>
 
-        <div class="field span-12">
-          <label for="saida-observacao">Observacao da venda</label>
+        <div class="field span-4">
+          <label for="saida-responsavel">Nome do consumo interno</label>
+          <input id="saida-responsavel" type="text" maxlength="120" value="Producao" placeholder="Ex.: Producao">
+        </div>
+
+        <div class="field span-8">
+          <label for="saida-observacao">Observacao do consumo</label>
           <input id="saida-observacao" type="text" maxlength="255" placeholder="Opcional">
         </div>
 
         <div class="span-12 compact-actions">
           <button id="btn-adicionar-lista-saida" class="btn btn-secondary" type="button">Adicionar a Lista</button>
-          <button id="btn-adicionar-mais-um-saida" class="btn btn-neutral" type="button">Baixar +1</button>
+          <button id="btn-adicionar-mais-um-saida" class="btn btn-neutral" type="button">Adicionar +1</button>
           <button id="btn-limpar-item-saida" class="btn btn-neutral" type="button">Limpar Item</button>
           <button id="btn-limpar-lista-saida" class="btn btn-neutral" type="button">Limpar Lista</button>
         </div>
@@ -438,7 +443,7 @@
           </thead>
           <tbody id="saida-tbody">
             <tr>
-              <td colspan="5" class="empty-state">Nenhum item adicionado para a baixa de venda.</td>
+              <td colspan="5" class="empty-state">Nenhum item adicionado para o consumo interno.</td>
             </tr>
           </tbody>
         </table>
@@ -446,7 +451,7 @@
 
       <div class="modal-actions">
         <button id="btn-cancelar-modal-saida" class="btn btn-neutral" type="button">Cancelar</button>
-        <button id="btn-baixar-tudo-saida" class="btn btn-primary" type="button">Baixar Tudo</button>
+        <button id="btn-baixar-tudo-saida" class="btn btn-primary" type="button">Confirmar Consumo</button>
       </div>
     </div>
   </div>

@@ -78,6 +78,21 @@ function buildSaidaPayload(body) {
   };
 }
 
+function buildConsumoInternoPayload(body) {
+  const itens = Array.isArray(body.itens) ? body.itens : [];
+
+  return {
+    responsavel_consumo: body.responsavel_consumo
+      ? String(body.responsavel_consumo).trim()
+      : 'Producao',
+    itens: itens.map((item) => ({
+      id_peca: normalizeOptionalInteger(item.id_peca),
+      quantidade: normalizeDecimal(item.quantidade)
+    })),
+    observacao: body.observacao ? String(body.observacao).trim() : null
+  };
+}
+
 function validateEntradaPayload(payload) {
   const errors = [];
 
@@ -161,6 +176,31 @@ function validateSaidaPayload(payload) {
 
   if (payload.tipo_saida === 'OUTROS' && !payload.observacao) {
     errors.push('A observacao e obrigatoria quando o tipo de saida for Outros.');
+  }
+
+  payload.itens.forEach((item, index) => {
+    if (!Number.isInteger(item.id_peca)) {
+      errors.push(`O item da linha ${index + 1} deve ser valido.`);
+    }
+
+    if (!Number.isFinite(item.quantidade) || item.quantidade <= 0) {
+      errors.push(`A quantidade da linha ${index + 1} deve ser maior que zero.`);
+    }
+  });
+
+  return errors;
+}
+
+function validateConsumoInternoPayload(payload) {
+  const errors = [];
+
+  if (!Array.isArray(payload.itens) || payload.itens.length === 0) {
+    errors.push('Informe ao menos um item para o consumo interno.');
+    return errors;
+  }
+
+  if (!payload.responsavel_consumo) {
+    errors.push('Informe o nome do consumo interno.');
   }
 
   payload.itens.forEach((item, index) => {
@@ -412,6 +452,44 @@ const EstoqueController = {
       return res.status(201).json(result);
     } catch (error) {
       const response = extractErrorResponse(error, 'Erro ao registrar saida na Expedição.');
+      return res.status(response.status).json(response.body);
+    }
+  },
+
+  // Registra consumo interno sempre usando o estoque do Almoxarifado e tipo USO_INTERNO.
+  async createConsumoInterno(req, res) {
+    try {
+      const payload = buildConsumoInternoPayload(req.body);
+      const errors = validateConsumoInternoPayload(payload);
+
+      if (errors.length > 0) {
+        return res.status(400).json({ message: 'Dados invalidos.', errors });
+      }
+
+      const result = await EstoqueModel.processConsumoInternoAlmoxarifado({
+        ...payload,
+        usuario: req.currentUser
+          ? {
+            id: req.currentUser.id,
+            login: req.currentUser.login,
+            nome: req.currentUser.nome
+          }
+          : null
+      });
+      await recordAuditLog(req, {
+        modulo: 'ESTOQUE',
+        acao: 'CONSUMO_INTERNO',
+        entidade_tipo: 'EXPEDICAO_SAIDA',
+        entidade_id: result?.saida?.id ?? payload.itens?.[0]?.id_peca ?? null,
+        descricao: 'Consumo interno do Almoxarifado registrado.',
+        depois: {
+          payload,
+          resultado: result
+        }
+      });
+      return res.status(201).json(result);
+    } catch (error) {
+      const response = extractErrorResponse(error, 'Erro ao registrar consumo interno do Almoxarifado.');
       return res.status(response.status).json(response.body);
     }
   },

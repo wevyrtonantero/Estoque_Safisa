@@ -5,6 +5,7 @@ const estoquePrioridadesApiBaseUrl = '/api/estoque/prioridades';
 const estoqueMovimentacoesApiBaseUrl = '/api/estoque/movimentacoes';
 const estoqueEntradaApiBaseUrl = '/api/estoque/entrada-inicial';
 const estoqueTransferenciaApiBaseUrl = '/api/estoque/transferencia';
+const estoqueConsumoInternoApiBaseUrl = '/api/estoque/consumo-interno';
 const fornecedoresApiBaseUrl = '/api/fornecedores';
 const solicitacoesApiBaseUrl = '/api/solicitacoes-estoque';
 const terceirizacaoApiBaseUrl = '/api/terceirizacao';
@@ -68,6 +69,15 @@ const refs = {
   transferenciaDestino: document.getElementById('almox-transferencia-destino'),
   transferenciaQuantidade: document.getElementById('almox-transferencia-quantidade'),
   transferenciaObservacao: document.getElementById('almox-transferencia-observacao'),
+  consumoInternoModal: document.getElementById('almox-consumo-interno-modal'),
+  consumoInternoMensagem: document.getElementById('almox-consumo-interno-mensagem'),
+  consumoInternoBusca: document.getElementById('almox-consumo-interno-busca'),
+  consumoInternoSugestoes: document.getElementById('almox-consumo-interno-sugestoes'),
+  consumoInternoIdItem: document.getElementById('almox-consumo-interno-id-item'),
+  consumoInternoResumo: document.getElementById('almox-consumo-interno-resumo'),
+  consumoInternoQuantidade: document.getElementById('almox-consumo-interno-quantidade'),
+  consumoInternoResponsavel: document.getElementById('almox-consumo-interno-responsavel'),
+  consumoInternoObservacao: document.getElementById('almox-consumo-interno-observacao'),
   pedidosModal: document.getElementById('almox-pedidos-modal'),
   pedidosTotal: document.getElementById('almox-pedidos-total'),
   pedidosTbody: document.getElementById('almox-pedidos-tbody'),
@@ -131,6 +141,7 @@ function bindEvents() {
   document.getElementById('almox-btn-pedidos').addEventListener('click', abrirModalPedidos);
   document.getElementById('almox-btn-entrada-manual').addEventListener('click', abrirModalEntradaManual);
   document.getElementById('almox-btn-transferencia').addEventListener('click', abrirModalTransferencia);
+  document.getElementById('almox-btn-consumo-interno').addEventListener('click', abrirModalConsumoInterno);
   document.getElementById('almox-btn-tratamento').addEventListener('click', abrirModalTratamento);
   document.getElementById('almox-btn-mp').addEventListener('click', abrirModalMateriaPrima);
   document.getElementById('almox-btn-fornecedores').addEventListener('click', abrirModalFornecedores);
@@ -164,6 +175,17 @@ function bindEvents() {
   });
   refs.transferenciaBusca.addEventListener('focus', () => renderizarSugestoesItemEstoque('transferencia', refs.transferenciaBusca.value.trim()));
   refs.transferenciaSugestoes.addEventListener('click', handleSugestaoItemEstoqueClick);
+
+  document.getElementById('btn-fechar-modal-almox-consumo-interno').addEventListener('click', fecharModalConsumoInterno);
+  document.getElementById('btn-cancelar-modal-almox-consumo-interno').addEventListener('click', fecharModalConsumoInterno);
+  document.getElementById('almox-consumo-interno-form').addEventListener('submit', handleSalvarConsumoInterno);
+  refs.consumoInternoBusca.addEventListener('input', () => {
+    refs.consumoInternoIdItem.value = '';
+    renderizarResumoConsumoInterno(null);
+    renderizarSugestoesItemEstoque('consumoInterno', refs.consumoInternoBusca.value.trim());
+  });
+  refs.consumoInternoBusca.addEventListener('focus', () => renderizarSugestoesItemEstoque('consumoInterno', refs.consumoInternoBusca.value.trim()));
+  refs.consumoInternoSugestoes.addEventListener('click', handleSugestaoItemEstoqueClick);
 
   refs.pedidosFiltroQ.addEventListener('input', renderizarPedidos);
   refs.pedidosFiltroStatus.addEventListener('change', renderizarPedidos);
@@ -205,6 +227,7 @@ function bindEvents() {
     refs.fornecedoresModal,
     refs.entradaManualModal,
     refs.transferenciaModal,
+    refs.consumoInternoModal,
     refs.pedidosModal,
     refs.atendimentoModal,
     refs.tratamentoModal,
@@ -387,6 +410,13 @@ function getItemEstoqueAutocompleteConfig(tipo) {
     };
   }
 
+  if (tipo === 'consumoInterno') {
+    return {
+      input: refs.consumoInternoBusca,
+      panel: refs.consumoInternoSugestoes
+    };
+  }
+
   return {
     input: refs.transferenciaBusca,
     panel: refs.transferenciaSugestoes
@@ -397,6 +427,10 @@ function renderizarSugestoesItemEstoque(tipo, termo) {
   const config = getItemEstoqueAutocompleteConfig(tipo);
   const filtro = normalizarBusca(termo);
   const itens = itensEstoqueCache.filter((item) => {
+    if (tipo === 'consumoInterno' && obterSaldoAlmoxarifadoItem(item.id) <= 0) {
+      return false;
+    }
+
     if (!filtro) {
       return true;
     }
@@ -410,12 +444,19 @@ function renderizarSugestoesItemEstoque(tipo, termo) {
     return;
   }
 
-  config.panel.innerHTML = itens.map((item) => `
-    <button type="button" class="autocomplete-option" data-item-tipo="${escapeHtml(tipo)}" data-item-id="${item.id}">
-      <strong>${escapeHtml(`${item.codigo} - ${item.descricao}`)}</strong>
-      <span>${escapeHtml(`${item.classificacao} | ${item.tipo}`)}</span>
-    </button>
-  `).join('');
+  config.panel.innerHTML = itens.map((item) => {
+    const saldoAlmox = obterSaldoAlmoxarifadoItem(item.id);
+    const subtitulo = tipo === 'consumoInterno'
+      ? `${item.classificacao} | ${item.tipo} | Disponivel Almox: ${formatDecimal(saldoAlmox)}`
+      : `${item.classificacao} | ${item.tipo}`;
+
+    return `
+      <button type="button" class="autocomplete-option" data-item-tipo="${escapeHtml(tipo)}" data-item-id="${item.id}">
+        <strong>${escapeHtml(`${item.codigo} - ${item.descricao}`)}</strong>
+        <span>${escapeHtml(subtitulo)}</span>
+      </button>
+    `;
+  }).join('');
   config.panel.classList.remove('hidden');
 }
 
@@ -438,6 +479,10 @@ function selecionarItemEstoquePorId(tipo, id) {
     refs.entradaManualIdItem.value = String(item.id);
     refs.entradaManualBusca.value = `${item.codigo} - ${item.descricao}`;
     renderizarResumoEntradaManual(item);
+  } else if (tipo === 'consumoInterno') {
+    refs.consumoInternoIdItem.value = String(item.id);
+    refs.consumoInternoBusca.value = `${item.codigo} - ${item.descricao}`;
+    renderizarResumoConsumoInterno(item);
   } else {
     refs.transferenciaIdItem.value = String(item.id);
     refs.transferenciaBusca.value = `${item.codigo} - ${item.descricao}`;
@@ -445,6 +490,11 @@ function selecionarItemEstoquePorId(tipo, id) {
   }
 
   esconderSugestoesItemEstoque();
+}
+
+function obterSaldoAlmoxarifadoItem(idPeca) {
+  const saldo = saldosAlmoxCache.find((item) => Number(item.id_peca) === Number(idPeca));
+  return saldo ? Number(saldo.quantidade || 0) : 0;
 }
 
 function renderizarResumoEntradaManual(item) {
@@ -479,6 +529,23 @@ function renderizarResumoTransferencia(item) {
     <span class="selected-tag">${escapeHtml(item.descricao)}</span>
     <span class="selected-tag">${escapeHtml(`Classificacao: ${item.classificacao}`)}</span>
     <span class="selected-tag">${escapeHtml(`Tipo: ${item.tipo}`)}</span>
+  `;
+}
+
+function renderizarResumoConsumoInterno(item) {
+  if (!item) {
+    refs.consumoInternoResumo.classList.add('selected-tags', 'empty');
+    refs.consumoInternoResumo.textContent = 'Selecione um item com saldo no Almoxarifado.';
+    return;
+  }
+
+  refs.consumoInternoResumo.classList.remove('empty');
+  refs.consumoInternoResumo.classList.add('selected-tags');
+  refs.consumoInternoResumo.innerHTML = `
+    <span class="selected-tag">${escapeHtml(item.codigo)}</span>
+    <span class="selected-tag">${escapeHtml(item.descricao)}</span>
+    <span class="selected-tag">${escapeHtml(`Classificacao: ${item.classificacao}`)}</span>
+    <span class="selected-tag">${escapeHtml(`Saldo Almox: ${formatDecimal(obterSaldoAlmoxarifadoItem(item.id))}`)}</span>
   `;
 }
 
@@ -989,6 +1056,66 @@ async function handleSalvarTransferencia(event) {
     refs.transferenciaMensagem.textContent = error.message;
     refs.transferenciaMensagem.className = 'message error';
     refs.transferenciaMensagem.classList.remove('hidden');
+  }
+}
+
+async function abrirModalConsumoInterno() {
+  try {
+    await carregarItensEstoque();
+    resetModalConsumoInterno();
+    openModal(refs.consumoInternoModal);
+  } catch (error) {
+    mostrarMensagem(error.message, 'error');
+  }
+}
+
+function fecharModalConsumoInterno() {
+  resetModalConsumoInterno();
+  closeModal(refs.consumoInternoModal);
+}
+
+function resetModalConsumoInterno() {
+  document.getElementById('almox-consumo-interno-form').reset();
+  refs.consumoInternoIdItem.value = '';
+  refs.consumoInternoResponsavel.value = 'Producao';
+  refs.consumoInternoQuantidade.value = '1';
+  refs.consumoInternoResumo.classList.add('selected-tags', 'empty');
+  refs.consumoInternoResumo.textContent = 'Selecione um item com saldo no Almoxarifado.';
+  refs.consumoInternoMensagem.className = 'message hidden';
+  refs.consumoInternoMensagem.textContent = '';
+  refs.consumoInternoSugestoes.classList.add('hidden');
+  refs.consumoInternoSugestoes.innerHTML = '';
+}
+
+async function handleSalvarConsumoInterno(event) {
+  event.preventDefault();
+
+  try {
+    const response = await fetch(estoqueConsumoInternoApiBaseUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        responsavel_consumo: refs.consumoInternoResponsavel.value.trim() || 'Producao',
+        itens: [{
+          id_peca: refs.consumoInternoIdItem.value,
+          quantidade: refs.consumoInternoQuantidade.value
+        }],
+        observacao: refs.consumoInternoObservacao.value.trim()
+      })
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(extractErrorMessage(result));
+    }
+
+    fecharModalConsumoInterno();
+    mostrarMensagem('Consumo interno registrado com sucesso.', 'success');
+    await Promise.all([carregarEstoqueAlmox(), carregarHistoricoSeAberto()]);
+  } catch (error) {
+    refs.consumoInternoMensagem.textContent = error.message;
+    refs.consumoInternoMensagem.className = 'message error';
+    refs.consumoInternoMensagem.classList.remove('hidden');
   }
 }
 
@@ -1594,6 +1721,7 @@ function handleModalBackdrop(event) {
   if (event.target.dataset.closeModal === 'almox-fornecedores') fecharModalFornecedores();
   if (event.target.dataset.closeModal === 'almox-entrada-manual') fecharModalEntradaManual();
   if (event.target.dataset.closeModal === 'almox-transferencia') fecharModalTransferencia();
+  if (event.target.dataset.closeModal === 'almox-consumo-interno') fecharModalConsumoInterno();
   if (event.target.dataset.closeModal === 'almox-pedidos') fecharModalPedidos();
   if (event.target.dataset.closeModal === 'almox-atendimento') fecharModalAtendimento();
   if (event.target.dataset.closeModal === 'almox-tratamento') fecharModalTratamento();
@@ -1632,6 +1760,7 @@ function handleKeyboardShortcuts(event) {
   else if (!refs.fornecedoresModal.classList.contains('hidden')) fecharModalFornecedores();
   else if (!refs.historicoModal.classList.contains('hidden')) fecharModalHistorico();
   else if (!refs.mpModal.classList.contains('hidden')) fecharModalMateriaPrima();
+  else if (!refs.consumoInternoModal.classList.contains('hidden')) fecharModalConsumoInterno();
   else if (!refs.transferenciaModal.classList.contains('hidden')) fecharModalTransferencia();
   else if (!refs.entradaManualModal.classList.contains('hidden')) fecharModalEntradaManual();
   else if (!refs.recebimentoModal.classList.contains('hidden')) fecharModalRecebimento();
@@ -1645,6 +1774,8 @@ function esconderSugestoesItemEstoque() {
   refs.entradaManualSugestoes.innerHTML = '';
   refs.transferenciaSugestoes.classList.add('hidden');
   refs.transferenciaSugestoes.innerHTML = '';
+  refs.consumoInternoSugestoes.classList.add('hidden');
+  refs.consumoInternoSugestoes.innerHTML = '';
 }
 
 function esconderSugestoesMateriaPrima() {
@@ -1675,6 +1806,7 @@ function closeModal(modal) {
     refs.fornecedoresModal,
     refs.entradaManualModal,
     refs.transferenciaModal,
+    refs.consumoInternoModal,
     refs.pedidosModal,
     refs.atendimentoModal,
     refs.tratamentoModal,

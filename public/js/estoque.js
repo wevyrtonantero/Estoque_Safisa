@@ -7,7 +7,7 @@ const estoqueMovimentacoesApiBaseUrl = '/api/estoque/movimentacoes';
 const entradaInicialApiBaseUrl = '/api/estoque/entrada-inicial';
 const transferenciaApiBaseUrl = '/api/estoque/transferencia';
 const ajusteApiBaseUrl = '/api/estoque/ajuste';
-const saidaApiBaseUrl = '/api/estoque/saida';
+const saidaApiBaseUrl = '/api/estoque/consumo-interno';
 const composicoesVendaApiBaseUrl = '/api/composicoes-venda';
 let estoquesCache = [];
 let itensCache = [];
@@ -18,10 +18,17 @@ let estruturasSubmontagemCache = new Map();
 let composicoesVendaCache = new Map();
 let filtroDebounceTimer = null;
 const expedicaoNomeCorreto = 'Expedi\u00e7\u00e3o';
+const almoxarifadoNomeCorreto = 'Almoxarifado';
 
 function obterEstoqueExpedicao() {
   return estoquesCache.find((estoque) => Number(estoque.id) === 3)
     || estoquesCache.find((estoque) => String(estoque.nome || '') === expedicaoNomeCorreto)
+    || null;
+}
+
+function obterEstoqueAlmoxarifado() {
+  return estoquesCache.find((estoque) => String(estoque.nome || '') === almoxarifadoNomeCorreto)
+    || estoquesCache.find((estoque) => Number(estoque.id) === 1)
     || null;
 }
 
@@ -33,6 +40,16 @@ function isRegistroExpedicao(registro) {
   }
 
   return String(registro.estoque_nome || '') === expedicaoNomeCorreto;
+}
+
+function isRegistroAlmoxarifado(registro) {
+  const estoqueAlmoxarifado = obterEstoqueAlmoxarifado();
+
+  if (estoqueAlmoxarifado && Number(registro.id_estoque) === Number(estoqueAlmoxarifado.id)) {
+    return true;
+  }
+
+  return String(registro.estoque_nome || '') === almoxarifadoNomeCorreto;
 }
 
 const filtroForm = document.getElementById('estoque-filtro-form');
@@ -521,7 +538,7 @@ function renderizarSugestoesItem(tipo, termo) {
   const config = getItemAutocompleteConfig(tipo);
   const filtro = termo.toLowerCase();
   const itensFiltrados = itensCache.filter((item) => {
-    if (tipo === 'saida' && obterDisponibilidadeVendaItem(item) <= 0) {
+    if (tipo === 'saida' && obterDisponibilidadeConsumoInternoItem(item) <= 0) {
       return false;
     }
 
@@ -542,9 +559,9 @@ function renderizarSugestoesItem(tipo, termo) {
   }
 
   config.panel.innerHTML = itensFiltrados.map((item) => {
-    const disponivelSaida = obterDisponibilidadeVendaItem(item);
+    const disponivelSaida = obterDisponibilidadeConsumoInternoItem(item);
     const subtitulo = tipo === 'saida'
-      ? `${item.classificacao} | ${item.tipo} | Disponivel ${expedicaoNomeCorreto}: ${formatarQuantidade(disponivelSaida)}`
+      ? `${item.classificacao} | ${item.tipo} | Disponivel ${almoxarifadoNomeCorreto}: ${formatarQuantidade(disponivelSaida)}`
       : `${item.classificacao} | ${item.tipo} | Maquina: ${item.maquina_nome || '-'}`;
 
     return `
@@ -706,11 +723,11 @@ async function handleTransferencia(event) {
   }
 }
 
-// Modal da saida de venda sempre usando o estoque de expedicao.
+// Modal de consumo interno sempre usando o estoque do Almoxarifado.
 async function abrirModalSaida(saldo = null) {
   resetSaidaForm();
 
-  if (saldo && isRegistroExpedicao(saldo)) {
+  if (saldo && isRegistroAlmoxarifado(saldo)) {
     saidaItemIdInput.value = saldo.id_peca;
     saidaItemBuscaInput.value = `${saldo.codigo} - ${saldo.descricao}`;
     await atualizarSaldoDisponivelSaida();
@@ -863,6 +880,15 @@ function obterSaldoExpedicao(itemId) {
   return saldo ? Number(saldo.quantidade) : 0;
 }
 
+function obterSaldoAlmoxarifado(itemId) {
+  const saldo = saldosOperacionaisCache.find((registro) => (
+    isRegistroAlmoxarifado(registro) &&
+    Number(registro.id_peca) === Number(itemId)
+  ));
+
+  return saldo ? Number(saldo.quantidade) : 0;
+}
+
 function calcularDisponibilidadeSubmontagem(componentes) {
   if (!Array.isArray(componentes) || componentes.length === 0) {
     return 0;
@@ -917,8 +943,12 @@ function obterDisponibilidadeVendaItem(item) {
   return calcularDisponibilidadeTotalSubmontagem(item.id, componentes);
 }
 
+function obterDisponibilidadeConsumoInternoItem(item) {
+  return Number(obterSaldoAlmoxarifado(item.id).toFixed(2));
+}
+
 function obterSaldoDisponivelRegistroSaida(registro) {
-  return obterDisponibilidadeVendaItem({
+  return obterDisponibilidadeConsumoInternoItem({
     id: registro.id_peca,
     classificacao: registro.classificacao
   });
@@ -929,17 +959,13 @@ async function obterItemSelecionadoSaida() {
   const item = itensCache.find((registro) => Number(registro.id) === itemId);
 
   if (!item) {
-    mostrarMensagemSaida('Escolha um item ou submontagem valida para a lista de venda.', 'error');
+    mostrarMensagemSaida('Escolha um item ou submontagem valida para a lista de consumo interno.', 'error');
     return null;
   }
 
-  if (item.classificacao === 'SUBMONTAGEM') {
-    await carregarEstruturaSubmontagem(item.id);
-  }
-
-  const saldoDisponivel = obterDisponibilidadeVendaItem(item);
+  const saldoDisponivel = obterDisponibilidadeConsumoInternoItem(item);
   if (saldoDisponivel <= 0) {
-    mostrarMensagemSaida(`O item ${item.codigo} nao possui saldo disponivel na Expedicao.`, 'error');
+    mostrarMensagemSaida(`O item ${item.codigo} nao possui saldo disponivel no Almoxarifado.`, 'error');
     return null;
   }
 
@@ -962,21 +988,8 @@ async function atualizarSaldoDisponivelSaida() {
     return;
   }
 
-  if (item.classificacao === 'SUBMONTAGEM') {
-    try {
-      await carregarEstruturaSubmontagem(item.id);
-      document.getElementById('saida-saldo-disponivel').value = formatarQuantidade(
-        obterDisponibilidadeVendaItem(item)
-      );
-    } catch (error) {
-      document.getElementById('saida-saldo-disponivel').value = '0';
-    }
-
-    return;
-  }
-
   document.getElementById('saida-saldo-disponivel').value = formatarQuantidade(
-    obterDisponibilidadeVendaItem(item)
+    obterDisponibilidadeConsumoInternoItem(item)
   );
 }
 
@@ -986,7 +999,7 @@ async function adicionarItemNaListaSaida() {
 
   const quantidade = Number.parseFloat(document.getElementById('saida-quantidade').value);
   if (!Number.isFinite(quantidade) || quantidade <= 0) {
-    return mostrarMensagemSaida('Informe uma quantidade valida para a lista de venda.', 'error');
+    return mostrarMensagemSaida('Informe uma quantidade valida para a lista de consumo interno.', 'error');
   }
 
   const itemExistente = saidaLista.find((registro) => Number(registro.id_peca) === Number(item.id));
@@ -994,12 +1007,12 @@ async function adicionarItemNaListaSaida() {
   const novaQuantidade = Number((quantidadeAtualLista + quantidade).toFixed(2));
 
   if (novaQuantidade > Number(item.saldo_disponivel)) {
-    return mostrarMensagemSaida(`A quantidade da lista excede o disponivel na Expedicao para ${item.codigo}.`, 'error');
+    return mostrarMensagemSaida(`A quantidade da lista excede o disponivel no Almoxarifado para ${item.codigo}.`, 'error');
   }
 
   upsertItemNaSaida(item, quantidade);
   limparItemSaidaAtual(false);
-  mostrarMensagemSaida('Item adicionado na lista de baixa.', 'success');
+  mostrarMensagemSaida('Item adicionado na lista de consumo interno.', 'success');
 }
 
 async function adicionarMaisUmNaListaSaida() {
@@ -1010,11 +1023,11 @@ async function adicionarMaisUmNaListaSaida() {
   const quantidadeAtualLista = itemExistente ? Number(itemExistente.quantidade) : 0;
 
   if (quantidadeAtualLista + 1 > Number(item.saldo_disponivel)) {
-    return mostrarMensagemSaida(`Nao ha saldo suficiente na Expedicao para adicionar mais 1 de ${item.codigo}.`, 'error');
+    return mostrarMensagemSaida(`Nao ha saldo suficiente no Almoxarifado para adicionar mais 1 de ${item.codigo}.`, 'error');
   }
 
   upsertItemNaSaida(item, 1);
-  mostrarMensagemSaida('Mais 1 unidade adicionada na lista de venda.', 'success');
+  mostrarMensagemSaida('Mais 1 unidade adicionada na lista de consumo interno.', 'success');
 }
 
 function upsertItemNaSaida(item, quantidadeSomada) {
@@ -1050,7 +1063,7 @@ function limparItemSaidaAtual(limparMensagem = true) {
 function limparListaSaida() {
   saidaLista = [];
   renderizarListaSaida();
-  mostrarMensagemSaida('Lista de baixa limpa.', 'success');
+  mostrarMensagemSaida('Lista de consumo interno limpa.', 'success');
 }
 
 function handleSaidaListActions(event) {
@@ -1064,7 +1077,7 @@ function handleSaidaListActions(event) {
   if (actionButton.dataset.saidaAction === 'plus') {
     const saldoDisponivel = obterSaldoDisponivelRegistroSaida(registro);
     if (Number(registro.quantidade) + 1 > saldoDisponivel) {
-      return mostrarMensagemSaida(`Nao ha saldo suficiente na Expedicao para adicionar mais 1 de ${registro.codigo}.`, 'error');
+      return mostrarMensagemSaida(`Nao ha saldo suficiente no Almoxarifado para adicionar mais 1 de ${registro.codigo}.`, 'error');
     }
     registro.quantidade = Number((Number(registro.quantidade) + 1).toFixed(2));
   }
@@ -1086,8 +1099,10 @@ function handleSaidaListActions(event) {
 
 async function baixarTudoSaida() {
   if (saidaLista.length === 0) {
-    return mostrarMensagemSaida('Monte a lista de venda antes de baixar.', 'error');
+    return mostrarMensagemSaida('Monte a lista de consumo interno antes de confirmar.', 'error');
   }
+
+  const responsavelConsumo = document.getElementById('saida-responsavel').value.trim() || 'Producao';
 
   try {
     const response = await fetch(saidaApiBaseUrl, {
@@ -1098,6 +1113,7 @@ async function baixarTudoSaida() {
           id_peca: item.id_peca,
           quantidade: item.quantidade
         })),
+        responsavel_consumo: responsavelConsumo,
         observacao: document.getElementById('saida-observacao').value.trim()
       })
     });
@@ -1108,7 +1124,7 @@ async function baixarTudoSaida() {
     }
 
     fecharModalSaida();
-    mostrarMensagemEstoque('Baixa de venda realizada com sucesso na Expedicao.', 'success');
+    mostrarMensagemEstoque('Consumo interno registrado com sucesso no Almoxarifado.', 'success');
     await recarregarSaldos();
   } catch (error) {
     mostrarMensagemSaida(error.message, 'error');
@@ -1126,7 +1142,7 @@ function renderizarListaSaida() {
   const saidaTbody = document.getElementById('saida-tbody');
 
   if (saidaLista.length === 0) {
-    saidaTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhum item adicionado para a baixa de venda.</td></tr>';
+    saidaTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhum item adicionado para o consumo interno.</td></tr>';
   } else {
     saidaTbody.innerHTML = saidaLista.map((item) => `
       <tr>
@@ -1138,7 +1154,7 @@ function renderizarListaSaida() {
           <details class="row-menu">
             <summary class="row-menu-trigger" aria-label="Abrir acoes">...</summary>
             <div class="row-menu-panel">
-              <button type="button" class="row-menu-item" data-saida-action="plus" data-item-id="${item.id_peca}">Baixar +1</button>
+              <button type="button" class="row-menu-item" data-saida-action="plus" data-item-id="${item.id_peca}">Adicionar +1</button>
               <button type="button" class="row-menu-item" data-saida-action="minus" data-item-id="${item.id_peca}">Remover 1</button>
               <button type="button" class="row-menu-item danger" data-saida-action="remove" data-item-id="${item.id_peca}">Remover da Lista</button>
             </div>
@@ -1383,8 +1399,8 @@ function renderizarTabelaSaldos(saldos) {
             ${Number(saldo.quantidade || 0) > 0 && String(saldo.classificacao || '').toUpperCase() === 'SUBMONTAGEM'
               ? `<button type="button" class="row-menu-item" data-action="disassemble" data-item-id="${saldo.id_peca}" data-stock-id="${saldo.id_estoque}">Desmembrar</button>`
               : ''}
-            ${isRegistroExpedicao(saldo) && Number(saldo.quantidade || 0) > 0
-              ? `<button type="button" class="row-menu-item" data-action="sale" data-item-id="${saldo.id_peca}" data-stock-id="${saldo.id_estoque}">Saida de Venda</button>`
+            ${isRegistroAlmoxarifado(saldo) && Number(saldo.quantidade || 0) > 0
+              ? `<button type="button" class="row-menu-item" data-action="sale" data-item-id="${saldo.id_peca}" data-stock-id="${saldo.id_estoque}">Consumo Interno</button>`
               : ''}
             <button type="button" class="row-menu-item" data-action="adjust" data-item-id="${saldo.id_peca}" data-stock-id="${saldo.id_estoque}">Ajustar Saldo</button>
           </div>
@@ -1496,8 +1512,9 @@ function resetSaidaForm() {
   saidaForm.reset();
   saidaLista = [];
   saidaItemIdInput.value = '';
-  document.getElementById('saida-estoque-titulo').textContent = expedicaoNomeCorreto;
-  document.getElementById('saida-estoque-subtitulo').textContent = 'Monte a lista de venda e baixe tudo de uma vez.';
+  document.getElementById('saida-estoque-titulo').textContent = almoxarifadoNomeCorreto;
+  document.getElementById('saida-estoque-subtitulo').textContent = 'Informe quem consumiu, monte a lista e confirme a baixa.';
+  document.getElementById('saida-responsavel').value = 'Producao';
   document.getElementById('saida-quantidade').value = '1';
   atualizarSaldoDisponivelSaida();
   renderizarListaSaida();

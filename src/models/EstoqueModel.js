@@ -16,6 +16,8 @@ class EstoqueModel {
   }
   static EXPEDICAO_NOME = 'Expedição';
 
+  static ALMOXARIFADO_NOME = 'Almoxarifado';
+
   // Cria um erro de negocio padronizado para as validacoes do fluxo.
   static createBusinessError(message) {
     const error = new Error(message);
@@ -1432,8 +1434,116 @@ class EstoqueModel {
       connection.release();
     }
   }
+
+  // Realiza consumo interno sempre a partir do estoque do Almoxarifado.
+  static async processConsumoInternoAlmoxarifado(data) {
+    const connection = await pool.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      const almoxarifado = await this.findStockByName(this.ALMOXARIFADO_NOME, connection);
+
+      if (!almoxarifado || Number(almoxarifado.ativo) !== 1) {
+        throw this.createBusinessError('O estoque do Almoxarifado nao esta disponivel para realizar o consumo interno.');
+      }
+
+      const responsavel = String(data.responsavel_consumo || 'Producao').trim() || 'Producao';
+      const observacaoBase = [
+        `Consumo interno: ${responsavel}.`,
+        data.observacao ? String(data.observacao).trim() : ''
+      ].filter(Boolean).join(' ').slice(0, 255);
+      const resultados = [];
+      const solicitacoes = [];
+      const movimentos = [];
+
+      for (const itemSolicitado of data.itens || []) {
+        const idPeca = Number(itemSolicitado.id_peca);
+        const quantidade = this.normalizePlannedQuantity(itemSolicitado.quantidade);
+        const item = await this.findItemById(idPeca, connection);
+
+        if (!item) {
+          throw this.createBusinessError('Um dos itens informados nao foi encontrado para o consumo interno.');
+        }
+
+        const saldoAtual = await this.findSaldoForUpdate(connection, almoxarifado.id, idPeca);
+        const quantidadeAtual = saldoAtual ? Number(saldoAtual.quantidade) : 0;
+
+        if (quantidade > quantidadeAtual) {
+          throw this.createBusinessError(`Saldo insuficiente no Almoxarifado para ${item.codigo}.`);
+        }
+
+        const novoSaldo = Number((quantidadeAtual - quantidade).toFixed(2));
+        await this.persistSaldo(connection, almoxarifado.id, idPeca, novoSaldo, saldoAtual);
+
+        const solicitacaoRef = solicitacoes.length + 1;
+        const observacaoMovimento = `${observacaoBase} Baixa do item ${item.codigo}.`.slice(0, 255);
+        const idMovimentacao = await this.createMovimentacao(connection, {
+          id_peca: idPeca,
+          id_estoque_origem: almoxarifado.id,
+          id_estoque_destino: null,
+          tipo_movimentacao: 'SAIDA',
+          quantidade,
+          observacao: observacaoMovimento
+        });
+
+        solicitacoes.push({
+          solicitacao_ref: solicitacaoRef,
+          id_peca: idPeca,
+          codigo: item.codigo,
+          descricao: item.descricao,
+          classificacao: item.classificacao,
+          quantidade_solicitada: quantidade,
+          quantidade_submontagem_pronta: quantidade,
+          quantidade_composicao_venda: 0,
+          quantidade_componentes: 0
+        });
+
+        movimentos.push({
+          id_peca: idPeca,
+          quantidade,
+          observacao: observacaoMovimento,
+          solicitacao_ref: solicitacaoRef,
+          id_peca_solicitada: idPeca,
+          forma_atendimento: 'PRONTO',
+          id_movimentacao_estoque: idMovimentacao
+        });
+
+        resultados.push({
+          id_peca: idPeca,
+          codigo: item.codigo,
+          descricao: item.descricao,
+          quantidade_baixada: quantidade,
+          saldo_restante: novoSaldo
+        });
+      }
+
+      const saida = await ExpedicaoSaidaModel.createFromProcess(connection, {
+        tipo_saida: 'USO_INTERNO',
+        observacao: observacaoBase,
+        usuario: data.usuario,
+        solicitacoes,
+        movimentos
+      });
+
+      await connection.commit();
+
+      return {
+        saida,
+        estoque_origem: almoxarifado,
+        itens: resultados,
+        solicitacoes
+      };
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }
 }
 
 EstoqueModel.EXPEDICAO_NOME = 'Expedi\u00e7\u00e3o';
+EstoqueModel.ALMOXARIFADO_NOME = 'Almoxarifado';
 
 module.exports = EstoqueModel;

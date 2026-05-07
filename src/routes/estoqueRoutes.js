@@ -34,6 +34,9 @@ router.post('/estoque/ajuste', requireApiRoles(STOCK_WRITE_ROLES), EstoqueContro
 // Rota para registrar saida final pela expedicao.
 router.post('/estoque/saida', requireApiRoles(STOCK_WRITE_ROLES), EstoqueController.createSaida);
 
+// Rota para registrar consumo interno do Almoxarifado.
+router.post('/estoque/consumo-interno', requireApiRoles(STOCK_WRITE_ROLES), EstoqueController.createConsumoInterno);
+
 // Rota para listar o relatorio estruturado de saidas da expedicao.
 router.get('/expedicao/saidas', requireApiRoles(STOCK_READ_ROLES), EstoqueController.getSaidasExpedicao);
 

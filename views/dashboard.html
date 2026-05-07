@@ -63,6 +63,7 @@
               <button id="almox-btn-pedidos" class="btn btn-primary" type="button"><span class="btn-label">Solicitacoes Recebidas</span><span id="almox-badge-pedidos" class="btn-badge hidden">0</span></button>
               <button id="almox-btn-entrada-manual" class="btn btn-secondary" type="button"><span class="btn-label">Entrada Manual</span></button>
               <button id="almox-btn-transferencia" class="btn btn-secondary" type="button"><span class="btn-label">Movimentacao entre Estoques</span></button>
+              <button id="almox-btn-consumo-interno" class="btn btn-primary" type="button"><span class="btn-label">Consumo Interno</span></button>
               <button id="almox-btn-tratamento" class="btn btn-neutral" type="button"><span class="btn-label">Entrada do Tratamento Externo</span><span id="almox-badge-tratamento" class="btn-badge hidden">0</span></button>
               <button id="almox-btn-mp" class="btn btn-secondary" type="button"><span class="btn-label">Entrada de Materia-prima</span></button>
               <button id="almox-btn-fornecedores" class="btn btn-neutral" type="button"><span class="btn-label">Consultar Fornecedores</span></button>
@@ -474,6 +475,58 @@
         <div class="span-12 modal-actions">
           <button id="btn-cancelar-modal-almox-transferencia" class="btn btn-neutral" type="button">Cancelar</button>
           <button class="btn btn-primary" type="submit">Confirmar Transferencia</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="almox-consumo-interno-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="almox-consumo-interno"></div>
+
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Uso interno</span>
+          <h2>Consumo interno</h2>
+          <p>Baixe pecas do Almoxarifado e registre a saida como uso interno.</p>
+        </div>
+
+        <button id="btn-fechar-modal-almox-consumo-interno" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="almox-consumo-interno-mensagem" class="message hidden"></div>
+
+      <form id="almox-consumo-interno-form" class="form-grid">
+        <input type="hidden" id="almox-consumo-interno-id-item">
+
+        <div class="field span-12">
+          <label for="almox-consumo-interno-busca">Item ou submontagem</label>
+          <div class="autocomplete">
+            <input id="almox-consumo-interno-busca" type="text" placeholder="Digite codigo ou descricao">
+            <div id="almox-consumo-interno-sugestoes" class="autocomplete-panel hidden"></div>
+          </div>
+        </div>
+
+        <div id="almox-consumo-interno-resumo" class="span-12 selected-tags empty">Selecione um item com saldo no Almoxarifado.</div>
+
+        <div class="field span-4">
+          <label for="almox-consumo-interno-quantidade">Quantidade</label>
+          <input id="almox-consumo-interno-quantidade" type="number" min="0.01" step="0.01" value="1" required>
+        </div>
+
+        <div class="field span-8">
+          <label for="almox-consumo-interno-responsavel">Nome do consumo interno</label>
+          <input id="almox-consumo-interno-responsavel" type="text" maxlength="120" value="Producao" placeholder="Ex.: Producao" required>
+        </div>
+
+        <div class="field span-12">
+          <label for="almox-consumo-interno-observacao">Observacao</label>
+          <input id="almox-consumo-interno-observacao" type="text" maxlength="255" placeholder="Opcional">
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button id="btn-cancelar-modal-almox-consumo-interno" class="btn btn-neutral" type="button">Cancelar</button>
+          <button class="btn btn-primary" type="submit">Confirmar Consumo</button>
         </div>
       </form>
     </div>
