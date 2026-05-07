@@ -38,7 +38,9 @@ function buildFinishPayload(body) {
       ? body.destinos.map((destino) => ({
         destino: destino.destino ? String(destino.destino).trim().toUpperCase() : '',
         quantidade: normalizeOptionalDecimal(destino.quantidade),
-        observacao: destino.observacao ? String(destino.observacao).trim() : null
+        observacao: destino.observacao ? String(destino.observacao).trim() : null,
+        defeito: destino.defeito ? String(destino.defeito).trim() : null,
+        falta_fazer: destino.falta_fazer ? String(destino.falta_fazer).trim() : null
       }))
       : [],
     observacao_fim: body.observacao_fim ? String(body.observacao_fim).trim() : null
@@ -49,7 +51,9 @@ function buildDestinationPayload(body) {
   return {
     destino: body.destino ? String(body.destino).trim().toUpperCase() : '',
     quantidade: normalizeOptionalDecimal(body.quantidade),
-    observacao: body.observacao ? String(body.observacao).trim() : null
+    observacao: body.observacao ? String(body.observacao).trim() : null,
+    defeito: body.defeito ? String(body.defeito).trim() : null,
+    falta_fazer: body.falta_fazer ? String(body.falta_fazer).trim() : null
   };
 }
 
@@ -111,6 +115,14 @@ function validateFinishPayload(payload) {
     if (!Number.isFinite(destino.quantidade) || destino.quantidade <= 0) {
       errors.push(`A quantidade do destino ${index + 1} deve ser maior que zero.`);
     }
+
+    if (destino.destino === 'RETRABALHO' && !destino.defeito) {
+      errors.push(`Informe o defeito do destino ${index + 1}.`);
+    }
+
+    if (destino.destino === 'PECAS_INACABADAS' && !destino.falta_fazer) {
+      errors.push(`Informe o que falta fazer do destino ${index + 1}.`);
+    }
   });
 
   return errors;
@@ -125,6 +137,14 @@ function validateDestinationPayload(payload) {
 
   if (!Number.isFinite(payload.quantidade) || payload.quantidade <= 0) {
     errors.push('A quantidade deve ser maior que zero.');
+  }
+
+  if (payload.destino === 'RETRABALHO' && !payload.defeito) {
+    errors.push('Informe o defeito para enviar ao retrabalho.');
+  }
+
+  if (payload.destino === 'PECAS_INACABADAS' && !payload.falta_fazer) {
+    errors.push('Informe o que falta fazer para enviar as pecas inacabadas.');
   }
 
   return errors;

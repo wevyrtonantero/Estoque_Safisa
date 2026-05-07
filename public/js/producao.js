@@ -39,6 +39,8 @@ const refs = {
   finalizacaoDestinoTratamento: document.getElementById('finalizacao-destino-tratamento'),
   finalizacaoDestinoInacabadas: document.getElementById('finalizacao-destino-inacabadas'),
   finalizacaoDestinoRetrabalho: document.getElementById('finalizacao-destino-retrabalho'),
+  finalizacaoDestinoInacabadasFalta: document.getElementById('finalizacao-destino-inacabadas-falta'),
+  finalizacaoDestinoRetrabalhoDefeito: document.getElementById('finalizacao-destino-retrabalho-defeito'),
   finalizacaoDestinoMontagem: document.getElementById('finalizacao-destino-montagem'),
   finalizacaoDestinoExpedicao: document.getElementById('finalizacao-destino-expedicao'),
   finalizacaoDestinosAlerta: document.getElementById('finalizacao-destinos-alerta'),
@@ -748,6 +750,8 @@ function zerarDestinosFinalizacao() {
   obterCamposDestinoFinalizacao().forEach((item) => {
     item.field.value = '0';
   });
+  refs.finalizacaoDestinoInacabadasFalta.value = '';
+  refs.finalizacaoDestinoRetrabalhoDefeito.value = '';
 }
 
 function calcularResumoDestinosFinalizacao() {
@@ -801,13 +805,35 @@ function atualizarResumoDestinosFinalizacao() {
 }
 
 function montarDestinosFinalizacao() {
-  return obterCamposDestinoFinalizacao()
+  const destinos = obterCamposDestinoFinalizacao()
     .map((item) => ({
       destino: item.destino,
       quantidade: Number.parseFloat(item.field.value || '0') || 0,
       observacao: `Destino informado na finalizacao: ${item.label}.`
     }))
     .filter((item) => item.quantidade > 0);
+
+  const inacabadas = destinos.find((item) => item.destino === 'PECAS_INACABADAS');
+  if (inacabadas) {
+    const faltaFazer = refs.finalizacaoDestinoInacabadasFalta.value.trim();
+    if (!faltaFazer) {
+      throw new Error('Informe o que falta fazer para enviar pecas inacabadas.');
+    }
+
+    inacabadas.falta_fazer = faltaFazer;
+  }
+
+  const retrabalho = destinos.find((item) => item.destino === 'RETRABALHO');
+  if (retrabalho) {
+    const defeito = refs.finalizacaoDestinoRetrabalhoDefeito.value.trim();
+    if (!defeito) {
+      throw new Error('Informe o defeito para enviar pecas ao retrabalho.');
+    }
+
+    retrabalho.defeito = defeito;
+  }
+
+  return destinos;
 }
 
 function resetFormProducao() {

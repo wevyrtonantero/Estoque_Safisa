@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="/img/icon-safisa.ico" type="image/x-icon">
+  <title>SAFISA | Pecas Inacabadas</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <main class="workspace">
+    <header class="topbar">
+      <div class="topbar-copy">
+        <p class="page-kicker">Controle de fluxo</p>
+        <h1 class="page-title">Pecas Inacabadas</h1>
+        <p class="page-subtitle">Veja o que ficou pendente antes da proxima etapa e acompanhe o saldo separado da producao.</p>
+      </div>
+    </header>
+
+    <section class="summary-row">
+      <article class="summary-card">
+        <span>Registros</span>
+        <strong id="metric-especial-registros">0</strong>
+      </article>
+
+      <article class="summary-card">
+        <span>Quantidade Total</span>
+        <strong id="metric-especial-quantidade">0</strong>
+      </article>
+
+      <article class="summary-card">
+        <span>Mais Antigo</span>
+        <strong id="metric-especial-antigo">-</strong>
+      </article>
+    </section>
+
+    <div id="estoque-especial-mensagem" class="message hidden"></div>
+
+    <section class="sector-shell">
+      <aside class="sector-menu">
+        <details class="sector-menu-card">
+          <summary class="sector-menu-summary">
+            <div class="sector-menu-heading">
+              <span class="section-pill">Inacabadas</span>
+              <strong>Menu</strong>
+            </div>
+            <span class="sector-menu-trigger" aria-hidden="true">...</span>
+          </summary>
+
+          <div class="sector-menu-panel">
+            <div class="sector-menu-panel-head">
+              <span class="section-pill">Inacabadas</span>
+              <strong>Acoes rapidas</strong>
+              <small>Atualize a fila ou volte para a producao quando precisar registrar novas entradas.</small>
+            </div>
+
+            <div class="sector-menu-list">
+              <button id="btn-especial-atualizar-menu" class="btn btn-neutral" type="button"><span class="btn-label">Atualizar lista</span></button>
+              <a href="/pagina-producao" class="btn btn-secondary"><span class="btn-label">Ir para Producao</span></a>
+              <a href="/pagina-tratamento-externo" class="btn btn-secondary"><span class="btn-label">Tratamento Externo</span></a>
+            </div>
+          </div>
+        </details>
+      </aside>
+
+      <div class="sector-content">
+        <section class="content-card">
+          <div class="card-top">
+            <div>
+              <span class="section-pill">Inacabadas</span>
+              <h2>Pecas em Aberto</h2>
+              <p id="total-estoque-especial">0 registro(s) encontrado(s)</p>
+            </div>
+          </div>
+
+          <form id="estoque-especial-filtro-form" class="toolbar-form">
+            <div class="field">
+              <label for="filtro-especial-codigo">Codigo</label>
+              <input id="filtro-especial-codigo" type="text" placeholder="Ex.: 005/2">
+            </div>
+
+            <div class="field">
+              <label for="filtro-especial-descricao">Descricao</label>
+              <input id="filtro-especial-descricao" type="text" placeholder="Parte da descricao">
+            </div>
+
+            <div class="field">
+              <label for="filtro-especial-detalhe">Falta fazer</label>
+              <input id="filtro-especial-detalhe" type="text" placeholder="Ex.: furar, temperar, facear">
+            </div>
+
+            <div class="field">
+              <label for="filtro-especial-origem">Origem</label>
+              <input id="filtro-especial-origem" type="text" placeholder="Producao, montagem...">
+            </div>
+
+            <button id="btn-limpar-filtros-especial" class="btn btn-neutral" type="button">Limpar</button>
+          </form>
+
+          <div class="subtle-divider"></div>
+
+          <div class="table-wrapper special-stock-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Cod.</th>
+                  <th>Descricao</th>
+                  <th>Falta fazer</th>
+                  <th>Origem</th>
+                  <th>Qtd.</th>
+                  <th>Acoes</th>
+                </tr>
+              </thead>
+              <tbody id="estoque-especial-tbody">
+                <tr>
+                  <td colspan="7" class="empty-state">Carregando pecas inacabadas...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <div id="especial-refugo-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="especial-refugo"></div>
+
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Refugo</span>
+          <h2>Registrar Refugo</h2>
+          <p>A quantidade sai das inacabadas e fica registrada como baixa de refugo.</p>
+        </div>
+        <button id="btn-fechar-modal-especial-refugo" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="especial-refugo-mensagem" class="message hidden"></div>
+
+      <form id="especial-refugo-form" class="form-grid">
+        <input type="hidden" id="especial-refugo-id">
+        <div id="especial-refugo-resumo" class="span-12 selected-tags empty">Selecione uma peca para continuar.</div>
+
+        <div class="field span-4">
+          <label for="especial-refugo-quantidade">Quantidade</label>
+          <input id="especial-refugo-quantidade" type="number" min="0" step="1" value="1" required>
+        </div>
+
+        <div class="field span-8">
+          <label for="especial-refugo-nome">Nome</label>
+          <input id="especial-refugo-nome" type="text" maxlength="120" placeholder="Quem esta registrando" required>
+        </div>
+
+        <div class="field span-12">
+          <label for="especial-refugo-motivo">Motivo</label>
+          <input id="especial-refugo-motivo" type="text" maxlength="255" placeholder="Explique o motivo do refugo" required>
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button id="btn-cancelar-modal-especial-refugo" class="btn btn-neutral" type="button">Cancelar</button>
+          <button class="btn btn-danger" type="submit">Registrar Refugo</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="especial-estoque-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="especial-estoque"></div>
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Estoque</span>
+          <h2>Encaminhar para Estoque</h2>
+          <p>Esta opcao fica ativa apenas na tela de retrabalho.</p>
+        </div>
+        <button id="btn-fechar-modal-especial-estoque" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+      <div id="especial-estoque-mensagem" class="message hidden"></div>
+      <form id="especial-estoque-form" class="form-grid">
+        <input type="hidden" id="especial-estoque-id">
+        <div id="especial-estoque-resumo" class="span-12 selected-tags empty">Selecione uma peca para continuar.</div>
+        <div class="field span-4">
+          <label for="especial-estoque-quantidade">Quantidade</label>
+          <input id="especial-estoque-quantidade" type="number" min="0" step="1" value="1" required>
+        </div>
+        <div class="field span-8">
+          <label for="especial-estoque-destino">Estoque destino</label>
+          <select id="especial-estoque-destino" required>
+            <option value="">Selecione</option>
+          </select>
+        </div>
+        <div class="field span-12">
+          <label for="especial-estoque-observacao">Observacao</label>
+          <input id="especial-estoque-observacao" type="text" maxlength="255" placeholder="Opcional">
+        </div>
+        <div class="span-12 modal-actions">
+          <button id="btn-cancelar-modal-especial-estoque" class="btn btn-neutral" type="button">Cancelar</button>
+          <button class="btn btn-success" type="submit">Encaminhar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="especial-tratamento-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="especial-tratamento"></div>
+
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Tratamento</span>
+          <h2>Encaminhar para Tratamento Externo</h2>
+          <p>A quantidade sai deste controle e entra na fila de tratamento externo.</p>
+        </div>
+        <button id="btn-fechar-modal-especial-tratamento" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="especial-tratamento-mensagem" class="message hidden"></div>
+
+      <form id="especial-tratamento-form" class="form-grid">
+        <input type="hidden" id="especial-tratamento-id">
+        <div id="especial-tratamento-resumo" class="span-12 selected-tags empty">Selecione uma peca para continuar.</div>
+
+        <div class="field span-4">
+          <label for="especial-tratamento-quantidade">Quantidade</label>
+          <input id="especial-tratamento-quantidade" type="number" min="0" step="1" value="1" required>
+        </div>
+
+        <div class="field span-8">
+          <label for="especial-tratamento-observacao">Observacao</label>
+          <input id="especial-tratamento-observacao" type="text" maxlength="255" placeholder="Opcional">
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button id="btn-cancelar-modal-especial-tratamento" class="btn btn-neutral" type="button">Cancelar</button>
+          <button class="btn btn-primary" type="submit">Enviar para Tratamento</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    window.ESTOQUE_ESPECIAL_CONFIG = {
+      tipo: 'PECAS_INACABADAS',
+      detalheLabel: 'Falta fazer',
+      emptyMessage: 'Nenhuma peca inacabada.',
+      permiteEstoque: false
+    };
+  </script>
+  <script src="/js/sector-menu.js"></script>
+  <script src="/js/estoque-especial.js"></script>
+  <script src="/js/session-indicator.js"></script>
+</body>
+</html>

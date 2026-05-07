@@ -1,6 +1,7 @@
 const { pool } = require('../../database/connection');
 const EstoqueMateriaPrimaModel = require('./EstoqueMateriaPrimaModel');
 const EstoqueModel = require('./EstoqueModel');
+const EstoqueEspecialModel = require('./EstoqueEspecialModel');
 const TratamentoExternoModel = require('./TratamentoExternoModel');
 
 class ProducaoModel {
@@ -52,6 +53,7 @@ class ProducaoModel {
     );
 
     await this.ensureSupportStocks(db);
+    await EstoqueEspecialModel.ensureSchema(db);
   }
 
   static async ensureSupportStocks(db = pool) {
@@ -471,7 +473,7 @@ class ProducaoModel {
   }
 
   static async persistDestinationRecord(connection, ordem, destino, quantidade, observacao, stock = null) {
-    await connection.query(
+    const [result] = await connection.query(
       `
         INSERT INTO producao_destinos (
           id_producao_ordem,
@@ -489,13 +491,25 @@ class ProducaoModel {
         observacao || null
       ]
     );
+
+    return result.insertId;
   }
 
   static async applyDestination(connection, ordem, data) {
     const destino = this.normalizeDestination(data.destino);
     const quantidade = this.normalizeDestinationQuantity(data.quantidade);
     const observacao = (data.observacao || `Destino da producao OP ${ordem.id}.`).slice(0, 255);
+    const defeito = data.defeito ? String(data.defeito).trim().slice(0, 255) : null;
+    const faltaFazer = data.falta_fazer ? String(data.falta_fazer).trim().slice(0, 255) : null;
     let stock = null;
+
+    if (destino === this.DESTINOS.RETRABALHO && !defeito) {
+      throw this.createBusinessError('Informe o defeito para enviar pecas ao retrabalho.');
+    }
+
+    if (destino === this.DESTINOS.PECAS_INACABADAS && !faltaFazer) {
+      throw this.createBusinessError('Informe o que falta fazer para enviar pecas inacabadas.');
+    }
 
     if (destino === this.DESTINOS.TRATAMENTO_EXTERNO) {
       await TratamentoExternoModel.registerEntradaProducao(connection, {
@@ -509,7 +523,22 @@ class ProducaoModel {
       await this.registerStockDestination(connection, ordem, stock, quantidade, observacao);
     }
 
-    await this.persistDestinationRecord(connection, ordem, destino, quantidade, observacao, stock);
+    const idProducaoDestino = await this.persistDestinationRecord(connection, ordem, destino, quantidade, observacao, stock);
+
+    if ([this.DESTINOS.PECAS_INACABADAS, this.DESTINOS.RETRABALHO].includes(destino)) {
+      await EstoqueEspecialModel.registerEntrada(connection, {
+        id_producao_destino: idProducaoDestino,
+        tipo: destino,
+        id_estoque: stock.id,
+        id_peca: ordem.id_peca,
+        id_producao_ordem: ordem.id,
+        quantidade,
+        origem: 'PRODUCAO',
+        defeito,
+        falta_fazer: faltaFazer,
+        observacao
+      });
+    }
 
     return {
       destino,
@@ -566,6 +595,16 @@ class ProducaoModel {
 
     if (!destino.id_estoque_destino) {
       throw this.createBusinessError('Destino de estoque da producao nao encontrado para estorno.');
+    }
+
+    if ([this.DESTINOS.PECAS_INACABADAS, this.DESTINOS.RETRABALHO].includes(destino.destino)) {
+      await EstoqueEspecialModel.removeEntradaProducao(connection, {
+        id_producao_destino: destino.id,
+        tipo: destino.destino,
+        id_producao_ordem: ordem.id,
+        id_peca: ordem.id_peca,
+        quantidade
+      });
     }
 
     const saldoAtual = await EstoqueModel.findSaldoForUpdate(
@@ -806,7 +845,9 @@ class ProducaoModel {
         await this.applyDestination(connection, ordemAtualizada, {
           destino: destino.destino,
           quantidade: quantidadeDestino,
-          observacao: destino.observacao || data.observacao_fim || null
+          observacao: destino.observacao || data.observacao_fim || null,
+          defeito: destino.defeito || null,
+          falta_fazer: destino.falta_fazer || null
         });
       }
 
@@ -851,7 +892,9 @@ class ProducaoModel {
       await this.applyDestination(connection, ordem, {
         destino: data.destino,
         quantidade,
-        observacao: data.observacao || null
+        observacao: data.observacao || null,
+        defeito: data.defeito || null,
+        falta_fazer: data.falta_fazer || null
       });
 
       const ordemAtualizada = await this.updateFinalizationStatusIfComplete(connection, ordem);
