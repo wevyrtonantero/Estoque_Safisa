@@ -91,62 +91,16 @@
             </div>
 
             <div class="field">
-              <label for="consulta-filtro-classificacao">Classe</label>
-              <select id="consulta-filtro-classificacao">
-                <option value="">Todas</option>
-                <option value="ITEM">Itens</option>
-                <option value="SUBMONTAGEM">Submontagens</option>
-              </select>
+              <label for="consulta-filtro-fornecedor">Fornecedor</label>
+              <input id="consulta-filtro-fornecedor" type="text" placeholder="Safisa, Figueroa...">
             </div>
 
             <div class="field">
-              <label for="consulta-filtro-base">Cobertura</label>
-              <select id="consulta-filtro-base">
-                <option value="total">Total geral</option>
-                <option value="operacional">Setores</option>
-                <option value="almoxarifado">Almox.</option>
-                <option value="producao">Producao</option>
-                <option value="montagem">Montagem</option>
-                <option value="expedicao">Expedicao</option>
-                <option value="tratamento_externo">Tratamento</option>
-                <option value="pecas_inacabadas">Inacabadas</option>
-                <option value="retrabalho">Retrabalho</option>
-              </select>
-            </div>
-
-            <div class="field">
-              <label for="consulta-filtro-estado">Estado</label>
-              <select id="consulta-filtro-estado">
-                <option value="">Todos</option>
-                <option value="ZERADO">Zerado</option>
-                <option value="ATE_7">Ate 7 dias</option>
-                <option value="ATE_15">Ate 15 dias</option>
-                <option value="ATE_30">Ate 30 dias</option>
-                <option value="OK">Acima 30 dias</option>
-                <option value="SEM_CONSUMO">Sem qtd/mes</option>
-              </select>
-            </div>
-
-            <div class="field">
-              <label for="consulta-filtro-data">Dura ate</label>
-              <input id="consulta-filtro-data" type="date">
-            </div>
-
-            <div class="field">
-              <label for="consulta-filtro-saldo">Exibir</label>
-              <select id="consulta-filtro-saldo">
-                <option value="1">Com saldo</option>
-                <option value="0">Todos</option>
-              </select>
-            </div>
-
-            <div class="field">
-              <label for="consulta-filtro-ordem">Ordem</label>
-              <select id="consulta-filtro-ordem">
-                <option value="cobertura">Cobertura</option>
+              <label for="consulta-filtro-duracao">Duracao</label>
+              <select id="consulta-filtro-duracao">
+                <option value="menor_duracao">Menor duracao</option>
+                <option value="maior_duracao">Maior duracao</option>
                 <option value="codigo">Codigo</option>
-                <option value="total_desc">Maior total</option>
-                <option value="total_asc">Menor total</option>
               </select>
             </div>
 
@@ -164,22 +118,21 @@
                   <th>Cod.</th>
                   <th>Descricao</th>
                   <th>Almox.</th>
-                  <th>Prod.</th>
                   <th>Mont.</th>
                   <th>Exp.</th>
                   <th>Setores</th>
                   <th>Trat.</th>
                   <th>Inacab.</th>
+                  <th>Prod.</th>
                   <th>Retrab.</th>
                   <th>Total</th>
                   <th>Qtd/mes</th>
                   <th>Dura ate</th>
-                  <th>Estado</th>
                 </tr>
               </thead>
               <tbody id="consulta-estoques-tbody">
                 <tr>
-                  <td colspan="14" class="empty-state">Carregando consulta...</td>
+                  <td colspan="13" class="empty-state">Carregando consulta...</td>
                 </tr>
               </tbody>
             </table>

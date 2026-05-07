@@ -12,12 +12,8 @@ const refs = {
   filtroForm: document.getElementById('consulta-estoques-filtro-form'),
   filtroCodigo: document.getElementById('consulta-filtro-codigo'),
   filtroDescricao: document.getElementById('consulta-filtro-descricao'),
-  filtroClassificacao: document.getElementById('consulta-filtro-classificacao'),
-  filtroBase: document.getElementById('consulta-filtro-base'),
-  filtroEstado: document.getElementById('consulta-filtro-estado'),
-  filtroData: document.getElementById('consulta-filtro-data'),
-  filtroSaldo: document.getElementById('consulta-filtro-saldo'),
-  filtroOrdem: document.getElementById('consulta-filtro-ordem'),
+  filtroFornecedor: document.getElementById('consulta-filtro-fornecedor'),
+  filtroDuracao: document.getElementById('consulta-filtro-duracao'),
   cardItens: document.getElementById('consulta-card-itens'),
   cardSaldo: document.getElementById('consulta-card-saldo'),
   cardAlerta: document.getElementById('consulta-card-alerta'),
@@ -51,12 +47,8 @@ async function carregarConsulta() {
 
   if (refs.filtroCodigo.value.trim()) params.append('codigo', refs.filtroCodigo.value.trim());
   if (refs.filtroDescricao.value.trim()) params.append('descricao', refs.filtroDescricao.value.trim());
-  if (refs.filtroClassificacao.value) params.append('classificacao', refs.filtroClassificacao.value);
-  if (refs.filtroBase.value) params.append('base_cobertura', refs.filtroBase.value);
-  if (refs.filtroEstado.value) params.append('estado', refs.filtroEstado.value);
-  if (refs.filtroData.value) params.append('data_ate', refs.filtroData.value);
-  if (refs.filtroSaldo.value) params.append('somente_com_saldo', refs.filtroSaldo.value);
-  if (refs.filtroOrdem.value) params.append('ordem', refs.filtroOrdem.value);
+  if (refs.filtroFornecedor.value.trim()) params.append('fornecedor', refs.filtroFornecedor.value.trim());
+  if (refs.filtroDuracao.value) params.append('duracao', refs.filtroDuracao.value);
 
   try {
     const endpoint = `${consultaEstoquesApiBaseUrl}?${params.toString()}`;
@@ -83,21 +75,21 @@ function renderizarConsulta() {
   refs.total.textContent = `${consultaCache.length} registro(s) encontrado(s)`;
 
   if (consultaCache.length === 0) {
-    refs.tbody.innerHTML = '<tr><td colspan="14" class="empty-state">Nenhuma peca encontrada para os filtros atuais.</td></tr>';
+    refs.tbody.innerHTML = '<tr><td colspan="13" class="empty-state">Nenhuma peca encontrada para os filtros atuais.</td></tr>';
     return;
   }
 
   refs.tbody.innerHTML = consultaCache.map((item) => `
-    <tr class="${getRowClass(item.estado_cobertura)}">
+    <tr>
       <td class="table-code">${escapeHtml(item.codigo)}</td>
       <td class="table-description">${escapeHtml(item.descricao)}</td>
       <td class="table-quantity">${formatNumber(item.estoque_almoxarifado)}</td>
-      <td class="table-quantity">${formatNumber(item.estoque_producao)}</td>
       <td class="table-quantity">${formatNumber(item.estoque_montagem)}</td>
       <td class="table-quantity">${formatNumber(item.estoque_expedicao)}</td>
       <td class="table-quantity">${formatNumber(item.somatorio_operacional)}</td>
       <td class="table-quantity">${formatNumber(item.tratamento_externo)}</td>
       <td class="table-quantity">${formatNumber(item.pecas_inacabadas)}</td>
+      <td class="table-quantity">${formatNumber(item.estoque_producao)}</td>
       <td class="table-quantity">${formatNumber(item.retrabalho)}</td>
       <td class="table-quantity">${formatNumber(item.somatorio_total)}</td>
       <td class="table-quantity">${formatNumber(item.quantidade_saida_mes)}</td>
@@ -105,7 +97,6 @@ function renderizarConsulta() {
         <span class="table-primary-line">${formatCoverageDate(item)}</span>
         <span class="table-note">${formatCoverageDays(item)}</span>
       </td>
-      <td>${renderEstado(item.estado_cobertura)}</td>
     </tr>
   `).join('');
 }
@@ -115,41 +106,6 @@ function renderizarIndicadores(indicadores) {
   refs.cardSaldo.textContent = formatNumber(indicadores.saldo_total || 0);
   refs.cardAlerta.textContent = formatInteger(indicadores.ate_7 || 0);
   refs.cardSemConsumo.textContent = formatInteger(indicadores.sem_consumo || 0);
-}
-
-function renderEstado(estado) {
-  const normalized = String(estado || '').toUpperCase();
-  const labels = {
-    SEM_CONSUMO: 'Sem qtd/mes',
-    ZERADO: 'Zerado',
-    ATE_7: 'Ate 7 dias',
-    ATE_15: 'Ate 15 dias',
-    ATE_30: 'Ate 30 dias',
-    OK: 'OK'
-  };
-  const classes = {
-    SEM_CONSUMO: '',
-    ZERADO: 'is-danger',
-    ATE_7: 'is-danger',
-    ATE_15: 'is-warning',
-    ATE_30: 'is-warning',
-    OK: 'is-success'
-  };
-
-  return `<span class="status-chip ${classes[normalized] || ''}">${escapeHtml(labels[normalized] || '-')}</span>`;
-}
-
-function getRowClass(estado) {
-  const normalized = String(estado || '').toUpperCase();
-  if (normalized === 'ZERADO' || normalized === 'ATE_7') {
-    return 'table-row-critical';
-  }
-
-  if (normalized === 'ATE_15' || normalized === 'ATE_30') {
-    return 'table-row-attention';
-  }
-
-  return '';
 }
 
 function formatCoverageDate(item) {
@@ -170,9 +126,7 @@ function formatCoverageDays(item) {
 
 function limparFiltros() {
   refs.filtroForm.reset();
-  refs.filtroBase.value = 'total';
-  refs.filtroSaldo.value = '1';
-  refs.filtroOrdem.value = 'cobertura';
+  refs.filtroDuracao.value = 'menor_duracao';
   carregarConsulta();
 }
 

@@ -116,10 +116,21 @@ class ConsultaEstoqueModel {
     };
   }
 
+  static supplierSummarySubquery() {
+    return `
+      SELECT
+        pf.id_peca,
+        GROUP_CONCAT(DISTINCT f.nome ORDER BY f.nome SEPARATOR ', ') AS fornecedores_nomes
+      FROM peca_fornecedor pf
+      INNER JOIN fornecedores f ON f.id = pf.id_fornecedor
+      GROUP BY pf.id_peca
+    `;
+  }
+
   static applyPostFilters(rows, filters) {
     const estado = String(filters.estado || '').trim().toUpperCase();
     const dataAte = this.normalizeDateOnly(filters.data_ate);
-    const somenteComSaldo = this.normalizeBoolean(filters.somente_com_saldo, true);
+    const somenteComSaldo = this.normalizeBoolean(filters.somente_com_saldo, false);
 
     return rows.filter((row) => {
       if (somenteComSaldo && Number(row.somatorio_total || 0) <= 0) {
@@ -139,7 +150,7 @@ class ConsultaEstoqueModel {
   }
 
   static sortRows(rows, ordem) {
-    const normalized = String(ordem || 'cobertura').trim().toLowerCase();
+    const normalized = String(ordem || 'menor_duracao').trim().toLowerCase();
     const byCode = (left, right) => String(left.codigo || '').localeCompare(String(right.codigo || ''), 'pt-BR');
 
     if (normalized === 'codigo') {
@@ -152,6 +163,27 @@ class ConsultaEstoqueModel {
 
     if (normalized === 'total_asc') {
       return rows.sort((left, right) => Number(left.somatorio_total || 0) - Number(right.somatorio_total || 0) || byCode(left, right));
+    }
+
+    if (normalized === 'maior_duracao') {
+      return rows.sort((left, right) => {
+        const leftHasCoverage = left.dias_cobertura !== null && left.dias_cobertura !== undefined;
+        const rightHasCoverage = right.dias_cobertura !== null && right.dias_cobertura !== undefined;
+
+        if (!leftHasCoverage && !rightHasCoverage) {
+          return byCode(left, right);
+        }
+
+        if (!leftHasCoverage) {
+          return 1;
+        }
+
+        if (!rightHasCoverage) {
+          return -1;
+        }
+
+        return Number(right.dias_cobertura) - Number(left.dias_cobertura) || byCode(left, right);
+      });
     }
 
     return rows.sort((left, right) => {
@@ -177,7 +209,7 @@ class ConsultaEstoqueModel {
   }
 
   static async findResumo(filters = {}) {
-    const conditions = ["p.classificacao IN ('ITEM', 'SUBMONTAGEM')"];
+    const conditions = ["p.classificacao = 'ITEM'"];
     const values = [];
 
     if (filters.codigo) {
@@ -190,9 +222,9 @@ class ConsultaEstoqueModel {
       values.push(`%${filters.descricao}%`);
     }
 
-    if (filters.classificacao) {
-      conditions.push('p.classificacao = ?');
-      values.push(filters.classificacao);
+    if (filters.fornecedor) {
+      conditions.push("COALESCE(fs.fornecedores_nomes, f.nome, '') LIKE ?");
+      values.push(`%${filters.fornecedor}%`);
     }
 
     const [rows] = await pool.query(
@@ -203,6 +235,7 @@ class ConsultaEstoqueModel {
           p.descricao,
           p.tipo,
           p.classificacao,
+          COALESCE(fs.fornecedores_nomes, f.nome, '') AS fornecedores_nomes,
           COALESCE(p.consumo_mensal, 0) AS quantidade_saida_mes,
           COALESCE(est.almoxarifado, 0) AS estoque_almoxarifado,
           COALESCE(prod.quantidade, 0) AS estoque_producao,
@@ -263,6 +296,8 @@ class ConsultaEstoqueModel {
           WHERE po.status = 'EM_ANDAMENTO'
           GROUP BY po.id_peca
         ) prod ON prod.id_peca = p.id
+        LEFT JOIN fornecedores f ON f.id = p.id_fornecedor
+        LEFT JOIN (${this.supplierSummarySubquery()}) fs ON fs.id_peca = p.id
         WHERE ${conditions.join(' AND ')}
         ORDER BY p.codigo ASC
       `,
@@ -281,8 +316,8 @@ class ConsultaEstoqueModel {
       const tratamentoExterno = Number(row.tratamento_externo || 0);
       const pecasInacabadas = Number(row.pecas_inacabadas || 0);
       const retrabalho = Number(row.retrabalho || 0);
-      const somatorioOperacional = Number((estoqueAlmoxarifado + estoqueProducao + estoqueMontagem + estoqueExpedicao).toFixed(2));
-      const somatorioTotal = Number((somatorioOperacional + tratamentoExterno + pecasInacabadas + retrabalho).toFixed(2));
+      const somatorioOperacional = Number((estoqueAlmoxarifado + estoqueMontagem + estoqueExpedicao).toFixed(2));
+      const somatorioTotal = Number((somatorioOperacional + tratamentoExterno + pecasInacabadas + estoqueProducao + retrabalho).toFixed(2));
       const normalizedRow = {
         ...row,
         quantidade_saida_mes: Number(row.quantidade_saida_mes || 0),
