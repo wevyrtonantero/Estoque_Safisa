@@ -16,6 +16,7 @@ const producaoRoutes = require('./src/routes/producaoRoutes');
 const terceirizacaoRemessaRoutes = require('./src/routes/terceirizacaoRemessaRoutes');
 const tratamentoExternoRoutes = require('./src/routes/tratamentoExternoRoutes');
 const estoqueEspecialRoutes = require('./src/routes/estoqueEspecialRoutes');
+const consultaEstoqueRoutes = require('./src/routes/consultaEstoqueRoutes');
 const solicitacaoEstoqueRoutes = require('./src/routes/solicitacaoEstoqueRoutes');
 const solicitacaoProducaoRoutes = require('./src/routes/solicitacaoProducaoRoutes');
 const painelRoutes = require('./src/routes/painelRoutes');
@@ -189,6 +190,10 @@ app.get('/pagina-tratamento-externo', requirePageRoles(OPERATION_READ_ROLES), (r
   sendView(res, 'tratamento-externo.html');
 });
 
+app.get('/pagina-consulta-estoques', requirePageRoles(STOCK_READ_ROLES), (req, res) => {
+  sendView(res, 'consulta-estoques.html');
+});
+
 app.get('/pagina-retrabalho', requirePageRoles(OPERATION_READ_ROLES), (req, res) => {
   sendView(res, 'retrabalho.html');
 });
@@ -215,6 +220,7 @@ app.use('/api', producaoRoutes);
 app.use('/api', terceirizacaoRemessaRoutes);
 app.use('/api', tratamentoExternoRoutes);
 app.use('/api', estoqueEspecialRoutes);
+app.use('/api', consultaEstoqueRoutes);
 app.use('/api', solicitacaoEstoqueRoutes);
 app.use('/api', solicitacaoProducaoRoutes);
 app.use('/api', painelRoutes);

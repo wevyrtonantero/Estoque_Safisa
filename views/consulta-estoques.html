@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="/img/icon-safisa.ico" type="image/x-icon">
+  <title>SAFISA | Consulta de Estoques</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <main class="workspace tv-workspace">
+    <header class="topbar">
+      <div class="topbar-copy">
+        <p class="page-kicker">Consulta operacional</p>
+        <h1 class="page-title">Visao Consolidada de Estoques</h1>
+        <p class="page-subtitle">Saldo por setor, pecas em processo, consumo mensal e previsao de cobertura.</p>
+      </div>
+    </header>
+
+    <section class="summary-row">
+      <article class="summary-card">
+        <span>Itens exibidos</span>
+        <strong id="consulta-card-itens">0</strong>
+      </article>
+
+      <article class="summary-card">
+        <span>Saldo total</span>
+        <strong id="consulta-card-saldo">0</strong>
+      </article>
+
+      <article class="summary-card">
+        <span>Ate 7 dias</span>
+        <strong id="consulta-card-alerta">0</strong>
+      </article>
+
+      <article class="summary-card">
+        <span>Sem qtd/mes</span>
+        <strong id="consulta-card-sem-consumo">0</strong>
+      </article>
+    </section>
+
+    <div id="consulta-estoques-mensagem" class="message hidden"></div>
+
+    <section class="sector-shell">
+      <aside class="sector-menu">
+        <details class="sector-menu-card">
+          <summary class="sector-menu-summary">
+            <div class="sector-menu-heading">
+              <span class="section-pill">Consulta</span>
+              <strong>Menu</strong>
+            </div>
+            <span class="sector-menu-trigger" aria-hidden="true">...</span>
+          </summary>
+
+          <div class="sector-menu-panel">
+            <div class="sector-menu-panel-head">
+              <span class="section-pill">Consulta</span>
+              <strong>Acoes rapidas</strong>
+              <small>Acesso direto para os principais setores.</small>
+            </div>
+
+            <div class="sector-menu-list">
+              <button id="consulta-btn-atualizar" class="btn btn-neutral" type="button"><span class="btn-label">Atualizar</span></button>
+              <button id="consulta-btn-tela-cheia" class="btn btn-secondary" type="button"><span class="btn-label">Tela Cheia</span></button>
+              <a href="/pagina-producao" class="btn btn-secondary"><span class="btn-label">Producao</span></a>
+              <a href="/pagina-almoxarifado" class="btn btn-secondary"><span class="btn-label">Almoxarifado</span></a>
+            </div>
+          </div>
+        </details>
+      </aside>
+
+      <div class="sector-content">
+        <section class="content-card">
+          <div class="card-top">
+            <div>
+              <span class="section-pill">TV</span>
+              <h2>Resumo por Peca</h2>
+              <p id="consulta-estoques-total">0 registro(s) encontrado(s)</p>
+            </div>
+          </div>
+
+          <form id="consulta-estoques-filtro-form" class="toolbar-form stock-toolbar">
+            <div class="field">
+              <label for="consulta-filtro-codigo">Cod.</label>
+              <input id="consulta-filtro-codigo" type="text" placeholder="Ex.: 005/2">
+            </div>
+
+            <div class="field">
+              <label for="consulta-filtro-descricao">Descricao</label>
+              <input id="consulta-filtro-descricao" type="text" placeholder="Parte da descricao">
+            </div>
+
+            <div class="field">
+              <label for="consulta-filtro-classificacao">Classe</label>
+              <select id="consulta-filtro-classificacao">
+                <option value="">Todas</option>
+                <option value="ITEM">Itens</option>
+                <option value="SUBMONTAGEM">Submontagens</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="consulta-filtro-base">Cobertura</label>
+              <select id="consulta-filtro-base">
+                <option value="total">Total geral</option>
+                <option value="operacional">Setores</option>
+                <option value="almoxarifado">Almox.</option>
+                <option value="producao">Producao</option>
+                <option value="montagem">Montagem</option>
+                <option value="expedicao">Expedicao</option>
+                <option value="tratamento_externo">Tratamento</option>
+                <option value="pecas_inacabadas">Inacabadas</option>
+                <option value="retrabalho">Retrabalho</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="consulta-filtro-estado">Estado</label>
+              <select id="consulta-filtro-estado">
+                <option value="">Todos</option>
+                <option value="ZERADO">Zerado</option>
+                <option value="ATE_7">Ate 7 dias</option>
+                <option value="ATE_15">Ate 15 dias</option>
+                <option value="ATE_30">Ate 30 dias</option>
+                <option value="OK">Acima 30 dias</option>
+                <option value="SEM_CONSUMO">Sem qtd/mes</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="consulta-filtro-data">Dura ate</label>
+              <input id="consulta-filtro-data" type="date">
+            </div>
+
+            <div class="field">
+              <label for="consulta-filtro-saldo">Exibir</label>
+              <select id="consulta-filtro-saldo">
+                <option value="1">Com saldo</option>
+                <option value="0">Todos</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="consulta-filtro-ordem">Ordem</label>
+              <select id="consulta-filtro-ordem">
+                <option value="cobertura">Cobertura</option>
+                <option value="codigo">Codigo</option>
+                <option value="total_desc">Maior total</option>
+                <option value="total_asc">Menor total</option>
+              </select>
+            </div>
+
+            <div class="toolbar-actions">
+              <button id="consulta-btn-limpar" class="btn btn-neutral" type="button">Limpar</button>
+            </div>
+          </form>
+
+          <div class="subtle-divider"></div>
+
+          <div class="table-wrapper consulta-stock-table" data-print-table data-print-title="Consulta consolidada de estoques">
+            <table>
+              <thead>
+                <tr>
+                  <th>Cod.</th>
+                  <th>Descricao</th>
+                  <th>Almox.</th>
+                  <th>Prod.</th>
+                  <th>Mont.</th>
+                  <th>Exp.</th>
+                  <th>Setores</th>
+                  <th>Trat.</th>
+                  <th>Inacab.</th>
+                  <th>Retrab.</th>
+                  <th>Total</th>
+                  <th>Qtd/mes</th>
+                  <th>Dura ate</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody id="consulta-estoques-tbody">
+                <tr>
+                  <td colspan="14" class="empty-state">Carregando consulta...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <script src="/js/sector-menu.js"></script>
+  <script src="/js/consulta-estoques.js"></script>
+  <script src="/js/table-print.js"></script>
+  <script src="/js/session-indicator.js"></script>
+</body>
+</html>
