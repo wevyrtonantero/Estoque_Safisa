@@ -12,6 +12,7 @@ const maquinaRoutes = require('./src/routes/maquinaRoutes');
 const materiaPrimaRoutes = require('./src/routes/materiaPrimaRoutes');
 const estoqueRoutes = require('./src/routes/estoqueRoutes');
 const estoqueMateriaPrimaRoutes = require('./src/routes/estoqueMateriaPrimaRoutes');
+const calculadoraMateriaPrimaRoutes = require('./src/routes/calculadoraMateriaPrimaRoutes');
 const producaoRoutes = require('./src/routes/producaoRoutes');
 const terceirizacaoRemessaRoutes = require('./src/routes/terceirizacaoRemessaRoutes');
 const tratamentoExternoRoutes = require('./src/routes/tratamentoExternoRoutes');
@@ -182,7 +183,7 @@ app.get('/pagina-producao', requirePageRoles(OPERATION_READ_ROLES), (req, res) =
   sendView(res, 'producao.html');
 });
 
-app.get('/pagina-estoque-materias-primas', requirePageRoles(ADMIN_READ_ROLES), (req, res) => {
+app.get('/pagina-estoque-materias-primas', requirePageRoles(STOCK_READ_ROLES), (req, res) => {
   sendView(res, 'estoque-materias-primas.html');
 });
 
@@ -216,6 +217,7 @@ app.use('/api', maquinaRoutes);
 app.use('/api', materiaPrimaRoutes);
 app.use('/api', estoqueRoutes);
 app.use('/api', estoqueMateriaPrimaRoutes);
+app.use('/api', calculadoraMateriaPrimaRoutes);
 app.use('/api', producaoRoutes);
 app.use('/api', terceirizacaoRemessaRoutes);
 app.use('/api', tratamentoExternoRoutes);
