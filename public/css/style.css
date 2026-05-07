@@ -1748,6 +1748,22 @@ tbody tr:hover {
   bottom: calc(100% + 8px);
 }
 
+.row-menu.is-fixed .row-menu-panel {
+  position: fixed;
+  top: var(--row-menu-top);
+  left: var(--row-menu-left);
+  right: auto;
+  bottom: auto;
+  z-index: 220;
+  max-height: var(--row-menu-max-height, calc(100vh - 24px));
+  overflow-y: auto;
+}
+
+.row-menu.is-fixed.drop-up .row-menu-panel {
+  top: var(--row-menu-top);
+  bottom: auto;
+}
+
 .row-menu-item {
   display: block;
   width: 100%;

@@ -29,6 +29,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('click', handleRowMenuDirection);
+  document.addEventListener('toggle', handleRowMenuToggle, true);
+  window.addEventListener('resize', repositionOpenRowMenu);
+  window.addEventListener('scroll', repositionOpenRowMenu, true);
 });
 
 function resolveIndicatorHost() {
@@ -110,7 +113,7 @@ function handleRowMenuDirection(event) {
 }
 
 function adjustRowMenuDirection(menu) {
-  menu.classList.remove('drop-up');
+  resetRowMenuPosition(menu);
 
   const trigger = menu.querySelector('.row-menu-trigger');
   const panel = menu.querySelector('.row-menu-panel');
@@ -118,22 +121,69 @@ function adjustRowMenuDirection(menu) {
     return;
   }
 
-  const wrapper = menu.closest('.table-wrapper');
   const triggerRect = trigger.getBoundingClientRect();
-  const wrapperRect = wrapper ? wrapper.getBoundingClientRect() : null;
-  const limitTop = Math.max(0, wrapperRect ? wrapperRect.top : 0);
-  const limitBottom = Math.min(window.innerHeight, wrapperRect ? wrapperRect.bottom : window.innerHeight);
-  const panelHeight = panel.offsetHeight || 180;
-  const spaceBelow = limitBottom - triggerRect.bottom;
-  const spaceAbove = triggerRect.top - limitTop;
+  const viewportPadding = 10;
+  const gap = 8;
+  const panelWidth = Math.max(panel.offsetWidth || 176, 176);
+  const fullPanelHeight = Math.max(panel.scrollHeight || panel.offsetHeight || 180, 48);
+  const spaceBelow = window.innerHeight - triggerRect.bottom - gap - viewportPadding;
+  const spaceAbove = triggerRect.top - gap - viewportPadding;
+  const shouldOpenUp = spaceBelow < Math.min(fullPanelHeight, 160) && spaceAbove > spaceBelow;
+  const availableSpace = shouldOpenUp ? spaceAbove : spaceBelow;
+  const maxHeight = Math.max(96, Math.min(fullPanelHeight, availableSpace));
+  const top = shouldOpenUp
+    ? Math.max(viewportPadding, triggerRect.top - gap - maxHeight)
+    : Math.min(window.innerHeight - viewportPadding - maxHeight, triggerRect.bottom + gap);
+  const left = Math.min(
+    window.innerWidth - viewportPadding - panelWidth,
+    Math.max(viewportPadding, triggerRect.right - panelWidth)
+  );
 
-  if (spaceBelow < panelHeight + 12 && spaceAbove > spaceBelow) {
+  menu.classList.add('is-fixed');
+  if (shouldOpenUp) {
     menu.classList.add('drop-up');
   }
+  menu.style.setProperty('--row-menu-top', `${Math.max(viewportPadding, top)}px`);
+  menu.style.setProperty('--row-menu-left', `${Math.max(viewportPadding, left)}px`);
+  menu.style.setProperty('--row-menu-max-height', `${maxHeight}px`);
 }
 
 function clearClosedDropUpMenus() {
-  document.querySelectorAll('.row-menu.drop-up:not([open])').forEach((menu) => {
-    menu.classList.remove('drop-up');
+  document.querySelectorAll('.row-menu.drop-up:not([open]), .row-menu.is-fixed:not([open])').forEach((menu) => {
+    resetRowMenuPosition(menu);
   });
+}
+
+function handleRowMenuToggle(event) {
+  const menu = event.target.closest?.('.row-menu');
+  if (!menu) {
+    return;
+  }
+
+  if (!menu.hasAttribute('open')) {
+    resetRowMenuPosition(menu);
+    return;
+  }
+
+  window.requestAnimationFrame(() => adjustRowMenuDirection(menu));
+}
+
+function repositionOpenRowMenu() {
+  const menu = document.querySelector('.row-menu[open]');
+  if (!menu) {
+    return;
+  }
+
+  window.requestAnimationFrame(() => {
+    if (menu.hasAttribute('open')) {
+      adjustRowMenuDirection(menu);
+    }
+  });
+}
+
+function resetRowMenuPosition(menu) {
+  menu.classList.remove('drop-up', 'is-fixed');
+  menu.style.removeProperty('--row-menu-top');
+  menu.style.removeProperty('--row-menu-left');
+  menu.style.removeProperty('--row-menu-max-height');
 }
