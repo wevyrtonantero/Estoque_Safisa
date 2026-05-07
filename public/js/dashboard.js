@@ -1549,6 +1549,11 @@ function obterRegistrosEstoqueAlmox() {
 }
 
 function enriquecerRegistroEstoque(item, prioridade = null) {
+  const quantidadeAtual = Number(prioridade?.quantidade ?? item.quantidade ?? 0);
+  const estadoFallback = quantidadeAtual <= 0
+    ? 'CRITICO'
+    : isItemEmAlerta(item) ? 'ATENCAO' : 'NORMAL';
+
   return {
     ...item,
     id_peca: Number(prioridade?.id_peca ?? item.id_peca ?? 0),
@@ -1558,11 +1563,11 @@ function enriquecerRegistroEstoque(item, prioridade = null) {
     classificacao: prioridade?.classificacao ?? item.classificacao ?? '-',
     fornecedor_nome: prioridade?.fornecedor_nome ?? item.fornecedor_nome ?? '',
     fornecedores_nomes: prioridade?.fornecedores_nomes ?? item.fornecedores_nomes ?? '',
-    quantidade: Number(prioridade?.quantidade ?? item.quantidade ?? 0),
+    quantidade: quantidadeAtual,
     quantidade_saida_mes: Number(prioridade?.quantidade_saida_mes ?? item.consumo_mensal ?? 0),
     dias_cobertura: prioridade?.dias_cobertura ?? null,
     data_prevista_ruptura: prioridade?.data_prevista_ruptura ?? null,
-    estado_necessidade: String(prioridade?.estado_necessidade || (isItemEmAlerta(item) ? 'ATENCAO' : 'NORMAL')).toUpperCase()
+    estado_necessidade: String(prioridade?.estado_necessidade || estadoFallback).toUpperCase()
   };
 }
 

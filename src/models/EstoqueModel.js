@@ -52,6 +52,7 @@ class EstoqueModel {
 
     const estadoExpression = `
       CASE
+        WHEN UPPER(COALESCE(e.nome, '')) LIKE '%ALMOX%' AND ${quantidadeExpression} <= 0 THEN 'CRITICO'
         WHEN (
           (${consumoMensalExpression} > 0 AND ${quantidadeExpression} <= 0)
           OR (${estoqueSegurancaExpression} > 0 AND ${quantidadeExpression} < ${estoqueSegurancaExpression})
@@ -70,6 +71,7 @@ class EstoqueModel {
 
     const prioridadeExpression = `
       CASE
+        WHEN UPPER(COALESCE(e.nome, '')) LIKE '%ALMOX%' AND ${quantidadeExpression} <= 0 THEN 1
         WHEN (
           (${consumoMensalExpression} > 0 AND ${quantidadeExpression} <= 0)
           OR (${estoqueSegurancaExpression} > 0 AND ${quantidadeExpression} < ${estoqueSegurancaExpression})
@@ -284,7 +286,7 @@ class EstoqueModel {
       "p.classificacao IN ('ITEM', 'SUBMONTAGEM')"
     ];
     const outerConditions = [
-      '(quantidade > 0 OR quantidade_saida_mes > 0 OR estoque_seguranca > 0)'
+      "(quantidade > 0 OR quantidade_saida_mes > 0 OR estoque_seguranca > 0 OR (UPPER(COALESCE(estoque_nome, '')) LIKE '%ALMOX%' AND quantidade <= 0))"
     ];
     const {
       diasCoberturaExpression,
