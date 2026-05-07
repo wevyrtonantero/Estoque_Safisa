@@ -270,7 +270,7 @@ async function carregarEstoqueAlmox() {
     throw new Error('Estoque do Almoxarifado nao encontrado.');
   }
 
-  const response = await fetch(`${estoqueSaldosApiBaseUrl}?estoque=${almox.id}`);
+  const response = await fetch(`${estoqueSaldosApiBaseUrl}?estoque=${almox.id}&modo=TODOS`);
   const result = await response.json();
 
   if (!response.ok) {

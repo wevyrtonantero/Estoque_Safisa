@@ -258,6 +258,7 @@ const EstoqueController = {
       const ordemQuantidade = req.query.ordem_quantidade
         ? String(req.query.ordem_quantidade).trim().toUpperCase()
         : '';
+      const modo = req.query.modo ? String(req.query.modo).trim().toUpperCase() : '';
       const estoque = normalizeOptionalInteger(req.query.estoque);
       const idPeca = normalizeOptionalInteger(req.query.id_peca);
 
@@ -271,7 +272,8 @@ const EstoqueController = {
         maquina: req.query.maquina ? String(req.query.maquina).trim() : '',
         classificacao: CLASSIFICACOES_VALIDAS.includes(classificacao) ? classificacao : '',
         q: req.query.q ? String(req.query.q).trim() : '',
-        ordem_quantidade: ['ASC', 'DESC'].includes(ordemQuantidade) ? ordemQuantidade : ''
+        ordem_quantidade: ['ASC', 'DESC'].includes(ordemQuantidade) ? ordemQuantidade : '',
+        mostrar_todos: modo === 'TODOS'
       });
 
       return res.status(200).json(saldos);

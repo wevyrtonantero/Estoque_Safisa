@@ -156,10 +156,14 @@ class EstoqueModel {
 
   // Lista os saldos com filtros dinamicos por estoque, item e atributos da peca.
   static async findSaldos(filters = {}) {
-    const conditions = ['s.quantidade > 0'];
+    const mostrarTodos = Boolean(filters.mostrar_todos);
+    const quantidadeExpression = mostrarTodos ? 'COALESCE(s.quantidade, 0)' : 's.quantidade';
+    const conditions = mostrarTodos
+      ? ['e.ativo = 1', "p.classificacao IN ('ITEM', 'SUBMONTAGEM')"]
+      : ['s.quantidade > 0'];
     const values = [];
     const orderBy = filters.ordem_quantidade
-      ? `s.quantidade ${filters.ordem_quantidade}, p.codigo ASC`
+      ? `${quantidadeExpression} ${filters.ordem_quantidade}, p.codigo ASC`
       : `
           CASE
             WHEN e.nome = 'Almoxarifado' THEN 1
@@ -222,13 +226,27 @@ class EstoqueModel {
       values.push(`%${filters.q}%`, `%${filters.q}%`, `%${filters.q}%`, `%${filters.q}%`);
     }
 
+    const fromClause = mostrarTodos
+      ? `
+        FROM estoques e
+        CROSS JOIN pecas p
+        LEFT JOIN estoque_saldos s
+          ON s.id_estoque = e.id
+          AND s.id_peca = p.id
+      `
+      : `
+        FROM estoque_saldos s
+        INNER JOIN estoques e ON e.id = s.id_estoque
+        INNER JOIN pecas p ON p.id = s.id_peca
+      `;
+
     const [rows] = await pool.query(
       `
         SELECT
-          s.id,
-          s.id_estoque,
-          s.id_peca,
-          s.quantidade,
+          COALESCE(s.id, 0) AS id,
+          e.id AS id_estoque,
+          p.id AS id_peca,
+          ${quantidadeExpression} AS quantidade,
           s.created_at,
           s.updated_at,
           e.nome AS estoque_nome,
@@ -245,9 +263,7 @@ class EstoqueModel {
           p.id_fornecedor,
           f.nome AS fornecedor_nome,
           COALESCE(fs.fornecedores_nomes, f.nome, '') AS fornecedores_nomes
-        FROM estoque_saldos s
-        INNER JOIN estoques e ON e.id = s.id_estoque
-        INNER JOIN pecas p ON p.id = s.id_peca
+        ${fromClause}
         LEFT JOIN maquinas m ON m.id = p.id_maquina
         LEFT JOIN fornecedores f ON f.id = p.id_fornecedor
         LEFT JOIN (${this.supplierSummarySubquery()}) fs ON fs.id_peca = p.id
