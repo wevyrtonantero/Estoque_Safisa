@@ -191,6 +191,7 @@ function bindEvents() {
   refs.pedidosFiltroStatus.addEventListener('change', renderizarPedidos);
   refs.pedidosFiltroSituacao.addEventListener('change', renderizarPedidos);
   document.getElementById('almox-btn-limpar-pedidos').addEventListener('click', limparFiltrosPedidos);
+  document.getElementById('almox-btn-marcar-pronto-todos').addEventListener('click', marcarProntoTodosPedidos);
   refs.pedidosTbody.addEventListener('click', handlePedidosActions);
 
   document.getElementById('btn-fechar-modal-almox-pedidos').addEventListener('click', fecharModalPedidos);
@@ -1264,6 +1265,52 @@ function handlePedidosActions(event) {
   if (button.dataset.action === 'atender') {
     abrirModalAtendimento(item);
   }
+}
+
+async function marcarProntoTodosPedidos() {
+  const pedidosFiltrados = obterPedidosFiltrados();
+  const elegiveis = pedidosFiltrados.filter((item) => ['PENDENTE', 'ATENDIDA_PARCIAL'].includes(String(item.status || '').toUpperCase()));
+
+  if (!elegiveis.length) {
+    mostrarMensagem('Nenhuma solicitacao pendente para marcar como pronto.', 'info');
+    return;
+  }
+
+  const confirmado = window.confirm(`Marcar ${elegiveis.length} solicitacao(oes) como pronta(s)?`);
+  if (!confirmado) {
+    return;
+  }
+
+  let ok = 0;
+  let falhas = 0;
+
+  for (const pedido of elegiveis) {
+    try {
+      const response = await fetch(`${solicitacoesApiBaseUrl}/${pedido.id}/iniciar-separacao`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(extractErrorMessage(result));
+      }
+
+      ok += 1;
+    } catch (error) {
+      falhas += 1;
+      console.error('Falha ao marcar pronto em lote:', error);
+    }
+  }
+
+  if (falhas > 0) {
+    mostrarMensagem(`Marcadas como prontas: ${ok}. Falhas: ${falhas}.`, 'warning');
+  } else {
+    mostrarMensagem(`Marcadas como prontas: ${ok}.`, 'success');
+  }
+
+  await carregarSolicitacoes();
 }
 
 async function handleAtenderSolicitacao(event) {

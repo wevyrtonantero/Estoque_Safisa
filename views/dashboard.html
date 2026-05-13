@@ -172,16 +172,19 @@
   <div id="almox-pedidos-modal" class="modal hidden" aria-hidden="true">
     <div class="modal-backdrop" data-close-modal="almox-pedidos"></div>
 
-    <div class="modal-dialog modal-wide">
-      <div class="modal-header">
-        <div>
-          <span class="section-pill">Solicitacoes</span>
-          <h2>Fila do Almoxarifado</h2>
-          <p id="almox-pedidos-total">0 registro(s) encontrado(s)</p>
-        </div>
+      <div class="modal-dialog modal-wide">
+        <div class="modal-header">
+          <div>
+            <span class="section-pill">Solicitacoes</span>
+            <h2>Fila do Almoxarifado</h2>
+            <p id="almox-pedidos-total">0 registro(s) encontrado(s)</p>
+          </div>
 
-        <button id="btn-fechar-modal-almox-pedidos" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
-      </div>
+          <div class="topbar-actions">
+            <button id="almox-btn-marcar-pronto-todos" class="btn btn-neutral" type="button">Marcar pronto p/ todos</button>
+            <button id="btn-fechar-modal-almox-pedidos" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+          </div>
+        </div>
 
       <form id="almox-pedidos-filtro-form" class="toolbar-form">
         <div class="field">

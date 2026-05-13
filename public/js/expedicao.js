@@ -199,6 +199,7 @@ function bindEvents() {
   document.getElementById('expedicao-btn-pedidos-menu').addEventListener('click', abrirModalPedidos);
   document.getElementById('expedicao-btn-historico-menu').addEventListener('click', abrirModalHistorico);
   document.getElementById('expedicao-btn-producao').addEventListener('click', abrirModalProducao);
+  document.getElementById('expedicao-btn-excluir-todos-pedidos').addEventListener('click', excluirTodosPedidosExpedicao);
   refs.pedidosFiltroSituacao.addEventListener('change', renderizarPedidos);
   refs.pedidosTbody.addEventListener('click', handlePedidosActions);
   refs.filtroCodigo.addEventListener('input', renderizarEstoque);
@@ -2270,6 +2271,54 @@ async function handlePedidosActions(event) {
   } catch (error) {
     mostrarMensagem(error.message, 'error');
   }
+}
+
+async function excluirTodosPedidosExpedicao() {
+  const pedidosFiltrados = obterPedidosExpedicaoFiltrados();
+  const cancelaveis = pedidosFiltrados.filter((item) => !['ATENDIDA', 'CANCELADA'].includes(String(item.status || '').toUpperCase()));
+
+  if (!cancelaveis.length) {
+    mostrarMensagem('Nenhum pedido ativo para excluir.', 'info');
+    return;
+  }
+
+  const confirmado = window.confirm(`Excluir ${cancelaveis.length} pedido(s) ativo(s) da Expedicao?`);
+  if (!confirmado) {
+    return;
+  }
+
+  let ok = 0;
+  let falhas = 0;
+
+  for (const pedido of cancelaveis) {
+    try {
+      const response = await fetch(`${solicitacoesApiBaseUrl}/${pedido.id}/cancelar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          observacao: `Pedido cancelado pela Expedicao. ${pedido.observacao || ''}`.trim()
+        })
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || 'Nao foi possivel excluir o pedido.');
+      }
+
+      ok += 1;
+    } catch (error) {
+      falhas += 1;
+      console.error('Falha ao excluir pedido em lote:', error);
+    }
+  }
+
+  if (falhas > 0) {
+    mostrarMensagem(`Pedidos excluidos: ${ok}. Falhas: ${falhas}.`, 'warning');
+  } else {
+    mostrarMensagem(`Pedidos excluidos: ${ok}.`, 'success');
+  }
+
+  await carregarPedidosExpedicao();
 }
 
 function renderizarHistorico() {
