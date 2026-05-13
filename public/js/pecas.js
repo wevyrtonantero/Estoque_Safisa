@@ -295,6 +295,13 @@ async function carregarPecaParaEdicao(id) {
     if (selectedFornecedorIds.length === 0 && peca.id_fornecedor) {
       selectedFornecedorIds = [Number(peca.id_fornecedor)];
     }
+
+    // Remove fornecedores que nao existem mais no cadastro (evita enviar IDs invalidos).
+    const fornecedoresValidos = new Set(
+      (cadastroOptionsCache.fornecedores || []).map((item) => Number(item.id))
+    );
+    selectedFornecedorIds = selectedFornecedorIds.filter((id) => fornecedoresValidos.has(Number(id)));
+
     sincronizarFornecedorPrincipal();
     renderizarFornecedoresSelecionados();
     document.getElementById('estoque-minimo').value = formatOptionalNumber(peca.estoque_minimo);
