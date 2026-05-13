@@ -737,9 +737,22 @@ class EstoqueModel {
       };
     }
 
-    const capacidades = [];
+    const planosPorLinha = [];
 
     for (const linha of composicao) {
+      const quantidadeLinha = Number(linha.quantidade);
+
+      if (quantidadeLinha <= 0) {
+        planosPorLinha.push({
+          linha,
+          itemAtende: null,
+          componentes: [],
+          quantidadeLinha,
+          capacidade: 0
+        });
+        continue;
+      }
+
       const disponibilidade = await this.getAvailableQuantity(
         connection,
         idEstoqueOrigem,
@@ -747,13 +760,45 @@ class EstoqueModel {
         reservasPorItem
       );
 
-      const quantidadeLinha = Number(linha.quantidade);
-      const capacidadeLinha = quantidadeLinha > 0
-        ? Number((Math.max(0, disponibilidade.quantidadeDisponivel) / quantidadeLinha).toFixed(2))
-        : 0;
+      const itemAtende = await this.findItemById(linha.id_item_atende, connection);
+      let capacidadeLinha = Number((Math.max(0, disponibilidade.quantidadeDisponivel) / quantidadeLinha).toFixed(2));
+      let componentes = [];
 
-      capacidades.push({
+      if (itemAtende && itemAtende.classificacao === 'SUBMONTAGEM') {
+        componentes = await this.findSubmontagemComponents(linha.id_item_atende, connection);
+
+        if (componentes.length > 0) {
+          const capacidadesComponentes = [];
+
+          for (const componente of componentes) {
+            const quantidadeComponentePorVenda = this.normalizePlannedQuantity(
+              Number(componente.quantidade) * quantidadeLinha
+            );
+            const disponibilidadeComponente = await this.getAvailableQuantity(
+              connection,
+              idEstoqueOrigem,
+              componente.id_item_componente,
+              reservasPorItem
+            );
+
+            capacidadesComponentes.push(
+              quantidadeComponentePorVenda > 0
+                ? Number((Math.max(0, disponibilidadeComponente.quantidadeDisponivel) / quantidadeComponentePorVenda).toFixed(2))
+                : 0
+            );
+          }
+
+          capacidadeLinha = Number((
+            capacidadeLinha + Math.min(...capacidadesComponentes)
+          ).toFixed(2));
+        }
+      }
+
+      planosPorLinha.push({
         linha,
+        itemAtende,
+        componentes,
+        quantidadeLinha,
         capacidade: capacidadeLinha
       });
     }
@@ -761,7 +806,7 @@ class EstoqueModel {
     const quantidadeAtendida = this.normalizePlannedQuantity(
       Math.min(
         Number(quantidadeDesejada),
-        ...capacidades.map((capacidade) => capacidade.capacidade)
+        ...planosPorLinha.map((plano) => plano.capacidade)
       )
     );
 
@@ -773,33 +818,117 @@ class EstoqueModel {
       };
     }
 
+    const reservasPlanejadas = new Map(reservasPorItem);
+    const movimentosComposicao = [];
     const itensConsumidos = [];
 
-    for (const capacidade of capacidades) {
-      const quantidadeConsumida = this.normalizePlannedQuantity(
-        Number(capacidade.linha.quantidade) * quantidadeAtendida
+    for (const plano of planosPorLinha) {
+      const quantidadeNecessariaLinha = this.normalizePlannedQuantity(
+        plano.quantidadeLinha * quantidadeAtendida
       );
 
-      if (quantidadeConsumida <= 0) {
+      if (quantidadeNecessariaLinha <= 0) {
         continue;
       }
 
-      this.addReservedQuantity(reservasPorItem, capacidade.linha.id_item_atende, quantidadeConsumida);
-      movimentosPlanejados.push({
-        id_peca: capacidade.linha.id_item_atende,
-        quantidade: quantidadeConsumida,
-        observacao: `${observacaoBase || 'Saida da Expedicao.'} Atendimento alternativo de ${item.codigo} via ${capacidade.linha.item_atende_codigo}.`.slice(0, 255),
-        solicitacao_ref: contextoSaida.solicitacao_ref,
-        id_peca_solicitada: item.id,
-        forma_atendimento: 'COMPOSICAO_VENDA'
-      });
-      itensConsumidos.push({
-        id_peca: capacidade.linha.id_item_atende,
-        codigo: capacidade.linha.item_atende_codigo,
-        descricao: capacidade.linha.item_atende_descricao,
-        quantidade_baixada: quantidadeConsumida
-      });
+      const disponibilidadePronta = await this.getAvailableQuantity(
+        connection,
+        idEstoqueOrigem,
+        plano.linha.id_item_atende,
+        reservasPlanejadas
+      );
+      const quantidadeProntaConsumida = this.normalizePlannedQuantity(
+        Math.min(
+          quantidadeNecessariaLinha,
+          Math.max(0, disponibilidadePronta.quantidadeDisponivel)
+        )
+      );
+      let quantidadeRestanteLinha = this.normalizePlannedQuantity(
+        quantidadeNecessariaLinha - quantidadeProntaConsumida
+      );
+
+      if (quantidadeProntaConsumida > 0) {
+        this.addReservedQuantity(reservasPlanejadas, plano.linha.id_item_atende, quantidadeProntaConsumida);
+        movimentosComposicao.push({
+          id_peca: plano.linha.id_item_atende,
+          quantidade: quantidadeProntaConsumida,
+          observacao: `${observacaoBase || 'Saida da Expedicao.'} Atendimento alternativo de ${item.codigo} via ${plano.linha.item_atende_codigo}.`.slice(0, 255),
+          solicitacao_ref: contextoSaida.solicitacao_ref,
+          id_peca_solicitada: item.id,
+          forma_atendimento: 'COMPOSICAO_VENDA'
+        });
+        itensConsumidos.push({
+          id_peca: plano.linha.id_item_atende,
+          codigo: plano.linha.item_atende_codigo,
+          descricao: plano.linha.item_atende_descricao,
+          quantidade_baixada: quantidadeProntaConsumida
+        });
+      }
+
+      if (quantidadeRestanteLinha <= 0) {
+        continue;
+      }
+
+      if (!plano.itemAtende || plano.itemAtende.classificacao !== 'SUBMONTAGEM' || !plano.componentes.length) {
+        return {
+          possui_composicao: true,
+          quantidade_atendida: 0,
+          itens_consumidos: []
+        };
+      }
+
+      for (const componente of plano.componentes) {
+        const quantidadeComponente = this.normalizePlannedQuantity(
+          Number(componente.quantidade) * quantidadeRestanteLinha
+        );
+        const disponibilidadeComponente = await this.getAvailableQuantity(
+          connection,
+          idEstoqueOrigem,
+          componente.id_item_componente,
+          reservasPlanejadas
+        );
+
+        if (quantidadeComponente > disponibilidadeComponente.quantidadeDisponivel) {
+          return {
+            possui_composicao: true,
+            quantidade_atendida: 0,
+            itens_consumidos: []
+          };
+        }
+      }
+
+      for (const componente of plano.componentes) {
+        const quantidadeComponente = this.normalizePlannedQuantity(
+          Number(componente.quantidade) * quantidadeRestanteLinha
+        );
+
+        if (quantidadeComponente <= 0) {
+          continue;
+        }
+
+        this.addReservedQuantity(reservasPlanejadas, componente.id_item_componente, quantidadeComponente);
+        movimentosComposicao.push({
+          id_peca: componente.id_item_componente,
+          quantidade: quantidadeComponente,
+          observacao: `${observacaoBase || 'Saida da Expedicao.'} Atendimento de ${item.codigo} via componentes de ${plano.linha.item_atende_codigo}: ${componente.codigo}.`.slice(0, 255),
+          solicitacao_ref: contextoSaida.solicitacao_ref,
+          id_peca_solicitada: item.id,
+          forma_atendimento: 'COMPONENTE_SUBMONTAGEM'
+        });
+        itensConsumidos.push({
+          id_peca: componente.id_item_componente,
+          codigo: componente.codigo,
+          descricao: componente.descricao,
+          quantidade_baixada: quantidadeComponente,
+          origem_composicao: plano.linha.item_atende_codigo
+        });
+      }
     }
+
+    for (const [idPeca, quantidade] of reservasPlanejadas.entries()) {
+      reservasPorItem.set(idPeca, quantidade);
+    }
+    movimentosPlanejados.push(...movimentosComposicao);
 
     return {
       possui_composicao: true,

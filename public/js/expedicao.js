@@ -489,9 +489,8 @@ async function carregarEstruturasParaSugestoesVenda(termo) {
 
   const candidatos = itensCache
     .filter((item) => (
-      item.classificacao === 'SUBMONTAGEM'
+      (item.classificacao === 'SUBMONTAGEM' || composicoesVendaCache.has(Number(item.id)))
       && normalizarBusca(`${item.codigo} ${item.descricao} ${item.classificacao}`).includes(filtro)
-      && !estruturasSubmontagemCache.has(item.id)
     ))
     .slice(0, 8);
 
@@ -499,15 +498,32 @@ async function carregarEstruturasParaSugestoesVenda(termo) {
     return;
   }
 
-  await Promise.allSettled(candidatos.map((item) => carregarEstruturaSubmontagem(item.id)));
+  await Promise.allSettled(candidatos.map((item) => garantirDisponibilidadeVendaCarregada(item)));
 }
 
 async function garantirDisponibilidadeVendaCarregada(item) {
-  if (!item || item.classificacao !== 'SUBMONTAGEM' || estruturasSubmontagemCache.has(item.id)) {
+  if (!item) {
     return;
   }
 
-  await carregarEstruturaSubmontagem(item.id);
+  const carregamentos = [];
+
+  if (item.classificacao === 'SUBMONTAGEM' && !estruturasSubmontagemCache.has(item.id)) {
+    carregamentos.push(carregarEstruturaSubmontagem(item.id));
+  }
+
+  const composicao = composicoesVendaCache.get(Number(item.id)) || [];
+  composicao.forEach((linha) => {
+    const itemAtende = itensCache.find((entry) => Number(entry.id) === Number(linha.id_item_atende));
+
+    if (itemAtende?.classificacao === 'SUBMONTAGEM' && !estruturasSubmontagemCache.has(itemAtende.id)) {
+      carregamentos.push(carregarEstruturaSubmontagem(itemAtende.id));
+    }
+  });
+
+  if (carregamentos.length) {
+    await Promise.allSettled(carregamentos);
+  }
 }
 
 async function renderizarSugestoes(termo) {
@@ -2460,13 +2476,11 @@ function obterSaldoOrigemSolicitacao(item) {
   return Number(item.saldo_almoxarifado || 0);
 }
 
-function calcularDisponibilidadeSubmontagem(item) {
+function calcularCapacidadeComponentesSubmontagem(item) {
   const componentes = estruturasSubmontagemCache.get(item.id) || [];
-  const saldoPronto = obterSaldoExpedicao(item.id);
-  const capacidadeComposicaoVenda = calcularDisponibilidadeComposicaoVenda(item.id);
 
   if (!componentes.length) {
-    return saldoPronto + capacidadeComposicaoVenda;
+    return 0;
   }
 
   const capacidades = componentes.map((componente) => {
@@ -2474,7 +2488,14 @@ function calcularDisponibilidadeSubmontagem(item) {
     return Math.floor(saldoComponente / Number(componente.quantidade || 1));
   });
 
-  const capacidadeComponentes = capacidades.length ? Math.min(...capacidades) : 0;
+  return capacidades.length ? Math.max(0, Math.min(...capacidades)) : 0;
+}
+
+function calcularDisponibilidadeSubmontagem(item) {
+  const saldoPronto = obterSaldoExpedicao(item.id);
+  const capacidadeComposicaoVenda = calcularDisponibilidadeComposicaoVenda(item.id);
+  const capacidadeComponentes = calcularCapacidadeComponentesSubmontagem(item);
+
   return saldoPronto + capacidadeComposicaoVenda + Math.max(0, capacidadeComponentes);
 }
 
@@ -2491,7 +2512,13 @@ function calcularDisponibilidadeComposicaoVenda(idItemVenda) {
       return 0;
     }
 
-    return Math.floor(obterSaldoExpedicao(linha.id_item_atende) / quantidadeBase);
+    const itemAtende = itensCache.find((entry) => Number(entry.id) === Number(linha.id_item_atende));
+    const saldoPronto = obterSaldoExpedicao(linha.id_item_atende);
+    const capacidadeComponentes = itemAtende?.classificacao === 'SUBMONTAGEM'
+      ? calcularCapacidadeComponentesSubmontagem(itemAtende)
+      : 0;
+
+    return Math.floor((saldoPronto + capacidadeComponentes) / quantidadeBase);
   });
 
   return capacidades.length ? Math.max(0, Math.min(...capacidades)) : 0;
