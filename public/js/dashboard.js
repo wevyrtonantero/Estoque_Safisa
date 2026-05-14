@@ -29,6 +29,12 @@ let autoRefreshHandle = null;
 const ACTIVE_REQUEST_STATUSES = ['PENDENTE', 'EM_SEPARACAO', 'ATENDIDA_PARCIAL'];
 const CLOSED_REQUEST_STATUSES = ['ATENDIDA', 'CANCELADA'];
 
+// Alerta visual na aba quando entrar pedido novo (Expedicao/Montagem) para o Almoxarifado.
+let lastActiveRequestKeyset = new Set();
+let tabFlashHandle = null;
+let tabFlashOriginalTitle = document.title;
+let tabFlashToggle = false;
+
 const refs = {
   mensagem: document.getElementById('almox-mensagem'),
   estoqueTbody: document.getElementById('almox-estoque-tbody'),
@@ -240,6 +246,12 @@ function bindEvents() {
 
   document.addEventListener('click', handleGlobalClick);
   document.addEventListener('keydown', handleKeyboardShortcuts);
+  window.addEventListener('focus', stopTabFlash);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      stopTabFlash();
+    }
+  });
 }
 
 async function carregarTudoInicial() {
@@ -309,10 +321,72 @@ async function carregarSolicitacoes() {
     throw new Error(result.message || 'Nao foi possivel carregar as solicitacoes.');
   }
 
+  // Detecta novos pedidos "ativos" (pendentes / em separacao / atendida parcial).
+  detectarPedidosNovos(Array.isArray(result) ? result : []);
+
   solicitacoesCache = result;
   renderizarPedidos();
   atualizarIndicadores();
   atualizarBadgesMenu();
+}
+
+function detectarPedidosNovos(novaLista) {
+  const ativos = novaLista.filter((item) => ACTIVE_REQUEST_STATUSES.includes(String(item.status || '').toUpperCase()));
+  const keyset = new Set(ativos.map((item) => buildRequestKey(item)));
+
+  // Primeira carga: so inicializa (nao alerta).
+  if (lastActiveRequestKeyset.size === 0) {
+    lastActiveRequestKeyset = keyset;
+    return;
+  }
+
+  const houveNovo = [...keyset].some((key) => !lastActiveRequestKeyset.has(key));
+  lastActiveRequestKeyset = keyset;
+
+  if (!houveNovo) {
+    return;
+  }
+
+  // Se a aba estiver em segundo plano, chama atencao.
+  if (document.hidden) {
+    startTabFlash(ativos.length);
+  }
+}
+
+function buildRequestKey(item) {
+  // id + status + pendente tende a ser o suficiente para diferenciar entradas novas/alteradas.
+  const id = Number(item.id || 0);
+  const status = String(item.status || '').toUpperCase();
+  const pendente = Number(item.quantidade_pendente || item.pendente || 0);
+  return `${id}:${status}:${pendente}`;
+}
+
+function startTabFlash(pendentes) {
+  if (tabFlashHandle) {
+    return;
+  }
+
+  tabFlashOriginalTitle = document.title || tabFlashOriginalTitle;
+  tabFlashToggle = false;
+
+  tabFlashHandle = window.setInterval(() => {
+    tabFlashToggle = !tabFlashToggle;
+    if (tabFlashToggle) {
+      document.title = `(!) ${pendentes} pedido(s) | ${tabFlashOriginalTitle}`;
+    } else {
+      document.title = tabFlashOriginalTitle;
+    }
+  }, 900);
+}
+
+function stopTabFlash() {
+  if (!tabFlashHandle) {
+    return;
+  }
+
+  window.clearInterval(tabFlashHandle);
+  tabFlashHandle = null;
+  document.title = tabFlashOriginalTitle;
 }
 
 async function carregarTratamento() {
@@ -1124,6 +1198,7 @@ async function handleSalvarConsumoInterno(event) {
 async function abrirModalPedidos() {
   try {
     await carregarSolicitacoes();
+    stopTabFlash();
     openModal(refs.pedidosModal);
   } catch (error) {
     mostrarMensagem(error.message, 'error');
