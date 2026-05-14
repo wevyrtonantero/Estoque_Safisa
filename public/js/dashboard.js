@@ -34,6 +34,8 @@ let lastActiveRequestKeyset = new Set();
 let tabFlashHandle = null;
 let tabFlashOriginalTitle = document.title;
 let tabFlashToggle = false;
+let lastDingAt = 0;
+const DING_COOLDOWN_MS = 8000;
 
 const refs = {
   mensagem: document.getElementById('almox-mensagem'),
@@ -350,6 +352,7 @@ function detectarPedidosNovos(novaLista) {
   // Se a aba estiver em segundo plano, chama atencao.
   if (document.hidden) {
     startTabFlash(ativos.length);
+    playDing();
   }
 }
 
@@ -387,6 +390,46 @@ function stopTabFlash() {
   window.clearInterval(tabFlashHandle);
   tabFlashHandle = null;
   document.title = tabFlashOriginalTitle;
+}
+
+function playDing() {
+  const now = Date.now();
+  if (now - lastDingAt < DING_COOLDOWN_MS) {
+    return;
+  }
+  lastDingAt = now;
+
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) {
+      return;
+    }
+
+    const ctx = new AudioCtx();
+    const gain = ctx.createGain();
+    const osc = ctx.createOscillator();
+
+    // Ding curto e discreto.
+    osc.type = 'sine';
+    osc.frequency.value = 880;
+    gain.gain.value = 0.04;
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    const t0 = ctx.currentTime;
+    osc.start(t0);
+    // Fade out rapido para nao ficar "apitando".
+    gain.gain.setValueAtTime(0.04, t0);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.18);
+    osc.stop(t0 + 0.2);
+
+    osc.onended = () => {
+      try { ctx.close(); } catch (_) { /* ignore */ }
+    };
+  } catch (_) {
+    // Se o navegador bloquear audio em background, apenas ignora.
+  }
 }
 
 async function carregarTratamento() {
