@@ -662,6 +662,8 @@ function handleSugestaoSolicitacaoClick(event) {
 
   refs.solicitacaoItemId.value = String(item.id);
   refs.solicitacaoBusca.value = `${item.codigo} - ${item.descricao}`;
+  const pacote = Number(item.estoque_minimo);
+  refs.solicitacaoQuantidade.value = Number.isFinite(pacote) && pacote > 0 ? String(pacote) : '';
   renderizarResumoItemSolicitacao(item);
   esconderSugestoesSolicitacao();
 }
@@ -694,7 +696,7 @@ function abrirModalSolicitacao(prefill = null) {
     preencherSolicitacaoEstoque(prefill);
   } else {
     refs.solicitacaoForm.reset();
-    refs.solicitacaoQuantidade.value = '1';
+    refs.solicitacaoQuantidade.value = '';
     refs.solicitacaoItemId.value = '';
     refs.solicitacaoBusca.value = '';
     renderizarResumoItemSolicitacao(null);
