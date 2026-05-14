@@ -622,36 +622,52 @@ function renderizarResumoItem(item) {
 
 function renderizarSugestoesSolicitacao(termo) {
   const filtro = normalizarBusca(termo);
-  const itens = itensCache.filter((item) => {
-    if (obterSaldoAlmoxarifado(item) <= 0) {
-      return false;
-    }
-
+  const candidatos = itensCache.filter((item) => {
     if (!filtro) {
       return true;
     }
 
     return normalizarBusca(`${item.codigo} ${item.descricao} ${item.classificacao}`).includes(filtro);
-  }).slice(0, 8);
+  });
+
+  const comSaldo = [];
+  const semSaldo = [];
+
+  candidatos.forEach((item) => {
+    if (obterSaldoAlmoxarifado(item) > 0) {
+      comSaldo.push(item);
+      return;
+    }
+
+    semSaldo.push(item);
+  });
+
+  const itens = [...comSaldo, ...semSaldo].slice(0, 8);
 
   if (!itens.length) {
-    refs.solicitacaoSugestoes.innerHTML = '<div class="autocomplete-empty">Nenhuma peca com saldo disponivel no Almoxarifado.</div>';
+    refs.solicitacaoSugestoes.innerHTML = '<div class="autocomplete-empty">Nenhuma peca encontrada no cadastro.</div>';
     refs.solicitacaoSugestoes.classList.remove('hidden');
     return;
   }
 
-  refs.solicitacaoSugestoes.innerHTML = itens.map((item) => `
-    <button type="button" class="autocomplete-option" data-id="${item.id}">
-      <strong>${escapeHtml(`${item.codigo} - ${item.descricao}`)}</strong>
-      <span>${escapeHtml(`${item.classificacao} | Pacote: ${formatPackage(item.estoque_minimo)} | Almox: ${formatInteger(item.saldo_almoxarifado)}`)}</span>
-    </button>
-  `).join('');
+  refs.solicitacaoSugestoes.innerHTML = itens.map((item) => {
+    const saldo = obterSaldoAlmoxarifado(item);
+    const semSaldoItem = saldo <= 0;
+    const origemLabel = `${formatInteger(saldo)}${semSaldoItem ? ' (sem saldo)' : ''}`;
+
+    return `
+      <button type="button" class="autocomplete-option" data-id="${item.id}" ${semSaldoItem ? 'disabled' : ''}>
+        <strong>${escapeHtml(`${item.codigo} - ${item.descricao}`)}</strong>
+        <span>${escapeHtml(`${item.classificacao} | Pacote: ${formatPackage(item.estoque_minimo)} | Origem: ${origemLabel}`)}</span>
+      </button>
+    `;
+  }).join('');
   refs.solicitacaoSugestoes.classList.remove('hidden');
 }
 
 function handleSugestaoSolicitacaoClick(event) {
   const option = event.target.closest('button[data-id]');
-  if (!option) {
+  if (!option || option.disabled) {
     return;
   }
 

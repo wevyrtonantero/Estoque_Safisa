@@ -30,7 +30,14 @@ const refs = {
   tratamentoResumo: document.getElementById('especial-tratamento-resumo'),
   tratamentoId: document.getElementById('especial-tratamento-id'),
   tratamentoQuantidade: document.getElementById('especial-tratamento-quantidade'),
-  tratamentoObservacao: document.getElementById('especial-tratamento-observacao')
+  tratamentoObservacao: document.getElementById('especial-tratamento-observacao'),
+  producaoModal: document.getElementById('especial-producao-modal'),
+  producaoMensagem: document.getElementById('especial-producao-mensagem'),
+  producaoResumo: document.getElementById('especial-producao-resumo'),
+  producaoId: document.getElementById('especial-producao-id'),
+  producaoQuantidade: document.getElementById('especial-producao-quantidade'),
+  producaoObservacao: document.getElementById('especial-producao-observacao'),
+  producaoForm: document.getElementById('especial-producao-form')
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -59,6 +66,12 @@ function bindEvents() {
   document.getElementById('btn-fechar-modal-especial-tratamento').addEventListener('click', fecharModalTratamento);
   document.getElementById('btn-cancelar-modal-especial-tratamento').addEventListener('click', fecharModalTratamento);
   document.getElementById('especial-tratamento-form').addEventListener('submit', handleTratamentoSubmit);
+  if (refs.producaoModal) {
+    document.getElementById('btn-fechar-modal-especial-producao').addEventListener('click', fecharModalProducao);
+    document.getElementById('btn-cancelar-modal-especial-producao').addEventListener('click', fecharModalProducao);
+    refs.producaoForm.addEventListener('submit', handleProducaoSubmit);
+    refs.producaoModal.addEventListener('click', handleBackdrop);
+  }
   refs.refugoModal.addEventListener('click', handleBackdrop);
   refs.estoqueModal.addEventListener('click', handleBackdrop);
   refs.tratamentoModal.addEventListener('click', handleBackdrop);
@@ -129,6 +142,9 @@ function renderizarRegistros() {
     const estoqueButton = configEstoqueEspecial.permiteEstoque
       ? `<button type="button" class="row-menu-item" data-action="estoque" data-id="${item.id}">Encaminhar para estoque</button>`
       : '';
+    const producaoButton = configEstoqueEspecial.permiteProducao
+      ? `<button type="button" class="row-menu-item" data-action="producao" data-id="${item.id}">Iniciar producao</button>`
+      : '';
 
     return `
       <tr>
@@ -143,6 +159,7 @@ function renderizarRegistros() {
             <summary class="row-menu-trigger" aria-label="Abrir acoes">...</summary>
             <div class="row-menu-panel">
               <button type="button" class="row-menu-item danger" data-action="refugo" data-id="${item.id}">Refugo</button>
+              ${producaoButton}
               ${estoqueButton}
               <button type="button" class="row-menu-item" data-action="tratamento" data-id="${item.id}">Encaminhar para tratamento externo</button>
             </div>
@@ -192,6 +209,11 @@ function handleTabelaActions(event) {
 
   if (button.dataset.action === 'tratamento') {
     abrirModalTratamento(item);
+    return;
+  }
+
+  if (button.dataset.action === 'producao') {
+    abrirModalProducao(item);
   }
 }
 
@@ -366,6 +388,69 @@ async function handleTratamentoSubmit(event) {
   }
 }
 
+function abrirModalProducao(item) {
+  if (!configEstoqueEspecial.permiteProducao || !refs.producaoModal) {
+    mostrarMensagem('Esta tela nao permite iniciar producao por aqui.', 'error');
+    return;
+  }
+
+  resetProducaoModal();
+  refs.producaoId.value = String(item.id);
+  refs.producaoQuantidade.value = '1';
+  refs.producaoQuantidade.max = String(item.quantidade);
+  preencherResumo(refs.producaoResumo, item);
+  openModal(refs.producaoModal);
+}
+
+function fecharModalProducao() {
+  if (!refs.producaoModal) {
+    return;
+  }
+
+  resetProducaoModal();
+  closeModal(refs.producaoModal);
+}
+
+function resetProducaoModal() {
+  if (!refs.producaoForm) {
+    return;
+  }
+
+  refs.producaoForm.reset();
+  refs.producaoId.value = '';
+  refs.producaoQuantidade.removeAttribute('max');
+  limparResumo(refs.producaoResumo);
+  limparMensagem(refs.producaoMensagem);
+}
+
+async function handleProducaoSubmit(event) {
+  event.preventDefault();
+
+  try {
+    const response = await fetch(`${estoqueEspecialApiBaseUrl}/registros/${refs.producaoId.value}/iniciar-producao`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        quantidade: refs.producaoQuantidade.value,
+        observacao: refs.producaoObservacao.value.trim()
+      })
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(extractErrorMessage(result));
+    }
+
+    fecharModalProducao();
+    mostrarMensagem(`Producao iniciada com sucesso. OP ${result.producao?.id || '-'}.`, 'success');
+    await carregarRegistros();
+  } catch (error) {
+    refs.producaoMensagem.textContent = error.message;
+    refs.producaoMensagem.className = 'message error';
+    refs.producaoMensagem.classList.remove('hidden');
+  }
+}
+
 function preencherResumo(container, item) {
   container.classList.remove('empty');
   container.classList.add('selected-tags');
@@ -413,6 +498,10 @@ function handleBackdrop(event) {
 
   if (event.target.dataset.closeModal === 'especial-tratamento') {
     fecharModalTratamento();
+  }
+
+  if (event.target.dataset.closeModal === 'especial-producao') {
+    fecharModalProducao();
   }
 }
 
@@ -496,19 +585,32 @@ function handleKeyboardShortcuts(event) {
 
   if (!refs.tratamentoModal.classList.contains('hidden')) {
     fecharModalTratamento();
+    return;
+  }
+
+  if (refs.producaoModal && !refs.producaoModal.classList.contains('hidden')) {
+    fecharModalProducao();
   }
 }
 
 function openModal(modal) {
+  if (!modal) {
+    return;
+  }
+
   modal.classList.remove('hidden');
   modal.setAttribute('aria-hidden', 'false');
   document.body.classList.add('has-modal');
 }
 
 function closeModal(modal) {
+  if (!modal) {
+    return;
+  }
+
   modal.classList.add('hidden');
   modal.setAttribute('aria-hidden', 'true');
-  const hasModal = [refs.refugoModal, refs.estoqueModal, refs.tratamentoModal]
+  const hasModal = [refs.refugoModal, refs.estoqueModal, refs.tratamentoModal, refs.producaoModal]
     .some((entry) => entry && !entry.classList.contains('hidden'));
   document.body.classList.toggle('has-modal', hasModal);
 }

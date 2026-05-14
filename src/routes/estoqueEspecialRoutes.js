@@ -10,5 +10,6 @@ router.get('/estoques-especiais/:tipo/registros', requireApiRoles(OPERATION_READ
 router.post('/estoques-especiais/:tipo/registros/:id/refugo', requireApiRoles(OPERATION_WRITE_ROLES), EstoqueEspecialController.registrarRefugo);
 router.post('/estoques-especiais/:tipo/registros/:id/enviar-estoque', requireApiRoles(OPERATION_WRITE_ROLES), EstoqueEspecialController.enviarParaEstoque);
 router.post('/estoques-especiais/:tipo/registros/:id/enviar-tratamento', requireApiRoles(OPERATION_WRITE_ROLES), EstoqueEspecialController.enviarParaTratamento);
+router.post('/estoques-especiais/:tipo/registros/:id/iniciar-producao', requireApiRoles(OPERATION_WRITE_ROLES), EstoqueEspecialController.iniciarProducao);
 
 module.exports = router;

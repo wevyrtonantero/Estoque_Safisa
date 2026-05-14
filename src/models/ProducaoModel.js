@@ -52,8 +52,45 @@ class ProducaoModel {
       `
     );
 
+    await this.ensureReturnOriginColumns(db);
     await this.ensureSupportStocks(db);
     await EstoqueEspecialModel.ensureSchema(db);
+  }
+
+  static async columnExists(db, tableName, columnName) {
+    const [rows] = await db.query(
+      `
+        SELECT 1
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = ?
+          AND COLUMN_NAME = ?
+        LIMIT 1
+      `,
+      [tableName, columnName]
+    );
+
+    return rows.length > 0;
+  }
+
+  static async ensureReturnOriginColumns(db = pool) {
+    if (!await this.columnExists(db, 'producao_ordens', 'origem_estoque_especial_tipo')) {
+      await db.query(
+        `
+          ALTER TABLE producao_ordens
+          ADD COLUMN origem_estoque_especial_tipo VARCHAR(40) NULL AFTER observacao_fim
+        `
+      );
+    }
+
+    if (!await this.columnExists(db, 'producao_ordens', 'origem_estoque_especial_registro_id')) {
+      await db.query(
+        `
+          ALTER TABLE producao_ordens
+          ADD COLUMN origem_estoque_especial_registro_id BIGINT NULL AFTER origem_estoque_especial_tipo
+        `
+      );
+    }
   }
 
   static async ensureSupportStocks(db = pool) {
@@ -131,6 +168,8 @@ class ProducaoModel {
           po.status,
           po.observacao_inicio,
           po.observacao_fim,
+          po.origem_estoque_especial_tipo,
+          po.origem_estoque_especial_registro_id,
           po.data_inicio,
           po.data_fim,
           po.created_at,
@@ -202,6 +241,8 @@ class ProducaoModel {
           po.status,
           po.observacao_inicio,
           po.observacao_fim,
+          po.origem_estoque_especial_tipo,
+          po.origem_estoque_especial_registro_id,
           po.data_inicio,
           po.data_fim,
           po.created_at,
@@ -332,6 +373,10 @@ class ProducaoModel {
     }
 
     return Number(ordem.peso_consumido_kg || 0);
+  }
+
+  static isReturnedFromSpecialStock(ordem) {
+    return String(ordem?.origem_estoque_especial_tipo || '').toUpperCase() === this.DESTINOS.PECAS_INACABADAS;
   }
 
   static calculateMateriaPrimaConsumption({ materiaPrima, peca = {}, quantidadeTotal, comprimentoCorteMm = null }) {
@@ -755,8 +800,15 @@ class ProducaoModel {
         throw this.createBusinessError('Informe uma quantidade produzida ou refugo maior que zero.');
       }
 
-      if (!ordem.id_materia_prima) {
+      const retornoInacabadas = this.isReturnedFromSpecialStock(ordem);
+      if (!retornoInacabadas && !ordem.id_materia_prima) {
         throw this.createBusinessError('A peca nao possui materia-prima vinculada. Ajuste a peca antes de finalizar a producao.');
+      }
+
+      if (retornoInacabadas && totalFinal > Number(ordem.quantidade_planejada || 0)) {
+        throw this.createBusinessError(
+          'A quantidade final nao pode ser maior que a quantidade retornada das pecas inacabadas.'
+        );
       }
 
       const quantidadeJaDestinada = await this.getTotalDestinado(id, connection);
@@ -766,32 +818,41 @@ class ProducaoModel {
         );
       }
 
-      const consumoFinal = this.calculateMateriaPrimaConsumption({
-        materiaPrima: ordem,
-        peca: ordem,
-        quantidadeTotal: totalFinal,
-        comprimentoCorteMm: data.comprimento_corte_mm
-      });
-      const quantidadeJaBaixadaEstoque = this.getCommittedStockConsumption(ordem);
-      const diferencaBaixaEstoque = Number((consumoFinal.quantidadeBaixadaEstoque - quantidadeJaBaixadaEstoque).toFixed(4));
+      let consumoFinal = {
+        quantidadeConsumida: Number(ordem.quantidade_consumida_materia_prima || 0),
+        unidadeConsumo: ordem.unidade_consumo || null,
+        pesoConsumido: ordem.peso_consumido_kg || null,
+        comprimentoCorteUsado: data.comprimento_corte_mm || ordem.comprimento_corte_mm || null
+      };
 
-      if (diferencaBaixaEstoque > 0) {
-        await EstoqueMateriaPrimaModel.registerConsumption(connection, {
-          id_materia_prima: ordem.id_materia_prima,
-          id_producao_ordem: id,
-          quantidade: diferencaBaixaEstoque,
-          unidade: consumoFinal.unidadeBaixaEstoque,
-          preventNegative: true,
-          observacao: `Complemento de consumo da producao ${ordem.peca_codigo} - ${ordem.peca_descricao}.`.slice(0, 255)
+      if (!retornoInacabadas) {
+        consumoFinal = this.calculateMateriaPrimaConsumption({
+          materiaPrima: ordem,
+          peca: ordem,
+          quantidadeTotal: totalFinal,
+          comprimentoCorteMm: data.comprimento_corte_mm
         });
-      } else if (diferencaBaixaEstoque < 0) {
-        await EstoqueMateriaPrimaModel.registerReturnFromProductionDelete(connection, {
-          id_materia_prima: ordem.id_materia_prima,
-          id_producao_ordem: id,
-          quantidade: Math.abs(diferencaBaixaEstoque),
-          unidade: consumoFinal.unidadeBaixaEstoque,
-          observacao: `Devolucao de materia-prima da producao ${ordem.peca_codigo} - ${ordem.peca_descricao}.`.slice(0, 255)
-        });
+        const quantidadeJaBaixadaEstoque = this.getCommittedStockConsumption(ordem);
+        const diferencaBaixaEstoque = Number((consumoFinal.quantidadeBaixadaEstoque - quantidadeJaBaixadaEstoque).toFixed(4));
+
+        if (diferencaBaixaEstoque > 0) {
+          await EstoqueMateriaPrimaModel.registerConsumption(connection, {
+            id_materia_prima: ordem.id_materia_prima,
+            id_producao_ordem: id,
+            quantidade: diferencaBaixaEstoque,
+            unidade: consumoFinal.unidadeBaixaEstoque,
+            preventNegative: true,
+            observacao: `Complemento de consumo da producao ${ordem.peca_codigo} - ${ordem.peca_descricao}.`.slice(0, 255)
+          });
+        } else if (diferencaBaixaEstoque < 0) {
+          await EstoqueMateriaPrimaModel.registerReturnFromProductionDelete(connection, {
+            id_materia_prima: ordem.id_materia_prima,
+            id_producao_ordem: id,
+            quantidade: Math.abs(diferencaBaixaEstoque),
+            unidade: consumoFinal.unidadeBaixaEstoque,
+            observacao: `Devolucao de materia-prima da producao ${ordem.peca_codigo} - ${ordem.peca_descricao}.`.slice(0, 255)
+          });
+        }
       }
 
       await connection.query(
@@ -921,19 +982,20 @@ class ProducaoModel {
       }
 
       if (ordem.status === 'FINALIZADA') {
-        if (!ordem.id_materia_prima) {
+        const retornoInacabadas = this.isReturnedFromSpecialStock(ordem);
+        if (!retornoInacabadas && !ordem.id_materia_prima) {
           throw this.createBusinessError('A ordem finalizada nao possui materia-prima vinculada para estorno.');
         }
 
         const quantidadeEstornoMp = this.getCommittedStockConsumption(ordem);
-        const unidadeEstorno = this.getStockConsumptionUnit(ordem);
+        const unidadeEstorno = retornoInacabadas ? null : this.getStockConsumptionUnit(ordem);
         const destinos = await this.findDestinations(ordem.id, connection);
 
         for (const destino of destinos) {
           await this.reverseDestination(connection, ordem, destino);
         }
 
-        if (quantidadeEstornoMp > 0) {
+        if (!retornoInacabadas && quantidadeEstornoMp > 0) {
           await EstoqueMateriaPrimaModel.registerReturnFromProductionDelete(connection, {
             id_materia_prima: ordem.id_materia_prima,
             id_producao_ordem: ordem.id,

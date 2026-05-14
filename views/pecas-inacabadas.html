@@ -98,7 +98,7 @@
 
           <div class="subtle-divider"></div>
 
-          <div class="table-wrapper special-stock-table">
+          <div class="table-wrapper special-stock-table" data-print-table data-print-title="Pecas Inacabadas">
             <table>
               <thead>
                 <tr>
@@ -239,16 +239,55 @@
     </div>
   </div>
 
+  <div id="especial-producao-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="especial-producao"></div>
+
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Producao</span>
+          <h2>Iniciar Producao</h2>
+          <p>A quantidade sai das pecas inacabadas e volta como uma ordem em andamento.</p>
+        </div>
+        <button id="btn-fechar-modal-especial-producao" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="especial-producao-mensagem" class="message hidden"></div>
+
+      <form id="especial-producao-form" class="form-grid">
+        <input type="hidden" id="especial-producao-id">
+        <div id="especial-producao-resumo" class="span-12 selected-tags empty">Selecione uma peca para continuar.</div>
+
+        <div class="field span-4">
+          <label for="especial-producao-quantidade">Quantidade</label>
+          <input id="especial-producao-quantidade" type="number" min="1" step="1" value="1" required>
+        </div>
+
+        <div class="field span-8">
+          <label for="especial-producao-observacao">Observacao</label>
+          <input id="especial-producao-observacao" type="text" maxlength="255" placeholder="Opcional">
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button id="btn-cancelar-modal-especial-producao" class="btn btn-neutral" type="button">Cancelar</button>
+          <button class="btn btn-success" type="submit">Iniciar Producao</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script>
     window.ESTOQUE_ESPECIAL_CONFIG = {
       tipo: 'PECAS_INACABADAS',
       detalheLabel: 'Falta fazer',
       emptyMessage: 'Nenhuma peca inacabada.',
-      permiteEstoque: false
+      permiteEstoque: false,
+      permiteProducao: true
     };
   </script>
   <script src="/js/sector-menu.js"></script>
   <script src="/js/estoque-especial.js"></script>
+  <script src="/js/table-print.js"></script>
   <script src="/js/session-indicator.js"></script>
 </body>
 </html>

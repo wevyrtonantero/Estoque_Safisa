@@ -367,6 +367,9 @@ class EstoqueEspecialModel {
           r.origem,
           r.defeito,
           r.falta_fazer,
+          p.id_maquina,
+          p.id_materia_prima,
+          p.comprimento_mm,
           p.codigo,
           p.descricao,
           e.nome AS estoque_nome
@@ -413,6 +416,111 @@ class EstoqueEspecialModel {
     const novoSaldoOrigem = Number((quantidadeOrigem - quantidade).toFixed(2));
     await EstoqueModel.persistSaldo(connection, registro.id_estoque, registro.id_peca, novoSaldoOrigem, saldoOrigem);
     return novoSaldoOrigem;
+  }
+
+  static async iniciarProducao(data) {
+    const connection = await pool.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      const tipo = this.normalizeTipo(data.tipo);
+      if (tipo !== this.TIPOS.PECAS_INACABADAS) {
+        throw this.createBusinessError('Somente pecas inacabadas podem voltar para a producao por aqui.');
+      }
+
+      const quantidade = this.normalizeQuantity(data.quantidade);
+      if (!Number.isInteger(quantidade)) {
+        throw this.createBusinessError('A quantidade para iniciar producao deve ser um numero inteiro.');
+      }
+
+      const registro = await this.findRegistroForUpdate(connection, data.id, tipo);
+
+      if (!registro) {
+        throw this.createBusinessError('Registro nao encontrado neste estoque.');
+      }
+
+      const idMaquina = Number(registro.id_maquina);
+      if (!Number.isInteger(idMaquina) || idMaquina <= 0) {
+        throw this.createBusinessError(`A peca ${registro.codigo} nao possui maquina vinculada para iniciar a producao.`);
+      }
+
+      const [maquinaRows] = await connection.query(
+        `
+          SELECT id, nome
+          FROM maquinas
+          WHERE id = ?
+          LIMIT 1
+        `,
+        [idMaquina]
+      );
+
+      if (!maquinaRows[0]) {
+        throw this.createBusinessError(`A maquina vinculada a peca ${registro.codigo} nao foi encontrada.`);
+      }
+
+      const saldoRegistroAtual = await this.reduceRegistro(connection, registro, quantidade);
+      const saldoEstoqueAtual = await this.reduceStockSaldo(connection, registro, quantidade);
+      const observacao = (
+        data.observacao
+        || `Retorno das pecas inacabadas para producao. Falta fazer: ${registro.falta_fazer || '-'}`
+      ).slice(0, 255);
+
+      const [result] = await connection.query(
+        `
+          INSERT INTO producao_ordens (
+            id_maquina,
+            id_peca,
+            id_materia_prima,
+            quantidade_planejada,
+            quantidade_consumida_materia_prima,
+            observacao_inicio,
+            origem_estoque_especial_tipo,
+            origem_estoque_especial_registro_id
+          ) VALUES (?, ?, ?, ?, 0, ?, ?, ?)
+        `,
+        [
+          idMaquina,
+          registro.id_peca,
+          registro.id_materia_prima || null,
+          quantidade,
+          observacao,
+          tipo,
+          registro.id
+        ]
+      );
+
+      await EstoqueModel.createMovimentacao(connection, {
+        id_peca: registro.id_peca,
+        id_estoque_origem: registro.id_estoque,
+        id_estoque_destino: null,
+        tipo_movimentacao: 'SAIDA',
+        quantidade,
+        observacao: `Retorno para producao OP ${result.insertId}. ${observacao}`.slice(0, 255)
+      });
+
+      await connection.commit();
+      return {
+        id: registro.id,
+        quantidade_retirada: quantidade,
+        saldo_registro_atual: saldoRegistroAtual,
+        saldo_estoque_atual: saldoEstoqueAtual,
+        producao: {
+          id: result.insertId,
+          id_maquina: idMaquina,
+          maquina_nome: maquinaRows[0].nome,
+          id_peca: registro.id_peca,
+          codigo: registro.codigo,
+          descricao: registro.descricao,
+          quantidade_planejada: quantidade
+        }
+      };
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
   }
 
   static async registrarRefugo(data) {

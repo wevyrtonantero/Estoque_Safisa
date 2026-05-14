@@ -129,6 +129,33 @@ const EstoqueEspecialController = {
       const response = extractErrorResponse(error, 'Erro ao encaminhar peca para tratamento externo.');
       return res.status(response.status).json(response.body);
     }
+  },
+
+  async iniciarProducao(req, res) {
+    try {
+      const id = normalizeOptionalInteger(req.params.id);
+      const quantidade = normalizeDecimal(req.body.quantidade);
+
+      if (!Number.isInteger(id)) {
+        return res.status(400).json({ message: 'Registro invalido.' });
+      }
+
+      if (!Number.isFinite(quantidade) || quantidade <= 0) {
+        return res.status(400).json({ message: 'A quantidade deve ser maior que zero.' });
+      }
+
+      const result = await EstoqueEspecialModel.iniciarProducao({
+        tipo: req.params.tipo,
+        id,
+        quantidade,
+        observacao: req.body.observacao ? String(req.body.observacao).trim() : null
+      });
+
+      return res.status(200).json(result);
+    } catch (error) {
+      const response = extractErrorResponse(error, 'Erro ao iniciar producao com peca inacabada.');
+      return res.status(response.status).json(response.body);
+    }
   }
 };
 
