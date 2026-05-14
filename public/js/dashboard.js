@@ -36,6 +36,8 @@ let tabFlashOriginalTitle = document.title;
 let tabFlashToggle = false;
 let lastDingAt = 0;
 const DING_COOLDOWN_MS = 8000;
+let beepHandle = null;
+const BEEP_INTERVAL_MS = 2000;
 
 const refs = {
   mensagem: document.getElementById('almox-mensagem'),
@@ -349,10 +351,10 @@ function detectarPedidosNovos(novaLista) {
     return;
   }
 
-  // Se a aba estiver em segundo plano, chama atencao.
-  if (document.hidden) {
+  // Se a aba/janela estiver fora de foco, chama atencao.
+  if (document.hidden || !document.hasFocus()) {
     startTabFlash(ativos.length);
-    playDing();
+    startBeepLoop();
   }
 }
 
@@ -384,17 +386,44 @@ function startTabFlash(pendentes) {
 
 function stopTabFlash() {
   if (!tabFlashHandle) {
+    stopBeepLoop();
     return;
   }
 
   window.clearInterval(tabFlashHandle);
   tabFlashHandle = null;
   document.title = tabFlashOriginalTitle;
+  stopBeepLoop();
 }
 
-function playDing() {
+function startBeepLoop() {
+  if (beepHandle) {
+    return;
+  }
+
+  // Primeiro beep imediato, depois intervalo constante.
+  playBeep();
+  beepHandle = window.setInterval(() => {
+    if (!document.hidden && document.hasFocus()) {
+      stopBeepLoop();
+      return;
+    }
+    playBeep();
+  }, BEEP_INTERVAL_MS);
+}
+
+function stopBeepLoop() {
+  if (!beepHandle) {
+    return;
+  }
+  window.clearInterval(beepHandle);
+  beepHandle = null;
+}
+
+function playBeep() {
   const now = Date.now();
-  if (now - lastDingAt < DING_COOLDOWN_MS) {
+  // Mantem um guard pra nao criar audio contexts em excesso caso o browser dispare eventos demais.
+  if (now - lastDingAt < 300) {
     return;
   }
   lastDingAt = now;
@@ -409,26 +438,24 @@ function playDing() {
     const gain = ctx.createGain();
     const osc = ctx.createOscillator();
 
-    // Ding curto e discreto.
-    osc.type = 'sine';
+    osc.type = 'square';
     osc.frequency.value = 880;
-    gain.gain.value = 0.04;
+    gain.gain.value = 0.1;
 
     osc.connect(gain);
     gain.connect(ctx.destination);
 
     const t0 = ctx.currentTime;
     osc.start(t0);
-    // Fade out rapido para nao ficar "apitando".
-    gain.gain.setValueAtTime(0.04, t0);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.18);
-    osc.stop(t0 + 0.2);
+    gain.gain.setValueAtTime(0.1, t0);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.25);
+    osc.stop(t0 + 0.28);
 
     osc.onended = () => {
       try { ctx.close(); } catch (_) { /* ignore */ }
     };
   } catch (_) {
-    // Se o navegador bloquear audio em background, apenas ignora.
+    // Se o navegador bloquear audio (por falta de interacao), apenas ignora.
   }
 }
 
