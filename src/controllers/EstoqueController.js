@@ -218,7 +218,11 @@ function validateConsumoInternoPayload(payload) {
 
 function extractErrorResponse(error, fallbackMessage) {
   if (error.statusCode) {
-    return { status: error.statusCode, body: { message: error.message } };
+    const body = { message: error.message };
+    if (error.details) {
+      body.details = error.details;
+    }
+    return { status: error.statusCode, body };
   }
 
   console.error(fallbackMessage, error);
@@ -454,6 +458,24 @@ const EstoqueController = {
       return res.status(201).json(result);
     } catch (error) {
       const response = extractErrorResponse(error, 'Erro ao registrar saida na Expedição.');
+      return res.status(response.status).json(response.body);
+    }
+  },
+
+  // Simula a saida pela mesma regra da venda, sem alterar saldos.
+  async diagnosticarSaida(req, res) {
+    try {
+      const payload = buildSaidaPayload(req.body);
+      const errors = validateSaidaPayload(payload);
+
+      if (errors.length > 0) {
+        return res.status(400).json({ message: 'Dados invalidos.', errors });
+      }
+
+      const result = await EstoqueModel.diagnosticarSaidaLote(payload);
+      return res.status(200).json(result);
+    } catch (error) {
+      const response = extractErrorResponse(error, 'Erro ao diagnosticar saida na Expedicao.');
       return res.status(response.status).json(response.body);
     }
   },

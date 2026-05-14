@@ -6,6 +6,7 @@ const transferenciaApiBaseUrl = '/api/estoque/transferencia';
 const solicitacoesApiBaseUrl = '/api/solicitacoes-estoque';
 const solicitacoesProducaoApiBaseUrl = '/api/solicitacoes-producao';
 const saidaApiBaseUrl = '/api/estoque/saida';
+const saidaDiagnosticoApiBaseUrl = '/api/estoque/saida/diagnostico';
 const submontagensApiBaseUrl = '/api/submontagens';
 const composicoesVendaApiBaseUrl = '/api/composicoes-venda';
 const producaoApiBaseUrl = '/api/producao';
@@ -67,6 +68,9 @@ const refs = {
   saldosItemSubtitulo: document.getElementById('expedicao-saldos-item-subtitulo'),
   saldosItemTbody: document.getElementById('expedicao-saldos-item-tbody'),
   saidaModal: document.getElementById('expedicao-saida-modal'),
+  faltasModal: document.getElementById('expedicao-faltas-modal'),
+  faltasSubtitulo: document.getElementById('expedicao-faltas-subtitulo'),
+  faltasTbody: document.getElementById('expedicao-faltas-tbody'),
   retornoModal: document.getElementById('expedicao-retorno-modal'),
   retornoMensagem: document.getElementById('expedicao-retorno-mensagem'),
   retornoForm: document.getElementById('expedicao-retorno-form'),
@@ -210,6 +214,8 @@ function bindEvents() {
   document.getElementById('expedicao-btn-limpar-filtros-estoque').addEventListener('click', limparFiltrosEstoque);
   document.getElementById('btn-fechar-modal-expedicao-estrutura').addEventListener('click', fecharModalEstrutura);
   document.getElementById('btn-fechar-modal-expedicao-saida').addEventListener('click', fecharModalSaida);
+  document.getElementById('btn-fechar-modal-expedicao-faltas').addEventListener('click', fecharModalFaltas);
+  document.getElementById('btn-fechar-modal-expedicao-faltas-rodape').addEventListener('click', fecharModalFaltas);
   document.getElementById('btn-fechar-modal-expedicao-retorno').addEventListener('click', fecharModalRetorno);
   document.getElementById('btn-cancelar-modal-expedicao-retorno').addEventListener('click', fecharModalRetorno);
   document.getElementById('btn-fechar-modal-expedicao-pedidos').addEventListener('click', fecharModalPedidos);
@@ -534,19 +540,15 @@ async function renderizarSugestoes(termo) {
   const itens = itensCache.filter((item) => {
     const disponibilidade = obterDisponibilidadeVenda(item);
 
-    if (disponibilidade <= 0) {
-      return false;
-    }
-
     if (!filtro) {
-      return true;
+      return disponibilidade > 0;
     }
 
     return normalizarBusca(`${item.codigo} ${item.descricao} ${item.classificacao}`).includes(filtro);
   }).slice(0, 8);
 
   if (!itens.length) {
-    refs.itemSugestoes.innerHTML = '<div class="autocomplete-empty">Nenhum item disponivel para venda na Expedicao.</div>';
+    refs.itemSugestoes.innerHTML = '<div class="autocomplete-empty">Nenhum item encontrado para venda.</div>';
     refs.itemSugestoes.classList.remove('hidden');
     return;
   }
@@ -581,7 +583,7 @@ async function handleSugestaoClick(event) {
 function renderizarResumoItem(item) {
   if (!item) {
     refs.itemResumo.classList.add('selected-tags', 'empty');
-    refs.itemResumo.textContent = 'Selecione um item para ver a disponibilidade atual na Expedicao.';
+    refs.itemResumo.textContent = 'Selecione um item para ver a disponibilidade atual em Expedicao + Montagem.';
     return;
   }
 
@@ -626,6 +628,37 @@ function abrirModalSaida() {
 
 function fecharModalSaida() {
   closeModal(refs.saidaModal);
+}
+
+function abrirModalFaltas(details) {
+  const itemVendaCodigo = details?.item_venda?.codigo || '-';
+  const itemVendaDescricao = details?.item_venda?.descricao || '-';
+  const faltas = Array.isArray(details?.faltas) ? details.faltas : [];
+
+  refs.faltasSubtitulo.textContent = `Venda bloqueada para ${itemVendaCodigo} - ${itemVendaDescricao}. Regularize os itens abaixo.`;
+
+  if (!faltas.length) {
+    refs.faltasTbody.innerHTML = '<tr><td colspan="8" class="empty-state">Nenhuma pendencia detalhada recebida.</td></tr>';
+  } else {
+    refs.faltasTbody.innerHTML = faltas.map((falta) => `
+      <tr>
+        <td class="table-code">${escapeHtml(falta.item_venda_codigo || itemVendaCodigo)}</td>
+        <td class="table-code">${escapeHtml(falta.codigo || '-')}</td>
+        <td class="table-description">${escapeHtml(falta.descricao || '-')}</td>
+        <td class="table-quantity">${formatDecimal(falta.necessario)}</td>
+        <td class="table-quantity">${formatDecimal(falta.disponivel_expedicao)}</td>
+        <td class="table-quantity">${formatDecimal(falta.disponivel_montagem)}</td>
+        <td class="table-quantity">${formatDecimal(falta.disponivel_total)}</td>
+        <td class="table-quantity">${formatDecimal(falta.falta)}</td>
+      </tr>
+    `).join('');
+  }
+
+  openModal(refs.faltasModal);
+}
+
+function fecharModalFaltas() {
+  closeModal(refs.faltasModal);
 }
 
 function atualizarObrigatoriedadeObservacaoSaida() {
@@ -1981,7 +2014,7 @@ async function handleCriarSolicitacaoProducao(event) {
 
 async function adicionarItemNaLista() {
   if (!refs.itemId.value) {
-    mostrarMensagemSaida('Selecione um item valido da Expedicao.', 'error');
+    mostrarMensagemSaida('Selecione um item valido da saida.', 'error');
     return;
   }
 
@@ -1999,24 +2032,21 @@ async function adicionarItemNaLista() {
     return;
   }
 
-  const disponivel = obterDisponibilidadeVenda(item);
   const existente = saidaLista.find((entry) => Number(entry.id_peca) === Number(item.id));
   const quantidadeTotal = quantidade + Number(existente ? existente.quantidade : 0);
 
-  if (quantidadeTotal > disponivel) {
-    mostrarMensagemSaida(`Disponivel insuficiente para ${item.codigo}.`, 'error');
-    return;
-  }
-
   if (existente) {
     existente.quantidade = quantidadeTotal;
+    await diagnosticarLinhaSaida(existente);
   } else {
-    saidaLista.push({
+    const novoItem = {
       id_peca: item.id,
       codigo: item.codigo,
       descricao: item.descricao,
       quantidade
-    });
+    };
+    saidaLista.push(novoItem);
+    await diagnosticarLinhaSaida(novoItem);
   }
 
   limparItemAtual();
@@ -2033,6 +2063,30 @@ function limparItemAtual() {
 }
 
 function handleListaActions(event) {
+  const botaoFalta = event.target.closest('button[data-falta-id]');
+  if (botaoFalta) {
+    const idPeca = Number(botaoFalta.dataset.faltaId);
+    const itemLista = saidaLista.find((entry) => Number(entry.id_peca) === idPeca);
+
+    if (!itemLista) {
+      mostrarMensagemSaida('Nao foi possivel calcular as faltas deste item.', 'error');
+      return;
+    }
+
+    diagnosticarLinhaSaida(itemLista)
+      .then(() => {
+        renderizarLista();
+        if (itemLista.pode_baixar) {
+          mostrarMensagemSaida(`${itemLista.codigo} possui saldo para baixa.`, 'success');
+          return;
+        }
+
+        abrirModalFaltas(itemLista.pendencias);
+      })
+      .catch((error) => mostrarMensagemSaida(error.message || 'Nao foi possivel calcular as faltas deste item.', 'error'));
+    return;
+  }
+
   const button = event.target.closest('button[data-remove-id]');
   if (!button) {
     return;
@@ -2055,37 +2109,119 @@ async function baixarSaida() {
   }
 
   try {
-    const response = await fetch(saidaApiBaseUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        tipo_saida: refs.tipoSaida.value || TIPO_SAIDA_PADRAO,
-        itens: saidaLista.map((item) => ({
-          id_peca: item.id_peca,
-          quantidade: item.quantidade
-        })),
-        observacao: refs.observacao.value.trim()
-      })
-    });
-    const result = await response.json();
+    await diagnosticarListaSaida();
+  } catch (error) {
+    mostrarMensagemSaida(error.message || 'Nao foi possivel validar os itens da lista.', 'error');
+    return;
+  }
 
-    if (!response.ok) {
-      throw new Error(result.message || 'Nao foi possivel registrar a saida.');
+  const itensOriginais = saidaLista.filter((item) => item.pode_baixar);
+  const itensPendentes = saidaLista.filter((item) => !item.pode_baixar);
+  const itensComFalha = [];
+  const pendencias = [];
+  let baixados = 0;
+
+  itensPendentes.forEach((item) => {
+    if (item.pendencias) {
+      pendencias.push(item.pendencias);
     }
+  });
 
-    saidaLista = [];
+  if (!itensOriginais.length) {
+    if (pendencias.length) {
+      abrirModalFaltas(consolidarPendenciasVenda(pendencias));
+    }
+    return;
+  }
+
+  for (const item of itensOriginais) {
+    try {
+      const response = await fetch(saidaApiBaseUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tipo_saida: refs.tipoSaida.value || TIPO_SAIDA_PADRAO,
+          itens: [{
+            id_peca: item.id_peca,
+            quantidade: item.quantidade
+          }],
+          observacao: refs.observacao.value.trim()
+        })
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        itensComFalha.push(item);
+        if (result?.details?.tipo === 'FALTA_ESTOQUE_VENDA') {
+          pendencias.push(result.details);
+        }
+        continue;
+      }
+
+      baixados += 1;
+    } catch (_) {
+      itensComFalha.push(item);
+    }
+  }
+
+  saidaLista = [...itensPendentes, ...itensComFalha];
+  renderizarLista();
+
+  await Promise.all([
+    carregarEstoqueExpedicao(),
+    carregarEstoqueMontagem(),
+    carregarHistoricoSaidas()
+  ]);
+
+  if (pendencias.length) {
+    abrirModalFaltas(consolidarPendenciasVenda(pendencias));
+  }
+
+  if (baixados > 0 && itensComFalha.length > 0) {
+    mostrarMensagemSaida(`Baixa parcial concluida: ${baixados} item(ns) baixado(s) e ${itensComFalha.length} pendente(s).`, 'warning');
+    return;
+  }
+
+  if (baixados > 0) {
     refs.tipoSaida.value = TIPO_SAIDA_PADRAO;
     refs.observacao.value = '';
     atualizarObrigatoriedadeObservacaoSaida();
-    renderizarLista();
     mostrarMensagemSaida('Saida registrada com sucesso.', 'success');
-    await Promise.all([
-      carregarEstoqueExpedicao(),
-      carregarHistoricoSaidas()
-    ]);
-  } catch (error) {
-    mostrarMensagemSaida(error.message, 'error');
+    return;
   }
+
+  if (!pendencias.length) {
+    mostrarMensagemSaida('Nao foi possivel registrar a saida com os itens atuais.', 'error');
+  }
+}
+
+async function diagnosticarLinhaSaida(itemLista) {
+  const response = await fetch(saidaDiagnosticoApiBaseUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      tipo_saida: refs.tipoSaida.value || TIPO_SAIDA_PADRAO,
+      itens: [{
+        id_peca: itemLista.id_peca,
+        quantidade: itemLista.quantidade
+      }],
+      observacao: refs.observacao.value.trim()
+    })
+  });
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || 'Nao foi possivel diagnosticar a saida.');
+  }
+
+  itemLista.pode_baixar = Boolean(result.pode_baixar);
+  itemLista.pendencias = result.details || null;
+  return itemLista;
+}
+
+async function diagnosticarListaSaida() {
+  await Promise.all(saidaLista.map((item) => diagnosticarLinhaSaida(item)));
+  renderizarLista();
 }
 
 async function abrirModalProducao() {
@@ -2220,15 +2356,49 @@ function renderizarLista() {
   }
 
   refs.listaTbody.innerHTML = saidaLista.map((item) => `
-    <tr>
+    <tr class="${item.pode_baixar === false ? 'expedicao-list-row-pendente' : ''}">
       <td class="table-code">${escapeHtml(item.codigo)}</td>
-      <td class="table-description">${escapeHtml(item.descricao)}</td>
+      <td class="table-description">
+        ${escapeHtml(item.descricao)}
+        ${item.pode_baixar === false ? '<div class="table-note">Pendente de estoque</div>' : ''}
+      </td>
       <td class="table-quantity">${formatInteger(item.quantidade)}</td>
-      <td class="table-actions-cell">
-        <button type="button" class="btn btn-neutral" data-remove-id="${item.id_peca}">Remover</button>
+      <td class="table-actions-cell expedicao-list-actions">
+        ${item.pode_baixar === false
+          ? `<button type="button" class="btn btn-secondary btn-small" data-falta-id="${item.id_peca}">Ver faltas</button>`
+          : ''}
+        <button type="button" class="btn btn-neutral btn-small" data-remove-id="${item.id_peca}">Remover</button>
       </td>
     </tr>
   `).join('');
+}
+
+function consolidarPendenciasVenda(listaDetalhes) {
+  const itensVenda = [];
+  const faltas = [];
+
+  listaDetalhes.forEach((details) => {
+    if (details?.item_venda) {
+      itensVenda.push(details.item_venda);
+    }
+
+    (details?.faltas || []).forEach((falta) => {
+      faltas.push({
+        ...falta,
+        item_venda_codigo: details?.item_venda?.codigo || '-',
+        item_venda_descricao: details?.item_venda?.descricao || '-'
+      });
+    });
+  });
+
+  return {
+    tipo: 'FALTA_ESTOQUE_VENDA',
+    item_venda: {
+      codigo: itensVenda.map((item) => item.codigo).filter(Boolean).join(', ') || '-',
+      descricao: 'Pendencias em itens da lista'
+    },
+    faltas
+  };
 }
 
 function renderizarPedidos() {
@@ -2549,6 +2719,10 @@ function obterSaldoOrigemSolicitacao(item) {
   return Number(item.saldo_almoxarifado || 0);
 }
 
+function obterSaldoConsolidadoVenda(idPeca) {
+  return obterSaldoExpedicao(idPeca) + obterSaldoMontagem(idPeca);
+}
+
 function calcularCapacidadeComponentesSubmontagem(item) {
   const componentes = estruturasSubmontagemCache.get(item.id) || [];
 
@@ -2557,7 +2731,7 @@ function calcularCapacidadeComponentesSubmontagem(item) {
   }
 
   const capacidades = componentes.map((componente) => {
-    const saldoComponente = obterSaldoExpedicao(componente.id_item_componente);
+    const saldoComponente = obterSaldoConsolidadoVenda(componente.id_item_componente);
     return Math.floor(saldoComponente / Number(componente.quantidade || 1));
   });
 
@@ -2565,8 +2739,14 @@ function calcularCapacidadeComponentesSubmontagem(item) {
 }
 
 function calcularDisponibilidadeSubmontagem(item) {
-  const saldoPronto = obterSaldoExpedicao(item.id);
+  const saldoPronto = obterSaldoConsolidadoVenda(item.id);
   const capacidadeComposicaoVenda = calcularDisponibilidadeComposicaoVenda(item.id);
+  const possuiComposicaoVenda = (composicoesVendaCache.get(Number(item.id)) || []).length > 0;
+
+  if (possuiComposicaoVenda) {
+    return saldoPronto + capacidadeComposicaoVenda;
+  }
+
   const capacidadeComponentes = calcularCapacidadeComponentesSubmontagem(item);
 
   return saldoPronto + capacidadeComposicaoVenda + Math.max(0, capacidadeComponentes);
@@ -2586,7 +2766,7 @@ function calcularDisponibilidadeComposicaoVenda(idItemVenda) {
     }
 
     const itemAtende = itensCache.find((entry) => Number(entry.id) === Number(linha.id_item_atende));
-    const saldoPronto = obterSaldoExpedicao(linha.id_item_atende);
+    const saldoPronto = obterSaldoConsolidadoVenda(linha.id_item_atende);
     const capacidadeComponentes = itemAtende?.classificacao === 'SUBMONTAGEM'
       ? calcularCapacidadeComponentesSubmontagem(itemAtende)
       : 0;
@@ -2598,7 +2778,7 @@ function calcularDisponibilidadeComposicaoVenda(idItemVenda) {
 }
 
 function obterDisponibilidadeVenda(item) {
-  const saldoPronto = obterSaldoExpedicao(item.id);
+  const saldoPronto = obterSaldoConsolidadoVenda(item.id);
   const capacidadeComposicaoVenda = calcularDisponibilidadeComposicaoVenda(item.id);
 
   if (item.classificacao === 'SUBMONTAGEM') {
@@ -2643,6 +2823,7 @@ function handleModalBackdrop(event) {
   if (event.target.dataset.closeModal === 'expedicao-historico-item') fecharModalHistoricoItem();
   if (event.target.dataset.closeModal === 'expedicao-saldos-item') fecharModalSaldosItem();
   if (event.target.dataset.closeModal === 'expedicao-saida') fecharModalSaida();
+  if (event.target.dataset.closeModal === 'expedicao-faltas') fecharModalFaltas();
   if (event.target.dataset.closeModal === 'expedicao-retorno') fecharModalRetorno();
   if (event.target.dataset.closeModal === 'expedicao-pedidos') fecharModalPedidos();
   if (event.target.dataset.closeModal === 'expedicao-historico') fecharModalHistorico();
@@ -2685,6 +2866,11 @@ function handleKeyboardShortcuts(event) {
 
   if (!refs.saldosItemModal.classList.contains('hidden')) {
     fecharModalSaldosItem();
+    return;
+  }
+
+  if (!refs.faltasModal.classList.contains('hidden')) {
+    fecharModalFaltas();
     return;
   }
 
@@ -2752,6 +2938,7 @@ function closeModal(modal) {
     refs.historicoItemModal,
     refs.saldosItemModal,
     refs.saidaModal,
+    refs.faltasModal,
     refs.retornoModal,
     refs.pedidosModal,
     refs.historicoModal,

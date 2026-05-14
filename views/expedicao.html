@@ -350,6 +350,48 @@
     </div>
   </div>
 
+  <div id="expedicao-faltas-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="expedicao-faltas"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Pendencias</span>
+          <h2>Itens faltantes para concluir a venda</h2>
+          <p id="expedicao-faltas-subtitulo">Revise as faltas e regularize os saldos antes de baixar a saida.</p>
+        </div>
+
+        <button id="btn-fechar-modal-expedicao-faltas" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Item venda</th>
+              <th>Codigo</th>
+              <th>Descricao</th>
+              <th>Necessario</th>
+              <th>Expedicao</th>
+              <th>Montagem</th>
+              <th>Total</th>
+              <th>Falta</th>
+            </tr>
+          </thead>
+          <tbody id="expedicao-faltas-tbody">
+            <tr>
+              <td colspan="8" class="empty-state">Nenhuma pendencia carregada.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="modal-actions">
+        <button id="btn-fechar-modal-expedicao-faltas-rodape" class="btn btn-neutral" type="button">Fechar</button>
+      </div>
+    </div>
+  </div>
+
   <div id="expedicao-pedidos-modal" class="modal hidden" aria-hidden="true">
     <div class="modal-backdrop" data-close-modal="expedicao-pedidos"></div>
 

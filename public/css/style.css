@@ -1574,6 +1574,21 @@ tbody tr:hover {
   text-align: right;
 }
 
+.expedicao-list-actions {
+  width: auto;
+  min-width: 200px;
+  white-space: nowrap;
+}
+
+.expedicao-list-actions .btn {
+  display: inline-flex;
+  margin-left: 8px;
+}
+
+.expedicao-list-row-pendente {
+  background: rgba(255, 246, 225, 0.88);
+}
+
 .table-quantity {
   font-weight: 800;
   color: var(--primary-900);
