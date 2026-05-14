@@ -34,6 +34,34 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('scroll', repositionOpenRowMenu, true);
 });
 
+// Desativa sugestoes do navegador (autocomplete/historico) nos campos do sistema.
+// Mantem atributos existentes (ex.: username/new-password) e nao toca em password.
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('form:not([autocomplete])').forEach((form) => {
+    form.setAttribute('autocomplete', 'off');
+  });
+
+  document.querySelectorAll('input').forEach((input) => {
+    const type = String(input.getAttribute('type') || 'text').toLowerCase();
+
+    if (type === 'password') {
+      return;
+    }
+
+    if (!input.hasAttribute('autocomplete')) {
+      input.setAttribute('autocomplete', 'off');
+    }
+
+    if (!input.hasAttribute('autocapitalize')) {
+      input.setAttribute('autocapitalize', 'off');
+    }
+
+    if (type === 'text' && !input.hasAttribute('spellcheck')) {
+      input.setAttribute('spellcheck', 'false');
+    }
+  });
+});
+
 function resolveIndicatorHost() {
   const topbarActions = document.querySelector('.topbar-actions');
   if (topbarActions) {

@@ -518,7 +518,7 @@ class TerceirizacaoRemessaModel {
         INNER JOIN pecas p ON p.id = ri.id_peca
         INNER JOIN fornecedores f ON f.id = r.id_fornecedor
         WHERE ${conditions.join(' AND ')}
-        ORDER BY r.id DESC, p.codigo ASC, ri.id ASC
+        ORDER BY r.data_envio ASC, r.id ASC, p.codigo ASC, ri.id ASC
       `,
       values
     );

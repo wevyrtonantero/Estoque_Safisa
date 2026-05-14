@@ -674,12 +674,12 @@ function renderizarTratamento() {
   refs.tratamentoTotal.textContent = `${registrosFiltrados.length} registro(s) encontrado(s)`;
 
   if (!tratamentoCache.length) {
-    refs.tratamentoTbody.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhuma peca aguardando retorno do tratamento externo.</td></tr>';
+    refs.tratamentoTbody.innerHTML = '<tr><td colspan="7" class="empty-state">Nenhuma peca aguardando retorno do tratamento externo.</td></tr>';
     return;
   }
 
   if (!registrosFiltrados.length) {
-    refs.tratamentoTbody.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhuma peca encontrada com os filtros informados.</td></tr>';
+    refs.tratamentoTbody.innerHTML = '<tr><td colspan="7" class="empty-state">Nenhuma peca encontrada com os filtros informados.</td></tr>';
     return;
   }
 
@@ -689,7 +689,8 @@ function renderizarTratamento() {
       <td class="table-description">${escapeHtml(item.descricao)}</td>
       <td>${escapeHtml(item.nome_empresa || '-')}</td>
       <td class="table-quantity">${formatInteger(item.quantidade_pendente)}</td>
-      <td>${escapeHtml(`Remessa #${item.id_remessa}`)}</td>
+      <td>${escapeHtml(item.numero_nf || '-')}</td>
+      <td>${formatarDataHora(item.data_envio)}</td>
       <td class="table-actions-cell">
         <details class="row-menu">
           <summary class="row-menu-trigger" aria-label="Abrir acoes">...</summary>
@@ -1137,7 +1138,8 @@ function abrirModalAtendimento(item) {
   refs.atendimentoMensagem.className = 'message hidden';
   refs.atendimentoMensagem.textContent = '';
   refs.atendimentoId.value = String(item.id);
-  refs.atendimentoQuantidade.value = '1';
+  const pacote = Number(item.quantidade_pacote);
+  refs.atendimentoQuantidade.value = Number.isFinite(pacote) && pacote > 0 ? String(pacote) : '';
   refs.atendimentoQuantidade.max = String(Math.max(1, Number(item.quantidade_pendente || 0)));
   refs.atendimentoObservacao.value = item.observacao || '';
   refs.atendimentoResumo.classList.remove('empty');
@@ -1176,7 +1178,7 @@ function abrirModalRecebimento(item) {
   refs.recebimentoMensagem.className = 'message hidden';
   refs.recebimentoMensagem.textContent = '';
   refs.recebimentoIdPeca.value = String(item.id_item);
-  refs.recebimentoQuantidade.value = '1';
+  refs.recebimentoQuantidade.value = String(Math.max(1, Number(item.quantidade_pendente || 0)));
   refs.recebimentoQuantidade.max = String(Math.max(1, Number(item.quantidade_pendente || 0)));
   refs.recebimentoObservacao.value = '';
   refs.recebimentoResumo.classList.remove('empty');
@@ -1185,7 +1187,8 @@ function abrirModalRecebimento(item) {
     <span class="selected-tag">${escapeHtml(`${item.codigo} - ${item.descricao}`)}</span>
     <span class="selected-tag">${escapeHtml(`Empresa: ${item.nome_empresa || '-'}`)}</span>
     <span class="selected-tag">${escapeHtml(`Pendente: ${formatInteger(item.quantidade_pendente)}`)}</span>
-    <span class="selected-tag">${escapeHtml(`Remessa #${item.id_remessa}`)}</span>
+    <span class="selected-tag">${escapeHtml(`NF: ${item.numero_nf || '-'}`)}</span>
+    <span class="selected-tag">${escapeHtml(`Envio: ${formatarDataHora(item.data_envio)}`)}</span>
   `;
 
   const almox = obterEstoqueAlmoxarifado();

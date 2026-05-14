@@ -49,6 +49,9 @@ async function carregarConsulta() {
   if (refs.filtroDescricao.value.trim()) params.append('descricao', refs.filtroDescricao.value.trim());
   if (refs.filtroFornecedor.value.trim()) params.append('fornecedor', refs.filtroFornecedor.value.trim());
   if (refs.filtroDuracao.value) params.append('duracao', refs.filtroDuracao.value);
+  // A cobertura (Dura ate) deve considerar o saldo "entre setores" (coluna Setores),
+  // nao o total consolidado.
+  params.append('base_cobertura', 'operacional');
 
   try {
     const endpoint = `${consultaEstoquesApiBaseUrl}?${params.toString()}`;

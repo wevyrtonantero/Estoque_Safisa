@@ -1268,17 +1268,29 @@ function handleSolicitacaoOrigemChange() {
 
 function renderizarSugestoesSolicitacao(termo) {
   const filtro = normalizarBusca(termo);
-  const itens = itensCache.filter((item) => {
-    if (refs.solicitacaoOrigem.value !== 'MONTAGEM' && obterSaldoOrigemSolicitacao(item) <= 0) {
-      return false;
-    }
-
+  const candidatos = itensCache.filter((item) => {
     if (!filtro) {
       return true;
     }
 
     return normalizarBusca(`${item.codigo} ${item.descricao} ${item.classificacao}`).includes(filtro);
-  }).slice(0, 8);
+  });
+
+  const origemPermiteSemSaldo = refs.solicitacaoOrigem.value === 'MONTAGEM';
+  const comSaldo = [];
+  const semSaldo = [];
+
+  candidatos.forEach((item) => {
+    const saldo = obterSaldoOrigemSolicitacao(item);
+    if (saldo > 0 || origemPermiteSemSaldo) {
+      comSaldo.push(item);
+      return;
+    }
+
+    semSaldo.push(item);
+  });
+
+  const itens = [...comSaldo, ...semSaldo].slice(0, 8);
 
   if (!itens.length) {
     refs.solicitacaoSugestoes.innerHTML = refs.solicitacaoOrigem.value === 'MONTAGEM'
@@ -1288,18 +1300,24 @@ function renderizarSugestoesSolicitacao(termo) {
     return;
   }
 
-  refs.solicitacaoSugestoes.innerHTML = itens.map((item) => `
-    <button type="button" class="autocomplete-option" data-id="${item.id}">
+  refs.solicitacaoSugestoes.innerHTML = itens.map((item) => {
+    const saldo = obterSaldoOrigemSolicitacao(item);
+    const desabilitado = !origemPermiteSemSaldo && saldo <= 0;
+    const origemLabel = `${formatInteger(saldo)}${desabilitado ? ' (sem saldo)' : ''}`;
+
+    return `
+    <button type="button" class="autocomplete-option" data-id="${item.id}" ${desabilitado ? 'disabled' : ''}>
       <strong>${escapeHtml(`${item.codigo} - ${item.descricao}`)}</strong>
-      <span>${escapeHtml(`${item.classificacao} | Pacote: ${formatPackage(item.estoque_minimo)} | Origem: ${formatInteger(obterSaldoOrigemSolicitacao(item))}`)}${refs.solicitacaoOrigem.value === 'MONTAGEM' ? ' (pode pedir sem saldo)' : ''}</span>
+      <span>${escapeHtml(`${item.classificacao} | Pacote: ${formatPackage(item.estoque_minimo)} | Origem: ${origemLabel}`)}${origemPermiteSemSaldo ? ' (pode pedir sem saldo)' : ''}</span>
     </button>
-  `).join('');
+  `;
+  }).join('');
   refs.solicitacaoSugestoes.classList.remove('hidden');
 }
 
 function handleSugestaoSolicitacaoClick(event) {
   const option = event.target.closest('button[data-id]');
-  if (!option) {
+  if (!option || option.disabled) {
     return;
   }
 
@@ -1310,8 +1328,14 @@ function handleSugestaoSolicitacaoClick(event) {
 
   refs.solicitacaoItemId.value = String(item.id);
   refs.solicitacaoBusca.value = `${item.codigo} - ${item.descricao}`;
+  preencherQuantidadeSolicitacaoPadrao(item);
   renderizarResumoItemSolicitacao(item);
   esconderSugestoesSolicitacao();
+}
+
+function preencherQuantidadeSolicitacaoPadrao(item) {
+  const pacote = Number(item?.estoque_minimo);
+  refs.solicitacaoQuantidade.value = Number.isFinite(pacote) && pacote > 0 ? String(pacote) : '';
 }
 
 function renderizarResumoItemSolicitacao(item) {
@@ -1381,7 +1405,7 @@ function renderizarListaSolicitacao() {
 function limparFormularioSolicitacao() {
   refs.solicitacaoItemId.value = '';
   refs.solicitacaoBusca.value = '';
-  refs.solicitacaoQuantidade.value = '1';
+  refs.solicitacaoQuantidade.value = '';
   refs.solicitacaoObservacao.value = '';
   renderizarResumoItemSolicitacao(null);
   esconderSugestoesSolicitacao();
