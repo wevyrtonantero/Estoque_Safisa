@@ -95,6 +95,7 @@ class EstoqueEspecialModel {
     );
 
     await this.backfillProducaoDestinos(db);
+    await this.syncLegacySpecialStockSaldos(db);
   }
 
   static async ensureSupportStocks(db = pool) {
@@ -298,6 +299,97 @@ class EstoqueEspecialModel {
     );
   }
 
+  static async syncLegacySpecialStockSaldos(db = pool) {
+    const [stockRows] = await db.query(
+      `
+        SELECT id, nome
+        FROM estoques
+        WHERE nome IN (?, ?, ?)
+      `,
+      [
+        this.STOCK_NAMES.PECAS_INACABADAS,
+        'Pecas Inacabadas',
+        this.STOCK_NAMES.RETRABALHO
+      ]
+    );
+
+    const stockIds = stockRows
+      .map((row) => Number(row.id))
+      .filter((id) => Number.isInteger(id) && id > 0);
+
+    if (!stockIds.length) {
+      return;
+    }
+
+    const [legacyRows] = await db.query(
+      `
+        SELECT
+          s.id_estoque,
+          e.nome AS estoque_nome,
+          s.id_peca,
+          s.quantidade
+        FROM estoque_saldos s
+        INNER JOIN estoques e ON e.id = s.id_estoque
+        WHERE s.id_estoque IN (${stockIds.map(() => '?').join(', ')})
+          AND s.quantidade > 0
+        ORDER BY s.id_estoque ASC, s.id_peca ASC
+      `,
+      stockIds
+    );
+
+    if (!legacyRows.length) {
+      return;
+    }
+
+    for (const row of legacyRows) {
+      let tipo = null;
+      try {
+        tipo = this.normalizeTipo(row.estoque_nome);
+      } catch (_) {
+        tipo = null;
+      }
+
+      if (!tipo) {
+        continue;
+      }
+
+      const [registroRows] = await db.query(
+        `
+          SELECT COALESCE(SUM(quantidade), 0) AS quantidade
+          FROM estoque_especial_registros
+          WHERE id_estoque = ?
+            AND id_peca = ?
+            AND tipo = ?
+            AND quantidade > 0
+        `,
+        [row.id_estoque, row.id_peca, tipo]
+      );
+
+      const quantidadeRegistro = Number(registroRows[0]?.quantidade || 0);
+      const quantidadeLegada = Number(row.quantidade || 0);
+      const diferenca = Number((quantidadeLegada - quantidadeRegistro).toFixed(2));
+
+      if (diferenca > 0) {
+        await this.registerEntrada(db, {
+          tipo,
+          id_estoque: row.id_estoque,
+          id_peca: row.id_peca,
+          quantidade: diferenca,
+          origem: 'MIGRACAO_ESTOQUE_ESPECIAL',
+          observacao: 'Migracao automatica de saldo legado do estoque especial.'
+        });
+      }
+    }
+
+    await db.query(
+      `
+        DELETE FROM estoque_saldos
+        WHERE id_estoque IN (${stockIds.map(() => '?').join(', ')})
+      `,
+      stockIds
+    );
+  }
+
   static async removeEntradaProducao(connection, data) {
     const tipo = this.normalizeTipo(data.tipo);
     const quantidadeRemover = this.normalizeQuantity(data.quantidade);
@@ -407,15 +499,18 @@ class EstoqueEspecialModel {
 
   static async reduceStockSaldo(connection, registro, quantidade) {
     const saldoOrigem = await EstoqueModel.findSaldoForUpdate(connection, registro.id_estoque, registro.id_peca);
-    const quantidadeOrigem = saldoOrigem ? Number(saldoOrigem.quantidade) : 0;
+    const saldoRegistroRestante = Number((Number(registro.quantidade || 0) - quantidade).toFixed(2));
 
-    if (quantidade > quantidadeOrigem) {
-      throw this.createBusinessError('Saldo insuficiente no estoque especial para esta saida.');
+    if (!saldoOrigem) {
+      return saldoRegistroRestante;
     }
 
-    const novoSaldoOrigem = Number((quantidadeOrigem - quantidade).toFixed(2));
-    await EstoqueModel.persistSaldo(connection, registro.id_estoque, registro.id_peca, novoSaldoOrigem, saldoOrigem);
-    return novoSaldoOrigem;
+    const quantidadeOrigem = Number(saldoOrigem.quantidade || 0);
+    const baixaEstoque = Math.min(quantidade, quantidadeOrigem);
+    const saldoPersistir = Number((quantidadeOrigem - baixaEstoque).toFixed(2));
+
+    await EstoqueModel.persistSaldo(connection, registro.id_estoque, registro.id_peca, saldoPersistir, saldoOrigem);
+    return saldoRegistroRestante;
   }
 
   static async iniciarProducao(data) {

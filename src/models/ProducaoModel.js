@@ -556,6 +556,8 @@ class ProducaoModel {
       throw this.createBusinessError('Informe o que falta fazer para enviar pecas inacabadas.');
     }
 
+    const isDestinoEspecial = [this.DESTINOS.PECAS_INACABADAS, this.DESTINOS.RETRABALHO].includes(destino);
+
     if (destino === this.DESTINOS.TRATAMENTO_EXTERNO) {
       await TratamentoExternoModel.registerEntradaProducao(connection, {
         id_peca: ordem.id_peca,
@@ -565,12 +567,14 @@ class ProducaoModel {
       });
     } else {
       stock = await this.resolveDestinationStock(connection, destino);
-      await this.registerStockDestination(connection, ordem, stock, quantidade, observacao);
+      if (!isDestinoEspecial) {
+        await this.registerStockDestination(connection, ordem, stock, quantidade, observacao);
+      }
     }
 
     const idProducaoDestino = await this.persistDestinationRecord(connection, ordem, destino, quantidade, observacao, stock);
 
-    if ([this.DESTINOS.PECAS_INACABADAS, this.DESTINOS.RETRABALHO].includes(destino)) {
+    if (isDestinoEspecial) {
       await EstoqueEspecialModel.registerEntrada(connection, {
         id_producao_destino: idProducaoDestino,
         tipo: destino,
@@ -650,6 +654,8 @@ class ProducaoModel {
         id_peca: ordem.id_peca,
         quantidade
       });
+
+      return;
     }
 
     const saldoAtual = await EstoqueModel.findSaldoForUpdate(

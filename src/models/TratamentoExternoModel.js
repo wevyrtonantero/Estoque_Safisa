@@ -337,28 +337,80 @@ class TratamentoExternoModel {
     );
   }
 
+  static resolveSpecialDestinationType(stockName) {
+    const normalized = String(stockName || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+
+    if (normalized === 'PECAS_INACABADAS' || normalized === 'RETRABALHO') {
+      return normalized;
+    }
+
+    return null;
+  }
+
+  static async registerDestinationEntry(connection, data) {
+    const estoqueDestino = await this.findStockById(connection, data.id_estoque_destino);
+    if (!estoqueDestino || Number(estoqueDestino.ativo) !== 1) {
+      throw this.createBusinessError('Estoque de destino nao encontrado ou inativo.');
+    }
+
+    const tipoEspecial = this.resolveSpecialDestinationType(estoqueDestino.nome);
+    if (tipoEspecial) {
+      const EstoqueEspecialModel = require('./EstoqueEspecialModel');
+      await EstoqueEspecialModel.registerEntrada(connection, {
+        tipo: tipoEspecial,
+        id_estoque: estoqueDestino.id,
+        id_peca: data.id_peca,
+        quantidade: Number(data.quantidade),
+        origem: data.origem || 'TRATAMENTO_EXTERNO',
+        observacao: data.observacao || null
+      });
+
+      return {
+        estoqueDestino,
+        saldoDestinoAtual: null,
+        tipoEspecial
+      };
+    }
+
+    const saldoDestino = await this.findStockSaldoForUpdate(connection, data.id_estoque_destino, data.id_peca);
+    const quantidadeDestino = saldoDestino ? Number(saldoDestino.quantidade) : 0;
+    const novoSaldoDestino = Number((quantidadeDestino + Number(data.quantidade)).toFixed(2));
+
+    await this.persistStockSaldo(connection, data.id_estoque_destino, data.id_peca, novoSaldoDestino, saldoDestino);
+
+    return {
+      estoqueDestino,
+      saldoDestinoAtual: novoSaldoDestino,
+      tipoEspecial: null
+    };
+  }
+
   static async sendToStock(data) {
     const connection = await pool.getConnection();
 
     try {
       await connection.beginTransaction();
 
-      const estoqueDestino = await this.findStockById(connection, data.id_estoque_destino);
-      if (!estoqueDestino || Number(estoqueDestino.ativo) !== 1) {
-        throw this.createBusinessError('Estoque de destino nao encontrado ou inativo.');
-      }
-
       await this.consumeForDispatch(connection, {
         id_peca: data.id_peca,
         quantidade: data.quantidade,
-        observacao: `Envio direto ao estoque ${estoqueDestino.nome}.`
+        observacao: 'Envio direto ao estoque.'
       });
 
-      const saldoDestino = await this.findStockSaldoForUpdate(connection, data.id_estoque_destino, data.id_peca);
-      const quantidadeDestino = saldoDestino ? Number(saldoDestino.quantidade) : 0;
-      const novoSaldoDestino = Number((quantidadeDestino + Number(data.quantidade)).toFixed(2));
+      const { estoqueDestino, saldoDestinoAtual } = await this.registerDestinationEntry(connection, {
+        id_peca: data.id_peca,
+        id_estoque_destino: data.id_estoque_destino,
+        quantidade: data.quantidade,
+        origem: 'TRATAMENTO_EXTERNO',
+        observacao: data.observacao || 'Entrada vinda do tratamento externo.'
+      });
 
-      await this.persistStockSaldo(connection, data.id_estoque_destino, data.id_peca, novoSaldoDestino, saldoDestino);
       await this.createStockMovimentacao(connection, {
         id_peca: data.id_peca,
         id_estoque_destino: data.id_estoque_destino,
@@ -370,7 +422,7 @@ class TratamentoExternoModel {
       await connection.commit();
       return {
         estoque_destino: estoqueDestino,
-        saldo_destino_atual: novoSaldoDestino
+        saldo_destino_atual: saldoDestinoAtual
       };
     } catch (error) {
       await connection.rollback();
@@ -381,16 +433,14 @@ class TratamentoExternoModel {
   }
 
   static async receiveFromThirdParty(connection, data) {
-    const estoqueDestino = await this.findStockById(connection, data.id_estoque_destino);
-    if (!estoqueDestino || Number(estoqueDestino.ativo) !== 1) {
-      throw this.createBusinessError('Estoque de destino nao encontrado ou inativo.');
-    }
+    const { estoqueDestino, saldoDestinoAtual } = await this.registerDestinationEntry(connection, {
+      id_peca: data.id_peca,
+      id_estoque_destino: data.id_estoque_destino,
+      quantidade: data.quantidade,
+      origem: 'TRATAMENTO_EXTERNO',
+      observacao: data.observacao || 'Retorno de terceirizacao recebido.'
+    });
 
-    const saldoDestino = await this.findStockSaldoForUpdate(connection, data.id_estoque_destino, data.id_peca);
-    const quantidadeDestino = saldoDestino ? Number(saldoDestino.quantidade) : 0;
-    const novoSaldoDestino = Number((quantidadeDestino + Number(data.quantidade)).toFixed(2));
-
-    await this.persistStockSaldo(connection, data.id_estoque_destino, data.id_peca, novoSaldoDestino, saldoDestino);
     await this.createStockMovimentacao(connection, {
       id_peca: data.id_peca,
       id_estoque_destino: data.id_estoque_destino,
@@ -401,7 +451,7 @@ class TratamentoExternoModel {
 
     return {
       estoque_destino: estoqueDestino,
-      saldo_destino_atual: novoSaldoDestino
+      saldo_destino_atual: saldoDestinoAtual
     };
   }
 }
