@@ -507,7 +507,8 @@ class EstoqueModel {
           es.id_item_componente,
           es.quantidade,
           p.codigo,
-          p.descricao
+          p.descricao,
+          p.classificacao
         FROM estrutura_submontagem es
         INNER JOIN pecas p ON p.id = es.id_item_componente
         WHERE es.id_submontagem = ?
@@ -680,6 +681,22 @@ class EstoqueModel {
     return rows[0] || null;
   }
 
+  // Le o saldo atual sem aplicar bloqueio, usado em diagnosticos.
+  static async findSaldo(connection, idEstoque, idPeca) {
+    const [rows] = await connection.query(
+      `
+        SELECT
+          id,
+          quantidade
+        FROM estoque_saldos
+        WHERE id_estoque = ? AND id_peca = ?
+      `,
+      [idEstoque, idPeca]
+    );
+
+    return rows[0] || null;
+  }
+
   // Le o saldo atual travando a linha durante a transacao.
   static async findSaldoForUpdate(connection, idEstoque, idPeca) {
     const [rows] = await connection.query(
@@ -695,6 +712,22 @@ class EstoqueModel {
     );
 
     return rows[0] || null;
+  }
+
+  static async findItemByIdCached(connection, id, itemCache = null) {
+    const itemId = Number(id);
+
+    if (itemCache?.has(itemId)) {
+      return itemCache.get(itemId);
+    }
+
+    const item = await this.findItemById(itemId, connection);
+
+    if (itemCache) {
+      itemCache.set(itemId, item || null);
+    }
+
+    return item || null;
   }
 
   static buildReservaKey(idEstoque, idPeca) {
@@ -732,8 +765,10 @@ class EstoqueModel {
     return Number(reservasPorItem.get(Number(idPeca)) || 0);
   }
 
-  static async getAvailableQuantity(connection, idEstoque, idPeca, reservasPorItem) {
-    const saldoAtual = await this.findSaldoForUpdate(connection, idEstoque, idPeca);
+  static async getAvailableQuantity(connection, idEstoque, idPeca, reservasPorItem, options = {}) {
+    const saldoAtual = options.lock === false
+      ? await this.findSaldo(connection, idEstoque, idPeca)
+      : await this.findSaldoForUpdate(connection, idEstoque, idPeca);
     const quantidadeAtual = saldoAtual ? Number(saldoAtual.quantidade) : 0;
     const quantidadeReservada = this.getReservedQuantity(reservasPorItem, idEstoque, idPeca);
 
@@ -794,6 +829,170 @@ class EstoqueModel {
       },
       faltas
     };
+  }
+
+  static addExpandedItemDemand(demandas, item, quantidade) {
+    const idPeca = Number(item?.id_peca ?? item?.id);
+
+    if (!idPeca) {
+      return;
+    }
+
+    const quantidadeNormalizada = this.normalizePlannedQuantity(quantidade);
+    const demandaAtual = demandas.get(idPeca) || {
+      id_peca: idPeca,
+      codigo: item?.codigo || '-',
+      descricao: item?.descricao || item?.codigo || '-',
+      classificacao: item?.classificacao || 'ITEM',
+      quantidade: 0
+    };
+
+    demandaAtual.quantidade = this.normalizePlannedQuantity(
+      Number(demandaAtual.quantidade || 0) + quantidadeNormalizada
+    );
+    demandas.set(idPeca, demandaAtual);
+  }
+
+  static async expandItemSaidaDemand(
+    connection,
+    item,
+    quantidadeBase,
+    itemCache = new Map(),
+    trilha = []
+  ) {
+    const quantidadeNormalizada = this.normalizePlannedQuantity(quantidadeBase);
+
+    if (quantidadeNormalizada <= 0) {
+      return [];
+    }
+
+    const itemId = Number(item?.id);
+
+    if (!itemId) {
+      throw this.createBusinessError('Um dos itens informados nao foi encontrado para a saida.');
+    }
+
+    if (trilha.includes(itemId)) {
+      const codigosTrilha = [...trilha, itemId].map((idAtual) => {
+        const itemTrilha = itemCache.get(Number(idAtual));
+        return itemTrilha?.codigo || String(idAtual);
+      });
+
+      throw this.createBusinessError(
+        `Foi detectado um ciclo na estrutura da submontagem ${item.codigo}. Caminho: ${codigosTrilha.join(' -> ')}.`
+      );
+    }
+
+    if (item.classificacao !== 'SUBMONTAGEM') {
+      return [{
+        id_peca: itemId,
+        codigo: item.codigo,
+        descricao: item.descricao,
+        classificacao: item.classificacao,
+        quantidade: quantidadeNormalizada
+      }];
+    }
+
+    const componentes = await this.findSubmontagemComponents(itemId, connection);
+
+    if (!componentes.length) {
+      throw this.createBusinessError(`A submontagem ${item.codigo} nao possui componentes cadastrados.`);
+    }
+
+    const demandas = new Map();
+    const proximaTrilha = [...trilha, itemId];
+
+    for (const componente of componentes) {
+      const quantidadeComponente = this.normalizePlannedQuantity(
+        Number(componente.quantidade || 0) * quantidadeNormalizada
+      );
+
+      if (quantidadeComponente <= 0) {
+        continue;
+      }
+
+      const itemComponente = await this.findItemByIdCached(
+        connection,
+        componente.id_item_componente,
+        itemCache
+      );
+
+      if (!itemComponente) {
+        throw this.createBusinessError(
+          `O componente ${componente.codigo || componente.id_item_componente} nao foi encontrado na estrutura de ${item.codigo}.`
+        );
+      }
+
+      const demandasFilhas = await this.expandItemSaidaDemand(
+        connection,
+        itemComponente,
+        quantidadeComponente,
+        itemCache,
+        proximaTrilha
+      );
+
+      demandasFilhas.forEach((demandaFilha) => {
+        this.addExpandedItemDemand(demandas, demandaFilha, demandaFilha.quantidade);
+      });
+    }
+
+    return [...demandas.values()].sort((a, b) => (
+      String(a.codigo || '').localeCompare(String(b.codigo || ''), 'pt-BR')
+      || Number(a.id_peca) - Number(b.id_peca)
+    ));
+  }
+
+  static buildFaltaSaidaDetalhe(item, quantidadeNecessaria, disponivelExpedicao, disponivelMontagem) {
+    const necessario = this.normalizePlannedQuantity(quantidadeNecessaria);
+    const quantidadeExpedicao = this.normalizePlannedQuantity(
+      Math.max(0, Number(disponivelExpedicao || 0))
+    );
+    const quantidadeMontagem = this.normalizePlannedQuantity(
+      Math.max(0, Number(disponivelMontagem || 0))
+    );
+    const quantidadeTotal = this.normalizePlannedQuantity(
+      quantidadeExpedicao + quantidadeMontagem
+    );
+
+    return {
+      id_peca: Number(item?.id_peca ?? item?.id) || null,
+      codigo: item?.codigo || '-',
+      descricao: item?.descricao || item?.codigo || '-',
+      necessario,
+      disponivel_expedicao: quantidadeExpedicao,
+      disponivel_montagem: quantidadeMontagem,
+      disponivel_total: quantidadeTotal,
+      falta: this.normalizePlannedQuantity(Math.max(0, necessario - quantidadeTotal))
+    };
+  }
+
+  static createSaidaFaltaError(itemSolicitado, faltas = []) {
+    if (
+      faltas.length === 1
+      && Number(faltas[0]?.id_peca || 0) === Number(itemSolicitado?.id || 0)
+      && itemSolicitado?.classificacao !== 'SUBMONTAGEM'
+    ) {
+      const falta = faltas[0];
+
+      return this.createBusinessError(
+        this.buildMensagemFaltaVenda({
+          itemVendaCodigo: itemSolicitado.codigo,
+          itemFaltanteCodigo: falta.codigo,
+          quantidadeNecessaria: falta.necessario,
+          disponivelExpedicao: falta.disponivel_expedicao,
+          disponivelMontagem: falta.disponivel_montagem
+        }),
+        this.buildErroDetalhadoFaltaVenda(itemSolicitado, faltas)
+      );
+    }
+
+    return this.createBusinessError(
+      this.buildMensagemFaltasComponentes({
+        itemVendaCodigo: itemSolicitado?.codigo || '-',
+        faltas
+      }),
+      this.buildErroDetalhadoFaltaVenda(itemSolicitado, faltas)
+    );
   }
 
   static async planComposicaoVendaConsumo(
@@ -1467,15 +1666,32 @@ class EstoqueModel {
       const reservasPorItem = new Map();
       const movimentosPlanejados = [];
       const solicitacoes = [];
+      const itemCache = new Map();
+      const usarBloqueio = !simular;
 
       for (const itemSolicitado of data.itens) {
         const idPeca = Number(itemSolicitado.id_peca);
-        const quantidadeSolicitada = Number(itemSolicitado.quantidade);
-        const item = await this.findItemById(idPeca, connection);
+        const quantidadeSolicitada = this.normalizePlannedQuantity(itemSolicitado.quantidade);
+        const item = await this.findItemByIdCached(connection, idPeca, itemCache);
         const solicitacaoRef = solicitacoes.length + 1;
 
         if (!item) {
           throw this.createBusinessError('Um dos itens informados nao foi encontrado para a saida.');
+        }
+
+        if (quantidadeSolicitada <= 0) {
+          throw this.createBusinessError(`Informe uma quantidade valida para ${item.codigo}.`);
+        }
+
+        const itensFinais = await this.expandItemSaidaDemand(
+          connection,
+          item,
+          quantidadeSolicitada,
+          itemCache
+        );
+
+        if (!itensFinais.length) {
+          throw this.createBusinessError(`A estrutura de ${item.codigo} nao gerou itens para a baixa.`);
         }
 
         solicitacoes.push({
@@ -1484,410 +1700,115 @@ class EstoqueModel {
           codigo: item.codigo,
           descricao: item.descricao,
           classificacao: item.classificacao,
-          quantidade_solicitada: quantidadeSolicitada
+          quantidade_solicitada: quantidadeSolicitada,
+          quantidade_submontagem_pronta: item.classificacao === 'ITEM' ? quantidadeSolicitada : 0,
+          quantidade_composicao_venda: 0,
+          itens_composicao_venda: [],
+          quantidade_componentes: item.classificacao === 'SUBMONTAGEM' ? quantidadeSolicitada : 0
         });
 
-        const disponibilidadeItemPronto = await this.getAvailableQuantity(
-          connection,
-          expedicao.id,
-          idPeca,
-          reservasPorItem
-        );
+        const faltas = [];
 
-        const quantidadeProntaConsumida = Math.min(
-          quantidadeSolicitada,
-          Math.max(0, disponibilidadeItemPronto.quantidadeDisponivel)
-        );
+        for (const itemFinal of itensFinais) {
+          const quantidadeNecessaria = this.normalizePlannedQuantity(itemFinal.quantidade);
 
-        if (quantidadeProntaConsumida > 0) {
-          this.addReservedQuantity(reservasPorItem, idPeca, quantidadeProntaConsumida, expedicao.id);
-          movimentosPlanejados.push({
-            id_peca: idPeca,
-            quantidade: quantidadeProntaConsumida,
-            observacao: `${data.observacao || 'Saida da Expedicao.'} Saida do item pronto ${item.codigo}.`.slice(0, 255),
-            solicitacao_ref: solicitacaoRef,
-            id_peca_solicitada: idPeca,
-            forma_atendimento: 'PRONTO',
-            id_estoque_origem: expedicao.id
-          });
-        }
-
-        let quantidadePendente = this.normalizePlannedQuantity(
-          quantidadeSolicitada - quantidadeProntaConsumida
-        );
-
-        const composicaoVendaExpedicao = quantidadePendente > 0
-          ? await this.planComposicaoVendaConsumo(
-            connection,
-            item,
-            quantidadePendente,
-            expedicao.id,
-            reservasPorItem,
-            data.observacao,
-            movimentosPlanejados,
-            {
-              solicitacao_ref: solicitacaoRef
-            }
-          )
-          : {
-            possui_composicao: false,
-            quantidade_atendida: 0,
-            itens_consumidos: []
-          };
-
-        quantidadePendente = this.normalizePlannedQuantity(
-          quantidadePendente - composicaoVendaExpedicao.quantidade_atendida
-        );
-
-        let quantidadeViaComponentesExpedicao = 0;
-
-        if (
-          quantidadePendente > 0
-          && item.classificacao === 'SUBMONTAGEM'
-          && !composicaoVendaExpedicao.possui_composicao
-        ) {
-          const componentesExpedicao = await this.findSubmontagemComponents(idPeca, connection);
-
-          if (componentesExpedicao.length > 0) {
-            let atendePorComponentesExpedicao = true;
-
-            for (const component of componentesExpedicao) {
-              const idComponente = Number(component.id_item_componente);
-              const quantidadeComponente = this.normalizePlannedQuantity(
-                Number(component.quantidade) * quantidadePendente
-              );
-              const disponibilidadeComponente = await this.getAvailableQuantity(
-                connection,
-                expedicao.id,
-                idComponente,
-                reservasPorItem
-              );
-
-              if (quantidadeComponente > disponibilidadeComponente.quantidadeDisponivel) {
-                atendePorComponentesExpedicao = false;
-                break;
-              }
-            }
-
-            if (atendePorComponentesExpedicao) {
-              for (const component of componentesExpedicao) {
-                const idComponente = Number(component.id_item_componente);
-                const quantidadeComponente = this.normalizePlannedQuantity(
-                  Number(component.quantidade) * quantidadePendente
-                );
-
-                this.addReservedQuantity(reservasPorItem, idComponente, quantidadeComponente, expedicao.id);
-                movimentosPlanejados.push({
-                  id_peca: idComponente,
-                  quantidade: quantidadeComponente,
-                  observacao: `${data.observacao || 'Saida da Expedicao.'} Complemento da submontagem ${item.codigo}.`.slice(0, 255),
-                  solicitacao_ref: solicitacaoRef,
-                  id_peca_solicitada: idPeca,
-                  forma_atendimento: 'COMPONENTE_SUBMONTAGEM',
-                  id_estoque_origem: expedicao.id
-                });
-              }
-
-              quantidadeViaComponentesExpedicao = quantidadePendente;
-              quantidadePendente = 0;
-            }
+          if (quantidadeNecessaria <= 0) {
+            continue;
           }
-        }
 
-        const composicaoVendaMontagem = {
-          possui_composicao: false,
-          quantidade_atendida: 0,
-          itens_consumidos: []
-        };
-        let quantidadeProntaMontagem = 0;
-        let quantidadeViaComponentesMontagem = 0;
-
-        if (quantidadePendente > 0) {
-          const disponibilidadeItemMontagem = await this.getAvailableQuantity(
+          const disponibilidadeExpedicao = await this.getAvailableQuantity(
             connection,
-            montagem.id,
-            idPeca,
-            reservasPorItem
-          );
-          quantidadeProntaMontagem = Math.min(
-            quantidadePendente,
-            Math.max(0, disponibilidadeItemMontagem.quantidadeDisponivel)
+            expedicao.id,
+            itemFinal.id_peca,
+            reservasPorItem,
+            { lock: usarBloqueio }
           );
 
-          if (quantidadeProntaMontagem > 0) {
-            this.addReservedQuantity(reservasPorItem, idPeca, quantidadeProntaMontagem, montagem.id);
+          const quantidadeDaExpedicao = this.normalizePlannedQuantity(
+            Math.min(
+              quantidadeNecessaria,
+              Math.max(0, disponibilidadeExpedicao.quantidadeDisponivel)
+            )
+          );
+
+          if (quantidadeDaExpedicao > 0) {
+            this.addReservedQuantity(
+              reservasPorItem,
+              itemFinal.id_peca,
+              quantidadeDaExpedicao,
+              expedicao.id
+            );
             movimentosPlanejados.push({
-              id_peca: idPeca,
-              quantidade: quantidadeProntaMontagem,
-              observacao: `${data.observacao || 'Saida da Expedicao.'} Complemento via Montagem do item pronto ${item.codigo}.`.slice(0, 255),
+              id_peca: itemFinal.id_peca,
+              quantidade: quantidadeDaExpedicao,
+              observacao: item.classificacao === 'SUBMONTAGEM'
+                ? `${data.observacao || 'Saida da Expedicao.'} Baixa da estrutura ${item.codigo}. Item final ${itemFinal.codigo} separado na Expedicao.`.slice(0, 255)
+                : `${data.observacao || 'Saida da Expedicao.'} Saida do item ${item.codigo}.`.slice(0, 255),
               solicitacao_ref: solicitacaoRef,
               id_peca_solicitada: idPeca,
-              forma_atendimento: 'PRONTO',
+              forma_atendimento: item.classificacao === 'SUBMONTAGEM' ? 'COMPONENTE_SUBMONTAGEM' : 'PRONTO',
+              id_estoque_origem: expedicao.id
+            });
+          }
+
+          const quantidadeRestante = this.normalizePlannedQuantity(
+            quantidadeNecessaria - quantidadeDaExpedicao
+          );
+
+          const disponibilidadeMontagem = await this.getAvailableQuantity(
+            connection,
+            montagem.id,
+            itemFinal.id_peca,
+            reservasPorItem,
+            { lock: usarBloqueio }
+          );
+
+          const quantidadeDaMontagem = this.normalizePlannedQuantity(
+            Math.min(
+              quantidadeRestante,
+              Math.max(0, disponibilidadeMontagem.quantidadeDisponivel)
+            )
+          );
+
+          if (quantidadeDaMontagem > 0) {
+            this.addReservedQuantity(
+              reservasPorItem,
+              itemFinal.id_peca,
+              quantidadeDaMontagem,
+              montagem.id
+            );
+            movimentosPlanejados.push({
+              id_peca: itemFinal.id_peca,
+              quantidade: quantidadeDaMontagem,
+              observacao: item.classificacao === 'SUBMONTAGEM'
+                ? `${data.observacao || 'Saida da Expedicao.'} Baixa da estrutura ${item.codigo}. Item final ${itemFinal.codigo} complementado pela Montagem.`.slice(0, 255)
+                : `${data.observacao || 'Saida da Expedicao.'} Complemento via Montagem do item ${item.codigo}.`.slice(0, 255),
+              solicitacao_ref: solicitacaoRef,
+              id_peca_solicitada: idPeca,
+              forma_atendimento: item.classificacao === 'SUBMONTAGEM' ? 'COMPONENTE_SUBMONTAGEM' : 'PRONTO',
               id_estoque_origem: montagem.id
             });
           }
 
-          quantidadePendente = this.normalizePlannedQuantity(
-            quantidadePendente - quantidadeProntaMontagem
-          );
-        }
-
-        if (quantidadePendente > 0) {
-          const planoMontagem = await this.planComposicaoVendaConsumo(
-            connection,
-            item,
-            quantidadePendente,
-            montagem.id,
-            reservasPorItem,
-            data.observacao,
-            movimentosPlanejados,
-            {
-              solicitacao_ref: solicitacaoRef
-            }
+          const quantidadeFaltante = this.normalizePlannedQuantity(
+            quantidadeNecessaria - quantidadeDaExpedicao - quantidadeDaMontagem
           );
 
-          composicaoVendaMontagem.possui_composicao = planoMontagem.possui_composicao;
-          composicaoVendaMontagem.quantidade_atendida = planoMontagem.quantidade_atendida;
-          composicaoVendaMontagem.itens_consumidos = planoMontagem.itens_consumidos;
-
-          quantidadePendente = this.normalizePlannedQuantity(
-            quantidadePendente - composicaoVendaMontagem.quantidade_atendida
-          );
-        }
-
-        const possuiComposicaoVenda = composicaoVendaExpedicao.possui_composicao
-          || composicaoVendaMontagem.possui_composicao;
-
-        if (
-          quantidadePendente > 0
-          && item.classificacao === 'SUBMONTAGEM'
-          && !possuiComposicaoVenda
-        ) {
-          const componentesMontagem = await this.findSubmontagemComponents(idPeca, connection);
-
-          if (componentesMontagem.length > 0) {
-            const faltasComponentesMontagem = [];
-
-            for (const component of componentesMontagem) {
-              const idComponente = Number(component.id_item_componente);
-              const quantidadeComponente = this.normalizePlannedQuantity(
-                Number(component.quantidade) * quantidadePendente
-              );
-              const disponibilidadeComponenteExpedicao = await this.getAvailableQuantity(
-                connection,
-                expedicao.id,
-                idComponente,
-                reservasPorItem
-              );
-              const disponibilidadeComponente = await this.getAvailableQuantity(
-                connection,
-                montagem.id,
-                idComponente,
-                reservasPorItem
-              );
-              const disponibilidadeTotal = this.normalizePlannedQuantity(
-                disponibilidadeComponenteExpedicao.quantidadeDisponivel
-                + disponibilidadeComponente.quantidadeDisponivel
-              );
-
-              if (quantidadeComponente > disponibilidadeTotal) {
-                faltasComponentesMontagem.push({
-                  id_peca: idComponente,
-                  codigo: component.codigo,
-                  descricao: component.descricao || component.codigo,
-                  necessario: quantidadeComponente,
-                  disponivel_expedicao: disponibilidadeComponenteExpedicao.quantidadeDisponivel,
-                  disponivel_montagem: disponibilidadeComponente.quantidadeDisponivel,
-                  disponivel_total: disponibilidadeTotal,
-                  falta: this.normalizePlannedQuantity(quantidadeComponente - disponibilidadeTotal)
-                });
-              }
-            }
-
-            if (faltasComponentesMontagem.length) {
-              throw this.createBusinessError(
-                this.buildMensagemFaltasComponentes({
-                  itemVendaCodigo: item.codigo,
-                  faltas: faltasComponentesMontagem.map((falta) => ({
-                    codigo: falta.codigo,
-                    necessario: falta.necessario,
-                    disponivel_total: falta.disponivel_total,
-                    disponivel_expedicao: falta.disponivel_expedicao,
-                    disponivel_montagem: falta.disponivel_montagem
-                  }))
-                }),
-                this.buildErroDetalhadoFaltaVenda(item, faltasComponentesMontagem)
-              );
-            }
-
-            for (const component of componentesMontagem) {
-              const idComponente = Number(component.id_item_componente);
-              const quantidadeNecessariaComponente = this.normalizePlannedQuantity(
-                Number(component.quantidade) * quantidadePendente
-              );
-              const disponibilidadeComponenteExpedicao = await this.getAvailableQuantity(
-                connection,
-                expedicao.id,
-                idComponente,
-                reservasPorItem
-              );
-              const quantidadeDaExpedicao = this.normalizePlannedQuantity(
-                Math.min(
-                  quantidadeNecessariaComponente,
-                  Math.max(0, disponibilidadeComponenteExpedicao.quantidadeDisponivel)
-                )
-              );
-              const quantidadeDaMontagem = this.normalizePlannedQuantity(
-                quantidadeNecessariaComponente - quantidadeDaExpedicao
-              );
-
-              if (quantidadeDaExpedicao > 0) {
-                this.addReservedQuantity(reservasPorItem, idComponente, quantidadeDaExpedicao, expedicao.id);
-                movimentosPlanejados.push({
-                  id_peca: idComponente,
-                  quantidade: quantidadeDaExpedicao,
-                  observacao: `${data.observacao || 'Saida da Expedicao.'} Complemento da submontagem ${item.codigo} via componentes da Expedicao.`.slice(0, 255),
-                  solicitacao_ref: solicitacaoRef,
-                  id_peca_solicitada: idPeca,
-                  forma_atendimento: 'COMPONENTE_SUBMONTAGEM',
-                  id_estoque_origem: expedicao.id
-                });
-              }
-
-              if (quantidadeDaMontagem > 0) {
-                this.addReservedQuantity(reservasPorItem, idComponente, quantidadeDaMontagem, montagem.id);
-                movimentosPlanejados.push({
-                  id_peca: idComponente,
-                  quantidade: quantidadeDaMontagem,
-                  observacao: `${data.observacao || 'Saida da Expedicao.'} Complemento da submontagem ${item.codigo} via componentes da Montagem.`.slice(0, 255),
-                  solicitacao_ref: solicitacaoRef,
-                  id_peca_solicitada: idPeca,
-                  forma_atendimento: 'COMPONENTE_SUBMONTAGEM',
-                  id_estoque_origem: montagem.id
-                });
-              }
-            }
-
-            quantidadeViaComponentesMontagem = quantidadePendente;
-            quantidadePendente = 0;
+          if (quantidadeFaltante > 0) {
+            faltas.push(
+              this.buildFaltaSaidaDetalhe(
+                itemFinal,
+                quantidadeNecessaria,
+                disponibilidadeExpedicao.quantidadeDisponivel,
+                disponibilidadeMontagem.quantidadeDisponivel
+              )
+            );
           }
         }
 
-        if (quantidadePendente > 0) {
-          if (item.classificacao === 'SUBMONTAGEM' && !possuiComposicaoVenda) {
-            const componentesFinais = await this.findSubmontagemComponents(idPeca, connection);
-            const faltas = [];
-
-            for (const component of componentesFinais) {
-              const idComponente = Number(component.id_item_componente);
-              const quantidadeComponente = this.normalizePlannedQuantity(
-                Number(component.quantidade) * quantidadePendente
-              );
-              const disponibilidadeComponenteExpedicao = await this.getAvailableQuantity(
-                connection,
-                expedicao.id,
-                idComponente,
-                reservasPorItem
-              );
-              const disponibilidadeComponenteMontagem = await this.getAvailableQuantity(
-                connection,
-                montagem.id,
-                idComponente,
-                reservasPorItem
-              );
-              const disponibilidadeTotal = this.normalizePlannedQuantity(
-                disponibilidadeComponenteExpedicao.quantidadeDisponivel
-                + disponibilidadeComponenteMontagem.quantidadeDisponivel
-              );
-
-              if (quantidadeComponente > disponibilidadeTotal) {
-                faltas.push({
-                  codigo: component.codigo,
-                  necessario: quantidadeComponente,
-                  disponivel_total: disponibilidadeTotal,
-                  disponivel_expedicao: disponibilidadeComponenteExpedicao.quantidadeDisponivel,
-                  disponivel_montagem: disponibilidadeComponenteMontagem.quantidadeDisponivel
-                });
-              }
-            }
-
-            if (faltas.length) {
-              throw this.createBusinessError(
-                this.buildMensagemFaltasComponentes({
-                  itemVendaCodigo: item.codigo,
-                  faltas
-                }),
-                this.buildErroDetalhadoFaltaVenda(item, faltas.map((falta) => ({
-                  id_peca: null,
-                  codigo: falta.codigo,
-                  descricao: falta.codigo,
-                  necessario: falta.necessario,
-                  disponivel_expedicao: falta.disponivel_expedicao,
-                  disponivel_montagem: falta.disponivel_montagem,
-                  disponivel_total: falta.disponivel_total,
-                  falta: this.normalizePlannedQuantity(falta.necessario - falta.disponivel_total)
-                })))
-              );
-            }
-          }
-
-          const disponibilidadeItemExpedicao = await this.getAvailableQuantity(
-            connection,
-            expedicao.id,
-            idPeca,
-            reservasPorItem
-          );
-          const disponibilidadeItemMontagem = await this.getAvailableQuantity(
-            connection,
-            montagem.id,
-            idPeca,
-            reservasPorItem
-          );
-          throw this.createBusinessError(
-            this.buildMensagemFaltaVenda({
-              itemVendaCodigo: item.codigo,
-              itemFaltanteCodigo: item.codigo,
-              quantidadeNecessaria: quantidadePendente,
-              disponivelExpedicao: disponibilidadeItemExpedicao.quantidadeDisponivel,
-              disponivelMontagem: disponibilidadeItemMontagem.quantidadeDisponivel
-            }),
-            this.buildErroDetalhadoFaltaVenda(item, [
-              {
-                id_peca: idPeca,
-                codigo: item.codigo,
-                descricao: item.descricao,
-                necessario: quantidadePendente,
-                disponivel_expedicao: disponibilidadeItemExpedicao.quantidadeDisponivel,
-                disponivel_montagem: disponibilidadeItemMontagem.quantidadeDisponivel,
-                disponivel_total: this.normalizePlannedQuantity(
-                  disponibilidadeItemExpedicao.quantidadeDisponivel
-                  + disponibilidadeItemMontagem.quantidadeDisponivel
-                ),
-                falta: this.normalizePlannedQuantity(
-                  quantidadePendente
-                  - (
-                    disponibilidadeItemExpedicao.quantidadeDisponivel
-                    + disponibilidadeItemMontagem.quantidadeDisponivel
-                  )
-                )
-              }
-            ])
-          );
+        if (faltas.length) {
+          throw this.createSaidaFaltaError(item, faltas);
         }
-
-        solicitacoes[solicitacoes.length - 1].quantidade_submontagem_pronta = this.normalizePlannedQuantity(
-          quantidadeProntaConsumida + quantidadeProntaMontagem
-        );
-        solicitacoes[solicitacoes.length - 1].quantidade_composicao_venda = this.normalizePlannedQuantity(
-          composicaoVendaExpedicao.quantidade_atendida + composicaoVendaMontagem.quantidade_atendida
-        );
-        solicitacoes[solicitacoes.length - 1].itens_composicao_venda = [
-          ...(composicaoVendaExpedicao.itens_consumidos || []),
-          ...(composicaoVendaMontagem.itens_consumidos || [])
-        ];
-        solicitacoes[solicitacoes.length - 1].quantidade_componentes = this.normalizePlannedQuantity(
-          quantidadeViaComponentesExpedicao + quantidadeViaComponentesMontagem
-        );
       }
 
       if (simular) {
@@ -1902,14 +1823,28 @@ class EstoqueModel {
       }
 
       const resultados = [];
+      const reservasOrdenadas = [...reservasPorItem.entries()]
+        .map(([reservaKey, quantidade]) => {
+          const reserva = typeof reservaKey === 'string'
+            ? this.parseReservaKey(reservaKey)
+            : { id_estoque: expedicao.id, id_peca: Number(reservaKey) };
 
-      for (const [reservaKey, quantidade] of reservasPorItem.entries()) {
-        const reserva = typeof reservaKey === 'string'
-          ? this.parseReservaKey(reservaKey)
-          : { id_estoque: expedicao.id, id_peca: Number(reservaKey) };
+          return {
+            id_estoque: Number(reserva.id_estoque),
+            id_peca: Number(reserva.id_peca),
+            quantidade: this.normalizePlannedQuantity(quantidade)
+          };
+        })
+        .sort((a, b) => (
+          Number(a.id_estoque) - Number(b.id_estoque)
+          || Number(a.id_peca) - Number(b.id_peca)
+        ));
+
+      for (const reserva of reservasOrdenadas) {
         const idPeca = Number(reserva.id_peca);
         const idEstoqueOrigem = Number(reserva.id_estoque);
-        const item = await this.findItemById(idPeca, connection);
+        const quantidade = this.normalizePlannedQuantity(reserva.quantidade);
+        const item = await this.findItemByIdCached(connection, idPeca, itemCache);
         const estoqueOrigem = await this.findStockById(idEstoqueOrigem, connection);
 
         if (!item) {
