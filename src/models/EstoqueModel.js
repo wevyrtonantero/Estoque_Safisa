@@ -819,7 +819,7 @@ class EstoqueModel {
     return `Nao foi possivel vender ${itemVendaCodigo}. Pecas faltantes: ${detalhes}.`;
   }
 
-  static buildErroDetalhadoFaltaVenda(itemVenda, faltas = []) {
+  static buildErroDetalhadoFaltaVenda(itemVenda, faltas = [], itensDiagnostico = []) {
     return {
       tipo: 'FALTA_ESTOQUE_VENDA',
       item_venda: {
@@ -827,7 +827,10 @@ class EstoqueModel {
         codigo: itemVenda?.codigo || '-',
         descricao: itemVenda?.descricao || '-'
       },
-      faltas
+      faltas,
+      itens_diagnostico: Array.isArray(itensDiagnostico) && itensDiagnostico.length
+        ? itensDiagnostico
+        : faltas
     };
   }
 
@@ -966,7 +969,29 @@ class EstoqueModel {
     };
   }
 
-  static createSaidaFaltaError(itemSolicitado, faltas = []) {
+  static buildDiagnosticoSaidaDetalhe(item, quantidadeNecessaria, disponivelExpedicao, disponivelMontagem) {
+    const detalhe = this.buildFaltaSaidaDetalhe(
+      item,
+      quantidadeNecessaria,
+      disponivelExpedicao,
+      disponivelMontagem
+    );
+
+    let statusAtendimento = 'OK_EXPEDICAO';
+
+    if (detalhe.falta > 0) {
+      statusAtendimento = 'FALTA_ESTOQUE';
+    } else if (detalhe.disponivel_expedicao < detalhe.necessario) {
+      statusAtendimento = 'COMPLEMENTA_MONTAGEM';
+    }
+
+    return {
+      ...detalhe,
+      status_atendimento: statusAtendimento
+    };
+  }
+
+  static createSaidaFaltaError(itemSolicitado, faltas = [], itensDiagnostico = []) {
     if (
       faltas.length === 1
       && Number(faltas[0]?.id_peca || 0) === Number(itemSolicitado?.id || 0)
@@ -982,7 +1007,7 @@ class EstoqueModel {
           disponivelExpedicao: falta.disponivel_expedicao,
           disponivelMontagem: falta.disponivel_montagem
         }),
-        this.buildErroDetalhadoFaltaVenda(itemSolicitado, faltas)
+        this.buildErroDetalhadoFaltaVenda(itemSolicitado, faltas, itensDiagnostico)
       );
     }
 
@@ -991,7 +1016,7 @@ class EstoqueModel {
         itemVendaCodigo: itemSolicitado?.codigo || '-',
         faltas
       }),
-      this.buildErroDetalhadoFaltaVenda(itemSolicitado, faltas)
+      this.buildErroDetalhadoFaltaVenda(itemSolicitado, faltas, itensDiagnostico)
     );
   }
 
@@ -1708,6 +1733,7 @@ class EstoqueModel {
         });
 
         const faltas = [];
+        const itensDiagnostico = [];
 
         for (const itemFinal of itensFinais) {
           const quantidadeNecessaria = this.normalizePlannedQuantity(itemFinal.quantidade);
@@ -1794,20 +1820,22 @@ class EstoqueModel {
             quantidadeNecessaria - quantidadeDaExpedicao - quantidadeDaMontagem
           );
 
+          const diagnosticoDetalhe = this.buildDiagnosticoSaidaDetalhe(
+            itemFinal,
+            quantidadeNecessaria,
+            disponibilidadeExpedicao.quantidadeDisponivel,
+            disponibilidadeMontagem.quantidadeDisponivel
+          );
+
+          itensDiagnostico.push(diagnosticoDetalhe);
+
           if (quantidadeFaltante > 0) {
-            faltas.push(
-              this.buildFaltaSaidaDetalhe(
-                itemFinal,
-                quantidadeNecessaria,
-                disponibilidadeExpedicao.quantidadeDisponivel,
-                disponibilidadeMontagem.quantidadeDisponivel
-              )
-            );
+            faltas.push(diagnosticoDetalhe);
           }
         }
 
         if (faltas.length) {
-          throw this.createSaidaFaltaError(item, faltas);
+          throw this.createSaidaFaltaError(item, faltas, itensDiagnostico);
         }
       }
 

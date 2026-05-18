@@ -615,18 +615,31 @@ function fecharModalSaida() {
 function abrirModalFaltas(details) {
   const itemVendaCodigo = details?.item_venda?.codigo || '-';
   const itemVendaDescricao = details?.item_venda?.descricao || '-';
-  const faltas = Array.isArray(details?.faltas) ? details.faltas : [];
+  const itensDiagnostico = Array.isArray(details?.itens_diagnostico) && details.itens_diagnostico.length
+    ? details.itens_diagnostico
+    : (Array.isArray(details?.faltas) ? details.faltas : []);
 
-  refs.faltasSubtitulo.textContent = `Venda bloqueada para ${itemVendaCodigo} - ${itemVendaDescricao}. Regularize os itens abaixo.`;
+  refs.faltasSubtitulo.textContent = `Venda bloqueada para ${itemVendaCodigo} - ${itemVendaDescricao}. Confira abaixo todas as pecas analisadas para concluir a baixa.`;
 
-  if (!faltas.length) {
+  if (!itensDiagnostico.length) {
     refs.faltasTbody.innerHTML = '<tr><td colspan="8" class="empty-state">Nenhuma pendencia detalhada recebida.</td></tr>';
   } else {
-    refs.faltasTbody.innerHTML = faltas.map((falta) => `
+    refs.faltasTbody.innerHTML = itensDiagnostico.map((falta) => `
       <tr>
         <td class="table-code">${escapeHtml(falta.item_venda_codigo || itemVendaCodigo)}</td>
         <td class="table-code">${escapeHtml(falta.codigo || '-')}</td>
-        <td class="table-description">${escapeHtml(falta.descricao || '-')}</td>
+        <td class="table-description">
+          ${escapeHtml(falta.descricao || '-')}
+          ${falta.status_atendimento === 'COMPLEMENTA_MONTAGEM'
+            ? '<div class="table-note">Complementa pela Montagem</div>'
+            : ''}
+          ${falta.status_atendimento === 'OK_EXPEDICAO'
+            ? '<div class="table-note">Atende pela Expedicao</div>'
+            : ''}
+          ${falta.status_atendimento === 'FALTA_ESTOQUE'
+            ? '<div class="table-note">Falta saldo para concluir</div>'
+            : ''}
+        </td>
         <td class="table-quantity">${formatDecimal(falta.necessario)}</td>
         <td class="table-quantity">${formatDecimal(falta.disponivel_expedicao)}</td>
         <td class="table-quantity">${formatDecimal(falta.disponivel_montagem)}</td>
@@ -2360,6 +2373,7 @@ function renderizarLista() {
 function consolidarPendenciasVenda(listaDetalhes) {
   const itensVenda = [];
   const faltas = [];
+  const itensDiagnostico = [];
 
   listaDetalhes.forEach((details) => {
     if (details?.item_venda) {
@@ -2373,6 +2387,14 @@ function consolidarPendenciasVenda(listaDetalhes) {
         item_venda_descricao: details?.item_venda?.descricao || '-'
       });
     });
+
+    (details?.itens_diagnostico || []).forEach((itemDiagnostico) => {
+      itensDiagnostico.push({
+        ...itemDiagnostico,
+        item_venda_codigo: details?.item_venda?.codigo || '-',
+        item_venda_descricao: details?.item_venda?.descricao || '-'
+      });
+    });
   });
 
   return {
@@ -2381,7 +2403,8 @@ function consolidarPendenciasVenda(listaDetalhes) {
       codigo: itensVenda.map((item) => item.codigo).filter(Boolean).join(', ') || '-',
       descricao: 'Pendencias em itens da lista'
     },
-    faltas
+    faltas,
+    itens_diagnostico: itensDiagnostico
   };
 }
 
