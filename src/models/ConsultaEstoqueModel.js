@@ -258,11 +258,29 @@ class ConsultaEstoqueModel {
         ) est ON est.id_peca = p.id
         LEFT JOIN (
           SELECT
-            s.id_peca,
-            SUM(s.quantidade) AS quantidade
-          FROM tratamento_externo_saldos s
-          WHERE s.quantidade > 0
-          GROUP BY s.id_peca
+            saldos.id_peca,
+            SUM(saldos.quantidade) AS quantidade
+          FROM (
+            SELECT
+              s.id_peca,
+              SUM(s.quantidade) AS quantidade
+            FROM tratamento_externo_saldos s
+            WHERE s.quantidade > 0
+            GROUP BY s.id_peca
+
+            UNION ALL
+
+            SELECT
+              ri.id_peca,
+              SUM(GREATEST(ri.quantidade_enviada - ri.quantidade_retorno, 0)) AS quantidade
+            FROM terceirizacao_remessa_itens ri
+            INNER JOIN terceirizacao_remessas r ON r.id = ri.id_remessa
+            WHERE r.status IN ('ENVIADA', 'RETORNO_PARCIAL')
+              AND ri.quantidade_enviada > ri.quantidade_retorno
+              AND COALESCE(ri.encerrado_manualmente, 0) = 0
+            GROUP BY ri.id_peca
+          ) saldos
+          GROUP BY saldos.id_peca
         ) trat ON trat.id_peca = p.id
         LEFT JOIN (
           SELECT
