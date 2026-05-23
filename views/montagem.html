@@ -12,7 +12,7 @@
     <header class="topbar">
       <div class="topbar-copy">
         <p class="page-kicker">Setor SAFISA</p>
-        <h1 class="page-title">Montagem</h1>
+        <h1 class="page-title">Estoque de Montagem</h1>
         <p class="page-subtitle">Acompanhe seu estoque, veja o status dos pedidos ao Almoxarifado e transfira pecas para a Expedicao.</p>
       </div>
     </header>
@@ -63,6 +63,8 @@
               <button id="montagem-btn-transferencia-menu" class="btn btn-primary" type="button"><span class="btn-label">Enviar para Expedicao</span></button>
               <button id="montagem-btn-solicitar" class="btn btn-neutral" type="button"><span class="btn-label">Solicitar Pecas</span></button>
               <button id="montagem-btn-efetuar" class="btn btn-success" type="button"><span class="btn-label">Efetuar Montagem</span></button>
+              <button id="montagem-btn-numeros-serie" class="btn btn-secondary" type="button"><span class="btn-label">Numeros de Serie</span></button>
+              <button id="montagem-btn-seriais-disponiveis" class="btn btn-secondary" type="button"><span class="btn-label">Seriais Disponiveis</span><span id="montagem-badge-seriais-disponiveis" class="btn-badge hidden">0</span></button>
               <button id="montagem-btn-simular" class="btn btn-secondary" type="button"><span class="btn-label">Simulacao de Montagem</span></button>
               <button id="montagem-btn-pedidos-menu" class="btn btn-neutral" type="button"><span class="btn-label">Meus Pedidos</span><span id="montagem-badge-pedidos" class="btn-badge hidden">0</span></button>
               <button id="montagem-btn-recebidos-menu" class="btn btn-neutral" type="button"><span class="btn-label">Pedidos da Expedicao</span><span id="montagem-badge-recebidos" class="btn-badge hidden">0</span></button>
@@ -659,6 +661,211 @@
     </div>
   </div>
 
+  <div id="montagem-numeros-serie-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="montagem-numeros-serie"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Montagem</span>
+          <h2>Registro de numeros de serie</h2>
+          <p>Registre somente submontagens elegiveis. O numero de serie e automatico, consome componentes da Montagem e envia a peca pronta para a Expedicao.</p>
+        </div>
+
+        <button id="btn-fechar-modal-montagem-numeros-serie" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="montagem-numeros-serie-mensagem" class="message hidden"></div>
+
+      <form id="montagem-numeros-serie-form" class="form-grid">
+        <input type="hidden" id="montagem-numero-serie-modelo-id">
+
+        <div class="field span-8">
+          <label for="montagem-numero-serie-modelo-busca">Modelo do servo</label>
+          <div class="autocomplete">
+            <input id="montagem-numero-serie-modelo-busca" type="text" placeholder="Digite codigo ou descricao da submontagem">
+            <div id="montagem-numero-serie-modelo-sugestoes" class="autocomplete-panel hidden"></div>
+          </div>
+        </div>
+
+        <div class="field span-4">
+          <label for="montagem-numero-serie-atual">Numero de serie inicial</label>
+          <input id="montagem-numero-serie-atual" type="text" readonly value="-">
+        </div>
+
+        <div id="montagem-numero-serie-resumo" class="span-12 selected-tags empty">
+          Selecione uma submontagem para registrar o lote.
+        </div>
+
+        <div class="field span-4">
+          <label for="montagem-numero-serie-quantidade">Quantidade</label>
+          <input id="montagem-numero-serie-quantidade" type="number" min="1" step="1" value="1" required>
+        </div>
+
+        <div class="field span-4">
+          <label for="montagem-numero-serie-montador">Montador</label>
+          <input id="montagem-numero-serie-montador" type="text" maxlength="120" list="montagem-numero-serie-montadores" placeholder="Digite ou selecione o montador" required>
+        </div>
+
+        <div class="field span-4">
+          <label for="montagem-numero-serie-faixa">Faixa prevista</label>
+          <input id="montagem-numero-serie-faixa" type="text" readonly value="-">
+        </div>
+
+        <div class="span-12 selected-tags">
+          <span id="montagem-numero-serie-diagnostico-capacidade-chip" class="selected-tag">Capacidade atual: 0</span>
+          <span id="montagem-numero-serie-diagnostico-falta-chip" class="selected-tag">Itens faltando: 0</span>
+          <span id="montagem-numero-serie-diagnostico-status-chip" class="selected-tag">Status: aguardando selecao</span>
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button id="btn-abrir-modal-montagem-numero-serie-diagnostico" class="btn btn-neutral" type="button">Ver diagnostico</button>
+          <button id="btn-salvar-modal-montagem-numeros-serie" class="btn btn-primary" type="submit">Registrar lote</button>
+        </div>
+      </form>
+
+      <div class="subtle-divider"></div>
+
+      <div class="section-header-inline">
+        <div>
+          <p class="page-kicker">Registros</p>
+          <h3>Numeros de serie gravados</h3>
+        </div>
+        <p id="montagem-numero-serie-total">0 registro(s) encontrado(s)</p>
+      </div>
+
+      <form class="toolbar-form">
+        <div class="field">
+          <label for="montagem-numero-serie-filtro-numero">Numero de serie</label>
+          <input id="montagem-numero-serie-filtro-numero" type="text" placeholder="Ex.: A-61124">
+        </div>
+
+        <div class="field">
+          <label for="montagem-numero-serie-filtro-modelo">Modelo</label>
+          <input id="montagem-numero-serie-filtro-modelo" type="text" placeholder="Codigo ou descricao">
+        </div>
+
+        <div class="field">
+          <label for="montagem-numero-serie-filtro-montador">Montador</label>
+          <input id="montagem-numero-serie-filtro-montador" type="text" placeholder="Parte do nome">
+        </div>
+
+        <button id="montagem-numero-serie-filtro-limpar" class="btn btn-neutral" type="button">Limpar</button>
+      </form>
+
+      <div class="table-wrapper" data-print-table data-print-title="Numeros de serie da montagem">
+        <table>
+          <thead>
+            <tr>
+              <th>Numero de serie</th>
+              <th>Modelo</th>
+              <th>Data da montagem</th>
+              <th>Montador</th>
+              <th>Numero do pedido</th>
+              <th>Data da saida</th>
+              <th>Acoes</th>
+            </tr>
+          </thead>
+          <tbody id="montagem-numero-serie-tbody">
+            <tr>
+              <td colspan="7" class="empty-state">Carregando registros...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="montagem-numero-serie-editar-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="montagem-numero-serie-editar"></div>
+
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Montagem</span>
+          <h2>Editar modelo do registro</h2>
+          <p>O numero de serie permanece fixo. Somente o modelo pode ser alterado.</p>
+        </div>
+
+        <button id="btn-fechar-modal-montagem-numero-serie-editar" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="montagem-numero-serie-editar-mensagem" class="message hidden"></div>
+
+      <form id="montagem-numero-serie-editar-form" class="form-grid">
+        <input type="hidden" id="montagem-numero-serie-editar-id">
+        <input type="hidden" id="montagem-numero-serie-editar-modelo-id">
+
+        <div class="field span-12">
+          <label for="montagem-numero-serie-editar-numero">Numero de serie</label>
+          <input id="montagem-numero-serie-editar-numero" type="text" readonly>
+        </div>
+
+        <div class="field span-12">
+          <label for="montagem-numero-serie-editar-modelo-busca">Modelo do servo</label>
+          <div class="autocomplete">
+            <input id="montagem-numero-serie-editar-modelo-busca" type="text" placeholder="Digite codigo ou descricao da submontagem">
+            <div id="montagem-numero-serie-editar-modelo-sugestoes" class="autocomplete-panel hidden"></div>
+          </div>
+        </div>
+
+        <div id="montagem-numero-serie-editar-resumo" class="span-12 selected-tags empty">
+          Selecione o novo modelo da submontagem.
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button id="btn-cancelar-modal-montagem-numero-serie-editar" class="btn btn-neutral" type="button">Cancelar</button>
+          <button class="btn btn-primary" type="submit">Salvar modelo</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="montagem-numero-serie-diagnostico-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="montagem-numero-serie-diagnostico"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Montagem</span>
+          <h2 id="montagem-numero-serie-diagnostico-titulo">Diagnostico da Montagem</h2>
+          <p id="montagem-numero-serie-diagnostico-subtitulo">O sistema verifica somente o estoque da Montagem para calcular o que pode ser montado agora.</p>
+        </div>
+
+        <button id="btn-fechar-modal-montagem-numero-serie-diagnostico" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div class="selected-tags">
+        <span id="montagem-numero-serie-diagnostico-capacidade-chip-modal" class="selected-tag">Capacidade atual: 0</span>
+        <span id="montagem-numero-serie-diagnostico-falta-chip-modal" class="selected-tag">Itens faltando: 0</span>
+        <span id="montagem-numero-serie-diagnostico-status-chip-modal" class="selected-tag">Status: aguardando selecao</span>
+      </div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Codigo</th>
+              <th>Descricao</th>
+              <th>Necessaria</th>
+              <th>Disponivel na Montagem</th>
+              <th>Falta</th>
+            </tr>
+          </thead>
+          <tbody id="montagem-numero-serie-diagnostico-tbody">
+            <tr>
+              <td colspan="5" class="empty-state">Selecione uma submontagem para visualizar o diagnostico.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="modal-actions">
+        <button id="btn-voltar-modal-montagem-numero-serie-diagnostico" class="btn btn-neutral" type="button">Voltar ao registro</button>
+      </div>
+    </div>
+  </div>
+
   <div id="montagem-simulacao-modal" class="modal hidden" aria-hidden="true">
     <div class="modal-backdrop" data-close-modal="montagem-simulacao"></div>
 
@@ -852,10 +1059,53 @@
     </div>
   </div>
 
+  <div id="seriais-disponiveis-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="seriais-disponiveis"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Montagem</span>
+          <h2>Numeros de serie disponiveis</h2>
+          <p id="seriais-disponiveis-subtitulo">Veja os registros que ja foram montados e ainda nao possuem vinculo com pedido.</p>
+        </div>
+
+        <button id="btn-fechar-modal-seriais-disponiveis" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div class="selected-tags" id="seriais-disponiveis-resumo"></div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Numero de serie</th>
+              <th>Modelo</th>
+              <th>Montador</th>
+              <th>Data da montagem</th>
+            </tr>
+          </thead>
+          <tbody id="seriais-disponiveis-tbody">
+            <tr>
+              <td colspan="4" class="empty-state">Carregando numeros de serie disponiveis...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <script src="/js/sector-menu.js"></script>
   <script src="/js/montagem.js"></script>
+  <script src="/js/seriais-disponiveis.js"></script>
   <script src="/js/table-print.js"></script>
   <script src="/js/session-indicator.js"></script>
+  <datalist id="montagem-numero-serie-montadores">
+    <option value="DANILO"></option>
+    <option value="AMARO"></option>
+    <option value="RONALDO"></option>
+    <option value="OSMAR"></option>
+  </datalist>
 </body>
 </html>
 

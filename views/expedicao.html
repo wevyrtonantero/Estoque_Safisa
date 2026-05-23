@@ -61,6 +61,8 @@
               <button id="expedicao-btn-solicitar" class="btn btn-neutral" type="button"><span class="btn-label">Solicitar Pecas</span></button>
               <button id="expedicao-btn-efetuar" class="btn btn-success" type="button"><span class="btn-label">Efetuar Montagem</span></button>
               <button id="expedicao-btn-simular" class="btn btn-secondary" type="button"><span class="btn-label">Simulacao de Montagem</span></button>
+              <button id="expedicao-btn-seriais-disponiveis" class="btn btn-secondary" type="button"><span class="btn-label">Seriais Disponiveis</span><span id="expedicao-badge-seriais-disponiveis" class="btn-badge hidden">0</span></button>
+              <a class="btn btn-primary" href="/pagina-gerenciamento-pedidos"><span class="btn-label">Gerenciar Pedidos</span></a>
               <button id="expedicao-btn-pedidos-menu" class="btn btn-neutral" type="button"><span class="btn-label">Meus Pedidos</span><span id="expedicao-badge-pedidos" class="btn-badge hidden">0</span></button>
               <a class="btn btn-secondary" href="/pagina-saidas-expedicao"><span class="btn-label">Relatorio de Saidas</span></a>
               <button id="expedicao-btn-historico-menu" class="btn btn-neutral" type="button"><span class="btn-label">Historico de Saidas</span></button>
@@ -978,8 +980,45 @@
     </div>
   </div>
 
+  <div id="seriais-disponiveis-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="seriais-disponiveis"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Expedicao</span>
+          <h2>Numeros de serie disponiveis</h2>
+          <p id="seriais-disponiveis-subtitulo">Veja os registros que ainda nao possuem vinculo com pedido.</p>
+        </div>
+
+        <button id="btn-fechar-modal-seriais-disponiveis" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div class="selected-tags" id="seriais-disponiveis-resumo"></div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Numero de serie</th>
+              <th>Modelo</th>
+              <th>Montador</th>
+              <th>Data da montagem</th>
+            </tr>
+          </thead>
+          <tbody id="seriais-disponiveis-tbody">
+            <tr>
+              <td colspan="4" class="empty-state">Carregando numeros de serie disponiveis...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <script src="/js/sector-menu.js"></script>
   <script src="/js/expedicao.js?v=20260514-1"></script>
+  <script src="/js/seriais-disponiveis.js"></script>
   <script src="/js/table-print.js"></script>
   <script src="/js/session-indicator.js"></script>
 </body>

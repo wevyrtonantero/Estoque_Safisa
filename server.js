@@ -25,12 +25,16 @@ const usuarioRoutes = require('./src/routes/usuarioRoutes');
 const auditLogRoutes = require('./src/routes/auditLogRoutes');
 const authRoutes = require('./src/routes/authRoutes');
 const composicaoVendaRoutes = require('./src/routes/composicaoVendaRoutes');
+const submontagemSerialRoutes = require('./src/routes/submontagemSerialRoutes');
+const pedidoExpedicaoRoutes = require('./src/routes/pedidoExpedicaoRoutes');
 const AuthController = require('./src/controllers/AuthController');
 const UsuarioModel = require('./src/models/UsuarioModel');
 const AuditLogModel = require('./src/models/AuditLogModel');
 const ComposicaoVendaModel = require('./src/models/ComposicaoVendaModel');
 const ExpedicaoSaidaModel = require('./src/models/ExpedicaoSaidaModel');
 const ProducaoModel = require('./src/models/ProducaoModel');
+const SubmontagemSerialModel = require('./src/models/SubmontagemSerialModel');
+const PedidoExpedicaoModel = require('./src/models/PedidoExpedicaoModel');
 const { attachAuthContext, requirePageRoles } = require('./src/middleware/authMiddleware');
 const { ALL_ROLES, ADMIN_READ_ROLES, OPERATION_READ_ROLES, SUPERADMIN_ONLY_ROLES, STOCK_READ_ROLES } = require('./src/security/roles');
 const { testConnection } = require('./database/connection');
@@ -151,6 +155,10 @@ app.get('/pagina-expedicao', requirePageRoles(OPERATION_READ_ROLES), (req, res) 
   sendView(res, 'expedicao.html');
 });
 
+app.get('/pagina-gerenciamento-pedidos', requirePageRoles(OPERATION_READ_ROLES), (req, res) => {
+  sendView(res, 'gerenciamento-pedidos.html');
+});
+
 app.get('/pagina-saidas-expedicao', requirePageRoles(STOCK_READ_ROLES), (req, res) => {
   sendView(res, 'relatorio-saidas-expedicao.html');
 });
@@ -229,6 +237,8 @@ app.use('/api', painelRoutes);
 app.use('/api', usuarioRoutes);
 app.use('/api', auditLogRoutes);
 app.use('/api', composicaoVendaRoutes);
+app.use('/api', submontagemSerialRoutes);
+app.use('/api', pedidoExpedicaoRoutes);
 
 // Resposta padrao para qualquer rota nao mapeada.
 app.use((req, res) => {
@@ -251,6 +261,8 @@ app.listen(PORT, async () => {
     await ComposicaoVendaModel.ensureSchema();
     await ExpedicaoSaidaModel.ensureSchema();
     await ProducaoModel.ensureSchema();
+    await SubmontagemSerialModel.ensureSchema();
+    await PedidoExpedicaoModel.ensureSchema();
   } catch (error) {
     console.error('Nao foi possivel validar a conexao com o MySQL:', error.message);
   }

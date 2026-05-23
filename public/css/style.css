@@ -2491,6 +2491,271 @@ tbody tr:hover {
   min-width: 140px;
 }
 
+.btn-small {
+  min-height: 38px;
+  padding: 8px 14px;
+  font-size: 0.88rem;
+}
+
+.pedido-prioridade-lista {
+  display: grid;
+  gap: 8px;
+  max-height: calc(100vh - 320px);
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.pedido-board {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+}
+
+.pedido-lane {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(208, 221, 236, 0.94);
+  border-radius: 10px;
+  background: rgba(246, 250, 254, 0.72);
+}
+
+.pedido-lane-today {
+  background: rgba(239, 248, 243, 0.82);
+  border-color: rgba(134, 196, 166, 0.72);
+}
+
+.pedido-lane-header h3 {
+  margin: 4px 0 0;
+  font-size: 1rem;
+}
+
+.pedido-lane-header p {
+  margin: 6px 0 0;
+  color: var(--text-soft);
+  font-size: 0.8rem;
+}
+
+.pedido-prioridade-lista-compact {
+  align-content: start;
+}
+
+.pedido-prioridade-card {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 6px;
+  padding: 6px 8px;
+  border: 2px solid rgba(53, 102, 150, 0.3);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 4px 8px rgba(10, 34, 61, 0.04);
+  cursor: pointer;
+}
+
+.pedido-prioridade-card.is-ready {
+  border-color: rgba(30, 139, 104, 0.55);
+}
+
+.pedido-prioridade-card.is-pending {
+  border-color: rgba(214, 69, 69, 0.52);
+}
+
+.pedido-prioridade-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 0;
+  color: var(--text-soft);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  font-size: 0.72rem;
+  user-select: none;
+}
+
+.pedido-prioridade-main {
+  display: grid;
+  gap: 4px;
+}
+
+.pedido-prioridade-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pedido-prioridade-identidade {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.pedido-prioridade-head h3 {
+  margin: 0;
+  font-size: 0.92rem;
+  line-height: 1.1;
+}
+
+.pedido-prioridade-head p {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.76rem;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pedido-prioridade-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 2px 8px;
+  color: var(--text-soft);
+  font-size: 0.72rem;
+  line-height: 1.1;
+}
+
+.pedido-prioridade-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.pedido-prioridade-tags {
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.pedido-prioridade-tags .selected-tag,
+.pedido-prioridade-identidade .section-pill {
+  font-size: 0.62rem;
+  padding: 3px 6px;
+}
+
+.pedido-prioridade-actions .btn-small {
+  min-height: 24px;
+  padding: 3px 7px;
+  font-size: 0.66rem;
+  border-radius: 999px;
+}
+
+.status-ready {
+  background: rgba(30, 139, 104, 0.13);
+  color: #156a50;
+}
+
+.status-pending {
+  background: rgba(214, 69, 69, 0.12);
+  color: #b13a3a;
+}
+
+.pedido-page .workspace {
+  width: min(1660px, calc(100% - 20px));
+  padding-top: 12px;
+}
+
+.pedido-page .topbar {
+  margin-bottom: 12px;
+  padding: 14px 16px;
+}
+
+.pedido-page .page-title {
+  font-size: clamp(1.45rem, 1.8vw, 2rem);
+}
+
+.pedido-page .page-subtitle {
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
+.pedido-page .summary-row {
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.pedido-page .summary-card {
+  padding: 12px 14px;
+}
+
+.pedido-page .summary-card strong {
+  margin-top: 6px;
+  font-size: 1.3rem;
+}
+
+.pedido-page .content-card {
+  margin-bottom: 12px;
+  padding: 14px;
+}
+
+.pedido-page .card-top {
+  margin-bottom: 12px;
+}
+
+.pedido-page .toolbar-form {
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+@media (max-width: 1180px) {
+  .pedido-board {
+    grid-template-columns: 1fr;
+  }
+
+  .pedido-prioridade-lista {
+    max-height: none;
+  }
+}
+
+.pedido-item-cell {
+  display: grid;
+  gap: 8px;
+}
+
+.pedido-item-row-complete td {
+  background: rgba(232, 245, 236, 0.92);
+}
+
+.pedido-item-cell span {
+  color: var(--text-soft);
+  font-size: 0.92rem;
+}
+
+.pedido-item-serial-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tag-inline-action {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0 0 0 6px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.pedido-item-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.pedido-item-checkbox input {
+  width: 16px;
+  height: 16px;
+}
+
+.pedido-print-btn {
+  font-size: 0.95rem;
+  width: 38px;
+  height: 38px;
+  min-height: 38px;
+}
+
 @keyframes portalButtonPulse {
   0%,
   100% {

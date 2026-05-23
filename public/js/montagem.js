@@ -6,6 +6,7 @@ const transferenciaApiBaseUrl = '/api/estoque/transferencia';
 const solicitacoesApiBaseUrl = '/api/solicitacoes-estoque';
 const solicitacoesProducaoApiBaseUrl = '/api/solicitacoes-producao';
 const submontagensApiBaseUrl = '/api/submontagens';
+const submontagemSeriaisApiBaseUrl = '/api/submontagem-seriais';
 const producaoApiBaseUrl = '/api/producao';
 const AUTO_REFRESH_MS = 15000;
 const ACTIVE_REQUEST_STATUSES = ['PENDENTE', 'FALTANDO_PECA', 'MONTANDO', 'EM_SEPARACAO', 'ATENDIDA_PARCIAL'];
@@ -23,6 +24,11 @@ let autoRefreshHandle = null;
 let estruturasSubmontagemCache = new Map();
 let efetuarFaltantesCache = [];
 let solicitacaoLista = [];
+let registrosNumeroSerieCache = [];
+let proximoNumeroSeriePreview = null;
+let ultimoMontadorNumeroSerie = '';
+let diagnosticoNumeroSerieAtual = null;
+let reabrirModalNumeroSerieAoFecharDiagnostico = false;
 
 const refs = {
   mensagem: document.getElementById('montagem-mensagem'),
@@ -102,6 +108,41 @@ const refs = {
   efetuarPreviewTbody: document.getElementById('montagem-efetuar-preview-tbody'),
   efetuarSolicitarFaltantes: document.getElementById('btn-montagem-efetuar-solicitar-faltantes'),
   efetuarSubmit: document.getElementById('btn-confirmar-modal-montagem-efetuar'),
+  numeroSerieModal: document.getElementById('montagem-numeros-serie-modal'),
+  numeroSerieMensagem: document.getElementById('montagem-numeros-serie-mensagem'),
+  numeroSerieForm: document.getElementById('montagem-numeros-serie-form'),
+  numeroSerieModeloId: document.getElementById('montagem-numero-serie-modelo-id'),
+  numeroSerieModeloBusca: document.getElementById('montagem-numero-serie-modelo-busca'),
+  numeroSerieModeloSugestoes: document.getElementById('montagem-numero-serie-modelo-sugestoes'),
+  numeroSerieAtual: document.getElementById('montagem-numero-serie-atual'),
+  numeroSerieResumo: document.getElementById('montagem-numero-serie-resumo'),
+  numeroSerieQuantidade: document.getElementById('montagem-numero-serie-quantidade'),
+  numeroSerieMontador: document.getElementById('montagem-numero-serie-montador'),
+  numeroSerieFaixa: document.getElementById('montagem-numero-serie-faixa'),
+  numeroSerieDiagnosticoModal: document.getElementById('montagem-numero-serie-diagnostico-modal'),
+  numeroSerieDiagnosticoTitulo: document.getElementById('montagem-numero-serie-diagnostico-titulo'),
+  numeroSerieDiagnosticoSubtitulo: document.getElementById('montagem-numero-serie-diagnostico-subtitulo'),
+  numeroSerieDiagnosticoCapacidadeChip: document.getElementById('montagem-numero-serie-diagnostico-capacidade-chip'),
+  numeroSerieDiagnosticoFaltaChip: document.getElementById('montagem-numero-serie-diagnostico-falta-chip'),
+  numeroSerieDiagnosticoStatusChip: document.getElementById('montagem-numero-serie-diagnostico-status-chip'),
+  numeroSerieDiagnosticoCapacidadeChipModal: document.getElementById('montagem-numero-serie-diagnostico-capacidade-chip-modal'),
+  numeroSerieDiagnosticoFaltaChipModal: document.getElementById('montagem-numero-serie-diagnostico-falta-chip-modal'),
+  numeroSerieDiagnosticoStatusChipModal: document.getElementById('montagem-numero-serie-diagnostico-status-chip-modal'),
+  numeroSerieDiagnosticoTbody: document.getElementById('montagem-numero-serie-diagnostico-tbody'),
+  numeroSerieTotal: document.getElementById('montagem-numero-serie-total'),
+  numeroSerieTbody: document.getElementById('montagem-numero-serie-tbody'),
+  numeroSerieFiltroNumero: document.getElementById('montagem-numero-serie-filtro-numero'),
+  numeroSerieFiltroModelo: document.getElementById('montagem-numero-serie-filtro-modelo'),
+  numeroSerieFiltroMontador: document.getElementById('montagem-numero-serie-filtro-montador'),
+  numeroSerieEditarModal: document.getElementById('montagem-numero-serie-editar-modal'),
+  numeroSerieEditarMensagem: document.getElementById('montagem-numero-serie-editar-mensagem'),
+  numeroSerieEditarForm: document.getElementById('montagem-numero-serie-editar-form'),
+  numeroSerieEditarId: document.getElementById('montagem-numero-serie-editar-id'),
+  numeroSerieEditarNumero: document.getElementById('montagem-numero-serie-editar-numero'),
+  numeroSerieEditarModeloId: document.getElementById('montagem-numero-serie-editar-modelo-id'),
+  numeroSerieEditarModeloBusca: document.getElementById('montagem-numero-serie-editar-modelo-busca'),
+  numeroSerieEditarModeloSugestoes: document.getElementById('montagem-numero-serie-editar-modelo-sugestoes'),
+  numeroSerieEditarResumo: document.getElementById('montagem-numero-serie-editar-resumo'),
   simulacaoModal: document.getElementById('montagem-simulacao-modal'),
   simulacaoMensagem: document.getElementById('montagem-simulacao-mensagem'),
   simulacaoForm: document.getElementById('montagem-simulacao-form'),
@@ -176,6 +217,8 @@ function bindEvents() {
       esconderSugestoes();
       esconderSugestoesSolicitacao();
       esconderSugestoesEfetuarMontagem();
+      esconderSugestoesNumeroSerieCadastro();
+      esconderSugestoesNumeroSerieEdicao();
       esconderSugestoesSubmontagem();
     }
   });
@@ -183,6 +226,7 @@ function bindEvents() {
   document.getElementById('montagem-btn-solicitar').addEventListener('click', () => abrirModalSolicitacao());
   document.getElementById('montagem-btn-solicitar-inline').addEventListener('click', () => abrirModalSolicitacao());
   document.getElementById('montagem-btn-efetuar').addEventListener('click', abrirModalEfetuarMontagem);
+  document.getElementById('montagem-btn-numeros-serie').addEventListener('click', abrirModalNumerosSerie);
   document.getElementById('montagem-btn-simular').addEventListener('click', abrirModalSimulacao);
   document.getElementById('montagem-btn-pedidos-menu').addEventListener('click', abrirModalPedidos);
   document.getElementById('montagem-btn-recebidos-menu').addEventListener('click', abrirModalPedidosRecebidos);
@@ -213,6 +257,12 @@ function bindEvents() {
   document.getElementById('btn-cancelar-modal-montagem-solicitacao').addEventListener('click', fecharModalSolicitacao);
   document.getElementById('btn-fechar-modal-montagem-efetuar').addEventListener('click', fecharModalEfetuarMontagem);
   document.getElementById('btn-cancelar-modal-montagem-efetuar').addEventListener('click', fecharModalEfetuarMontagem);
+  document.getElementById('btn-fechar-modal-montagem-numeros-serie').addEventListener('click', fecharModalNumerosSerie);
+  document.getElementById('btn-abrir-modal-montagem-numero-serie-diagnostico').addEventListener('click', abrirModalDiagnosticoNumeroSerie);
+  document.getElementById('btn-fechar-modal-montagem-numero-serie-diagnostico').addEventListener('click', fecharModalDiagnosticoNumeroSerie);
+  document.getElementById('btn-voltar-modal-montagem-numero-serie-diagnostico').addEventListener('click', fecharModalDiagnosticoNumeroSerie);
+  document.getElementById('btn-fechar-modal-montagem-numero-serie-editar').addEventListener('click', fecharModalEditarNumeroSerie);
+  document.getElementById('btn-cancelar-modal-montagem-numero-serie-editar').addEventListener('click', fecharModalEditarNumeroSerie);
   refs.efetuarSolicitarFaltantes.addEventListener('click', handleSolicitarFaltantesMontagem);
   document.getElementById('btn-fechar-modal-montagem-simulacao').addEventListener('click', fecharModalSimulacao);
   document.getElementById('btn-fechar-modal-montagem-atendimento').addEventListener('click', fecharModalAtendimento);
@@ -232,6 +282,9 @@ function bindEvents() {
     refs.consumirProducaoModal,
     refs.solicitacaoModal,
     refs.efetuarModal,
+    refs.numeroSerieModal,
+    refs.numeroSerieDiagnosticoModal,
+    refs.numeroSerieEditarModal,
     refs.simulacaoModal,
     refs.atendimentoModal,
     refs.statusSolicitacaoModal,
@@ -247,6 +300,31 @@ function bindEvents() {
   refs.efetuarBusca.addEventListener('focus', () => renderizarSugestoesEfetuarMontagem(refs.efetuarBusca.value.trim()));
   refs.efetuarSugestoes.addEventListener('click', handleSugestaoEfetuarMontagemClick);
   refs.efetuarQuantidade.addEventListener('input', () => atualizarPreviewEfetuarMontagem());
+  refs.numeroSerieForm.addEventListener('submit', handleRegistrarNumerosSerie);
+  refs.numeroSerieModeloBusca.addEventListener('input', () => {
+    refs.numeroSerieModeloId.value = '';
+    renderizarResumoNumeroSerie(null);
+    renderizarSugestoesNumeroSerieCadastro(refs.numeroSerieModeloBusca.value.trim());
+  });
+  refs.numeroSerieModeloBusca.addEventListener('focus', () => renderizarSugestoesNumeroSerieCadastro(refs.numeroSerieModeloBusca.value.trim()));
+  refs.numeroSerieModeloSugestoes.addEventListener('click', handleSugestaoNumeroSerieCadastroClick);
+  refs.numeroSerieQuantidade.addEventListener('input', () => {
+    atualizarFaixaNumeroSerie();
+    atualizarDiagnosticoNumeroSerie();
+  });
+  refs.numeroSerieFiltroNumero.addEventListener('input', renderizarRegistrosNumeroSerie);
+  refs.numeroSerieFiltroModelo.addEventListener('input', renderizarRegistrosNumeroSerie);
+  refs.numeroSerieFiltroMontador.addEventListener('input', renderizarRegistrosNumeroSerie);
+  refs.numeroSerieTbody.addEventListener('click', handleRegistrosNumeroSerieActions);
+  document.getElementById('montagem-numero-serie-filtro-limpar').addEventListener('click', limparFiltrosNumeroSerie);
+  refs.numeroSerieEditarForm.addEventListener('submit', handleSalvarEdicaoNumeroSerie);
+  refs.numeroSerieEditarModeloBusca.addEventListener('input', () => {
+    refs.numeroSerieEditarModeloId.value = '';
+    renderizarResumoNumeroSerieEdicao(null);
+    renderizarSugestoesNumeroSerieEdicao(refs.numeroSerieEditarModeloBusca.value.trim());
+  });
+  refs.numeroSerieEditarModeloBusca.addEventListener('focus', () => renderizarSugestoesNumeroSerieEdicao(refs.numeroSerieEditarModeloBusca.value.trim()));
+  refs.numeroSerieEditarModeloSugestoes.addEventListener('click', handleSugestaoNumeroSerieEdicaoClick);
   refs.simulacaoForm.addEventListener('submit', handleSimular);
   refs.simulacaoTbody.addEventListener('click', handleSimulacaoActions);
   refs.atendimentoForm.addEventListener('submit', handleAtenderPedidoRecebido);
@@ -774,6 +852,577 @@ async function abrirModalEfetuarMontagem() {
 function fecharModalEfetuarMontagem() {
   resetModalEfetuarMontagem();
   closeModal(refs.efetuarModal);
+}
+
+async function abrirModalNumerosSerie() {
+  resetFormularioNumeroSerie();
+  refs.numeroSerieTbody.innerHTML = '<tr><td colspan="7" class="empty-state">Carregando registros...</td></tr>';
+  refs.numeroSerieTotal.textContent = 'Carregando registros...';
+  openModal(refs.numeroSerieModal);
+
+  try {
+    if (!submontagensCache.length) {
+      await carregarSubmontagens();
+    }
+
+    await Promise.all([
+      carregarProximoNumeroSerie(),
+      carregarRegistrosNumeroSerie()
+    ]);
+  } catch (error) {
+    mostrarMensagemNumeroSerie(error.message, 'error');
+    refs.numeroSerieTbody.innerHTML = '<tr><td colspan="7" class="empty-state">Nao foi possivel carregar os registros.</td></tr>';
+  }
+}
+
+function fecharModalNumerosSerie() {
+  esconderSugestoesNumeroSerieCadastro();
+  closeModal(refs.numeroSerieModal);
+}
+
+function abrirModalDiagnosticoNumeroSerie() {
+  reabrirModalNumeroSerieAoFecharDiagnostico = !refs.numeroSerieModal.classList.contains('hidden');
+  if (reabrirModalNumeroSerieAoFecharDiagnostico) {
+    closeModal(refs.numeroSerieModal);
+  }
+  openModal(refs.numeroSerieDiagnosticoModal);
+}
+
+function fecharModalDiagnosticoNumeroSerie() {
+  closeModal(refs.numeroSerieDiagnosticoModal);
+  if (reabrirModalNumeroSerieAoFecharDiagnostico) {
+    reabrirModalNumeroSerieAoFecharDiagnostico = false;
+    openModal(refs.numeroSerieModal);
+  }
+}
+
+function resetFormularioNumeroSerie() {
+  refs.numeroSerieMensagem.className = 'message hidden';
+  refs.numeroSerieMensagem.textContent = '';
+  refs.numeroSerieForm.reset();
+  refs.numeroSerieModeloId.value = '';
+  refs.numeroSerieQuantidade.value = '1';
+  refs.numeroSerieMontador.value = ultimoMontadorNumeroSerie || '';
+  refs.numeroSerieAtual.value = '-';
+  refs.numeroSerieFaixa.value = '-';
+  diagnosticoNumeroSerieAtual = null;
+  renderizarResumoNumeroSerie(null);
+  resetDiagnosticoNumeroSerie();
+  esconderSugestoesNumeroSerieCadastro();
+}
+
+async function carregarProximoNumeroSerie() {
+  const response = await fetch(`${submontagemSeriaisApiBaseUrl}/proximo`);
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || 'Nao foi possivel carregar o proximo numero de serie.');
+  }
+
+  proximoNumeroSeriePreview = result;
+  refs.numeroSerieAtual.value = result.numero_serie || '-';
+  atualizarFaixaNumeroSerie();
+}
+
+async function carregarRegistrosNumeroSerie() {
+  const response = await fetch(`${submontagemSeriaisApiBaseUrl}?limit=1000`);
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || 'Nao foi possivel carregar os registros de numeros de serie.');
+  }
+
+  registrosNumeroSerieCache = Array.isArray(result) ? result : [];
+  renderizarRegistrosNumeroSerie();
+}
+
+function limparFiltrosNumeroSerie() {
+  refs.numeroSerieFiltroNumero.value = '';
+  refs.numeroSerieFiltroModelo.value = '';
+  refs.numeroSerieFiltroMontador.value = '';
+  renderizarRegistrosNumeroSerie();
+}
+
+function obterRegistrosNumeroSerieFiltrados() {
+  const filtroNumero = normalizarBusca(refs.numeroSerieFiltroNumero.value.trim());
+  const filtroModelo = normalizarBusca(refs.numeroSerieFiltroModelo.value.trim());
+  const filtroMontador = normalizarBusca(refs.numeroSerieFiltroMontador.value.trim());
+
+  return registrosNumeroSerieCache.filter((registro) => {
+    if (filtroNumero && !normalizarBusca(registro.numero_serie).includes(filtroNumero)) {
+      return false;
+    }
+
+    if (filtroModelo) {
+      const textoModelo = normalizarBusca(`${registro.modelo_servo_codigo} ${registro.modelo_servo_descricao}`);
+      if (!textoModelo.includes(filtroModelo)) {
+        return false;
+      }
+    }
+
+    if (filtroMontador && !normalizarBusca(registro.montador_nome).includes(filtroMontador)) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
+function renderizarRegistrosNumeroSerie() {
+  const registros = obterRegistrosNumeroSerieFiltrados();
+  refs.numeroSerieTotal.textContent = `${registros.length} registro(s) encontrado(s)`;
+
+  if (!registrosNumeroSerieCache.length) {
+    refs.numeroSerieTbody.innerHTML = '<tr><td colspan="7" class="empty-state">Nenhum numero de serie registrado ainda.</td></tr>';
+    return;
+  }
+
+  if (!registros.length) {
+    refs.numeroSerieTbody.innerHTML = '<tr><td colspan="7" class="empty-state">Nenhum registro encontrado com os filtros informados.</td></tr>';
+    return;
+  }
+
+  refs.numeroSerieTbody.innerHTML = registros.map((registro) => `
+    <tr>
+      <td class="table-code">${escapeHtml(registro.numero_serie)}</td>
+      <td class="table-description">${escapeHtml(`${registro.modelo_servo_codigo} - ${registro.modelo_servo_descricao}`)}</td>
+      <td>${formatarDataHora(registro.data_montagem)}</td>
+      <td>${escapeHtml(registro.montador_nome || '-')}</td>
+      <td>${escapeHtml(registro.numero_pedido || '-')}</td>
+      <td>${formatarDataHora(registro.data_saida)}</td>
+      <td>
+        <details class="row-menu">
+          <summary class="row-menu-trigger" aria-label="Abrir acoes">...</summary>
+          <div class="row-menu-panel">
+            <button type="button" class="row-menu-item" data-action="edit-serial-model" data-registro-id="${registro.id}">Editar modelo</button>
+          </div>
+        </details>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function filtrarSubmontagensPorTermo(termo) {
+  const filtro = normalizarBusca(termo);
+
+  return submontagensCache
+    .filter((item) => isModeloElegivelNumeroSerie(item))
+    .filter((item) => {
+      if (!filtro) {
+        return true;
+      }
+
+      return normalizarBusca(`${item.codigo} ${item.descricao}`).includes(filtro);
+    })
+    .slice(0, 8);
+}
+
+function isModeloElegivelNumeroSerie(item) {
+  const codigo = String(item?.codigo || '').toUpperCase();
+  const descricao = String(item?.descricao || '').toUpperCase();
+  return ['VF', 'MC', 'AL', 'BR', 'SAF', 'CJ', 'MBF'].some((keyword) => codigo.includes(keyword))
+    && descricao.includes('SERVO');
+}
+
+function renderizarSugestoesNumeroSerieCadastro(termo) {
+  const itens = filtrarSubmontagensPorTermo(termo);
+
+  renderizarPainelAutocomplete(
+    refs.numeroSerieModeloSugestoes,
+    itens,
+    (item) => ({
+      id: item.id,
+      title: `${item.codigo} - ${item.descricao}`,
+      subtitle: `Submontagem | Componentes: ${formatInteger(item.total_componentes || 0)}`
+    }),
+    'Nenhuma submontagem encontrada.'
+  );
+}
+
+function renderizarSugestoesNumeroSerieEdicao(termo) {
+  const itens = filtrarSubmontagensPorTermo(termo);
+
+  renderizarPainelAutocomplete(
+    refs.numeroSerieEditarModeloSugestoes,
+    itens,
+    (item) => ({
+      id: item.id,
+      title: `${item.codigo} - ${item.descricao}`,
+      subtitle: `Submontagem | Componentes: ${formatInteger(item.total_componentes || 0)}`
+    }),
+    'Nenhuma submontagem encontrada.'
+  );
+}
+
+function handleSugestaoNumeroSerieCadastroClick(event) {
+  const option = event.target.closest('button[data-id]');
+  if (!option) {
+    return;
+  }
+
+  const item = submontagensCache.find((entry) => Number(entry.id) === Number(option.dataset.id));
+  if (!item) {
+    return;
+  }
+
+  refs.numeroSerieModeloId.value = String(item.id);
+  refs.numeroSerieModeloBusca.value = `${item.codigo} - ${item.descricao}`;
+  renderizarResumoNumeroSerie(item);
+  esconderSugestoesNumeroSerieCadastro();
+  atualizarDiagnosticoNumeroSerie();
+}
+
+function handleSugestaoNumeroSerieEdicaoClick(event) {
+  const option = event.target.closest('button[data-id]');
+  if (!option) {
+    return;
+  }
+
+  const item = submontagensCache.find((entry) => Number(entry.id) === Number(option.dataset.id));
+  if (!item) {
+    return;
+  }
+
+  refs.numeroSerieEditarModeloId.value = String(item.id);
+  refs.numeroSerieEditarModeloBusca.value = `${item.codigo} - ${item.descricao}`;
+  renderizarResumoNumeroSerieEdicao(item);
+  esconderSugestoesNumeroSerieEdicao();
+}
+
+function renderizarResumoNumeroSerie(item) {
+  if (!item) {
+    refs.numeroSerieResumo.classList.add('selected-tags', 'empty');
+    refs.numeroSerieResumo.textContent = 'Selecione uma submontagem para registrar o lote.';
+    return;
+  }
+
+  refs.numeroSerieResumo.classList.remove('empty');
+  refs.numeroSerieResumo.classList.add('selected-tags');
+  refs.numeroSerieResumo.innerHTML = `
+    <span class="selected-tag">${escapeHtml(item.codigo)}</span>
+    <span class="selected-tag">${escapeHtml(item.descricao)}</span>
+    <span class="selected-tag">${escapeHtml(`Classificacao: ${item.classificacao}`)}</span>
+    <span class="selected-tag">${escapeHtml(`Componentes: ${formatInteger(item.total_componentes || 0)}`)}</span>
+  `;
+}
+
+function renderizarResumoNumeroSerieEdicao(item) {
+  if (!item) {
+    refs.numeroSerieEditarResumo.classList.add('selected-tags', 'empty');
+    refs.numeroSerieEditarResumo.textContent = 'Selecione o novo modelo da submontagem.';
+    return;
+  }
+
+  refs.numeroSerieEditarResumo.classList.remove('empty');
+  refs.numeroSerieEditarResumo.classList.add('selected-tags');
+  refs.numeroSerieEditarResumo.innerHTML = `
+    <span class="selected-tag">${escapeHtml(item.codigo)}</span>
+    <span class="selected-tag">${escapeHtml(item.descricao)}</span>
+    <span class="selected-tag">${escapeHtml(`Classificacao: ${item.classificacao}`)}</span>
+  `;
+}
+
+function esconderSugestoesNumeroSerieCadastro() {
+  refs.numeroSerieModeloSugestoes.classList.add('hidden');
+  refs.numeroSerieModeloSugestoes.innerHTML = '';
+}
+
+function esconderSugestoesNumeroSerieEdicao() {
+  refs.numeroSerieEditarModeloSugestoes.classList.add('hidden');
+  refs.numeroSerieEditarModeloSugestoes.innerHTML = '';
+}
+
+function atualizarFaixaNumeroSerie() {
+  if (!proximoNumeroSeriePreview || !Number.isInteger(Number(proximoNumeroSeriePreview.numero_sequencial))) {
+    refs.numeroSerieFaixa.value = '-';
+    return;
+  }
+
+  const quantidadeInformada = Number.parseInt(refs.numeroSerieQuantidade.value, 10);
+  const quantidade = Number.isInteger(quantidadeInformada) && quantidadeInformada > 0 ? quantidadeInformada : 1;
+  const numeroInicial = Number(proximoNumeroSeriePreview.numero_sequencial);
+  const numeroFinal = numeroInicial + quantidade - 1;
+  const primeiro = formatarNumeroSerieSequencial(numeroInicial);
+  const ultimo = formatarNumeroSerieSequencial(numeroFinal);
+
+  refs.numeroSerieFaixa.value = primeiro === ultimo ? primeiro : `${primeiro} ate ${ultimo}`;
+}
+
+function resetDiagnosticoNumeroSerie() {
+  refs.numeroSerieDiagnosticoTitulo.textContent = 'Selecione uma submontagem';
+  refs.numeroSerieDiagnosticoSubtitulo.textContent = 'O sistema verifica somente o estoque da Montagem para calcular o que pode ser montado agora.';
+  refs.numeroSerieDiagnosticoCapacidadeChip.textContent = 'Capacidade atual: 0';
+  refs.numeroSerieDiagnosticoFaltaChip.textContent = 'Itens faltando: 0';
+  refs.numeroSerieDiagnosticoStatusChip.textContent = 'Status: aguardando selecao';
+  refs.numeroSerieDiagnosticoCapacidadeChipModal.textContent = 'Capacidade atual: 0';
+  refs.numeroSerieDiagnosticoFaltaChipModal.textContent = 'Itens faltando: 0';
+  refs.numeroSerieDiagnosticoStatusChipModal.textContent = 'Status: aguardando selecao';
+  refs.numeroSerieDiagnosticoTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Selecione uma submontagem para visualizar o diagnostico.</td></tr>';
+}
+
+async function atualizarDiagnosticoNumeroSerie() {
+  const modeloId = Number.parseInt(refs.numeroSerieModeloId.value, 10);
+  const quantidadeInformada = Number.parseInt(refs.numeroSerieQuantidade.value, 10);
+  const quantidade = Number.isInteger(quantidadeInformada) && quantidadeInformada > 0 ? quantidadeInformada : 1;
+
+  if (!Number.isInteger(modeloId)) {
+    resetDiagnosticoNumeroSerie();
+    return;
+  }
+
+  const modelo = submontagensCache.find((item) => Number(item.id) === modeloId);
+  refs.numeroSerieDiagnosticoTitulo.textContent = modelo
+    ? `${modelo.codigo} - ${modelo.descricao}`
+    : 'Diagnostico da submontagem';
+  refs.numeroSerieDiagnosticoSubtitulo.textContent = `Quantidade desejada: ${formatInteger(quantidade)} | Consulta somente o estoque da Montagem.`;
+  refs.numeroSerieDiagnosticoCapacidadeChip.textContent = 'Capacidade atual: calculando...';
+  refs.numeroSerieDiagnosticoFaltaChip.textContent = 'Itens faltando: calculando...';
+  refs.numeroSerieDiagnosticoStatusChip.textContent = 'Status: calculando';
+  refs.numeroSerieDiagnosticoCapacidadeChipModal.textContent = 'Capacidade atual: calculando...';
+  refs.numeroSerieDiagnosticoFaltaChipModal.textContent = 'Itens faltando: calculando...';
+  refs.numeroSerieDiagnosticoStatusChipModal.textContent = 'Status: calculando';
+  refs.numeroSerieDiagnosticoTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Calculando diagnostico da montagem...</td></tr>';
+
+  try {
+    const componentes = await carregarEstruturaSubmontagem(modeloId);
+
+    if (!componentes.length) {
+      diagnosticoNumeroSerieAtual = {
+        capacidadeAtual: 0,
+        faltantes: 0,
+        status: 'Status: sem estrutura'
+      };
+      refs.numeroSerieDiagnosticoCapacidadeChip.textContent = 'Capacidade atual: 0';
+      refs.numeroSerieDiagnosticoFaltaChip.textContent = 'Itens faltando: 0';
+      refs.numeroSerieDiagnosticoStatusChip.textContent = 'Status: sem estrutura';
+      refs.numeroSerieDiagnosticoCapacidadeChipModal.textContent = 'Capacidade atual: 0';
+      refs.numeroSerieDiagnosticoFaltaChipModal.textContent = 'Itens faltando: 0';
+      refs.numeroSerieDiagnosticoStatusChipModal.textContent = 'Status: sem estrutura';
+      refs.numeroSerieDiagnosticoTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Esta submontagem nao possui componentes cadastrados.</td></tr>';
+      return;
+    }
+
+    const detalhes = componentes.map((componente) => {
+      const quantidadeEstrutura = Number(componente.quantidade || 0);
+      const quantidadeNecessaria = Number((quantidadeEstrutura * quantidade).toFixed(2));
+      const quantidadeDisponivel = obterSaldoMontagem(componente.id_item_componente);
+      const quantidadeFaltante = Math.max(0, Number((quantidadeNecessaria - quantidadeDisponivel).toFixed(2)));
+      const capacidadeComponente = quantidadeEstrutura > 0
+        ? Math.floor(quantidadeDisponivel / quantidadeEstrutura)
+        : 0;
+
+      return {
+        ...componente,
+        quantidade_estrutura: quantidadeEstrutura,
+        quantidade_necessaria: quantidadeNecessaria,
+        quantidade_disponivel: quantidadeDisponivel,
+        quantidade_faltante: quantidadeFaltante,
+        capacidade_componente: capacidadeComponente,
+        pode_montar: quantidadeFaltante <= 0
+      };
+    });
+
+    const capacidadeAtual = detalhes.reduce((menor, item) => (
+      menor === null ? item.capacidade_componente : Math.min(menor, item.capacidade_componente)
+    ), null);
+    const faltantes = detalhes.filter((item) => item.quantidade_faltante > 0);
+    const podeMontar = faltantes.length === 0;
+    const statusTexto = podeMontar ? 'Status: pode registrar' : 'Status: faltam componentes';
+
+    diagnosticoNumeroSerieAtual = {
+      capacidadeAtual: capacidadeAtual || 0,
+      faltantes: faltantes.length,
+      status: statusTexto,
+      detalhes
+    };
+
+    refs.numeroSerieDiagnosticoCapacidadeChip.textContent = `Capacidade atual: ${formatInteger(capacidadeAtual || 0)}`;
+    refs.numeroSerieDiagnosticoFaltaChip.textContent = `Itens faltando: ${formatInteger(faltantes.length)}`;
+    refs.numeroSerieDiagnosticoStatusChip.textContent = statusTexto;
+    refs.numeroSerieDiagnosticoCapacidadeChipModal.textContent = `Capacidade atual: ${formatInteger(capacidadeAtual || 0)}`;
+    refs.numeroSerieDiagnosticoFaltaChipModal.textContent = `Itens faltando: ${formatInteger(faltantes.length)}`;
+    refs.numeroSerieDiagnosticoStatusChipModal.textContent = statusTexto;
+
+    if (!faltantes.length) {
+      refs.numeroSerieDiagnosticoTbody.innerHTML = `<tr><td colspan="5" class="empty-state">Nenhum item faltando na Montagem para esta quantidade. Capacidade atual: ${formatInteger(capacidadeAtual || 0)}.</td></tr>`;
+      return;
+    }
+
+    refs.numeroSerieDiagnosticoTbody.innerHTML = faltantes.map((item) => `
+      <tr>
+        <td class="table-code">${escapeHtml(item.codigo_componente)}</td>
+        <td class="table-description">${escapeHtml(item.descricao_componente)}</td>
+        <td class="table-quantity">${formatDecimal(item.quantidade_necessaria)}</td>
+        <td class="table-quantity">${formatDecimal(item.quantidade_disponivel)}</td>
+        <td class="table-quantity">${formatDecimal(item.quantidade_faltante)}</td>
+      </tr>
+    `).join('');
+  } catch (error) {
+    diagnosticoNumeroSerieAtual = null;
+    refs.numeroSerieDiagnosticoCapacidadeChip.textContent = 'Capacidade atual: -';
+    refs.numeroSerieDiagnosticoFaltaChip.textContent = 'Itens faltando: -';
+    refs.numeroSerieDiagnosticoStatusChip.textContent = 'Status: erro';
+    refs.numeroSerieDiagnosticoCapacidadeChipModal.textContent = 'Capacidade atual: -';
+    refs.numeroSerieDiagnosticoFaltaChipModal.textContent = 'Itens faltando: -';
+    refs.numeroSerieDiagnosticoStatusChipModal.textContent = 'Status: erro';
+    refs.numeroSerieDiagnosticoTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Nao foi possivel calcular o diagnostico da montagem.</td></tr>';
+  }
+}
+
+function formatarNumeroSerieSequencial(numeroSequencial) {
+  const safeNumber = Number.parseInt(numeroSequencial, 10);
+
+  if (!Number.isInteger(safeNumber) || safeNumber <= 0) {
+    return '-';
+  }
+
+  const prefixIndex = Math.floor((safeNumber - 1) / 100000);
+  const prefix = String.fromCharCode('A'.charCodeAt(0) + prefixIndex);
+  return `${prefix}-${safeNumber}`;
+}
+
+async function handleRegistrarNumerosSerie(event) {
+  event.preventDefault();
+
+  try {
+    const modeloId = Number.parseInt(refs.numeroSerieModeloId.value, 10);
+    const quantidade = Number.parseInt(refs.numeroSerieQuantidade.value, 10);
+    const montador = refs.numeroSerieMontador.value.trim();
+
+    if (!Number.isInteger(modeloId)) {
+      throw new Error('Selecione uma submontagem valida para o registro.');
+    }
+
+    if (!Number.isInteger(quantidade) || quantidade <= 0) {
+      throw new Error('Informe uma quantidade valida para o registro.');
+    }
+
+    if (!montador) {
+      throw new Error('Informe o nome do montador.');
+    }
+
+    const numeroEsperado = refs.numeroSerieAtual.value;
+    const response = await fetch(`${submontagemSeriaisApiBaseUrl}/lote`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id_modelo_servo: modeloId,
+        quantidade,
+        montador_nome: montador
+      })
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(formatarErroNumeroSerie(result));
+    }
+
+    ultimoMontadorNumeroSerie = montador;
+    const houveConcorrencia = result.primeiro_numero_serie !== numeroEsperado;
+
+    if (houveConcorrencia) {
+      mostrarMensagemNumeroSerie(
+        `Lote registrado com sucesso. Outro operador gravou antes e a faixa confirmada foi de ${result.primeiro_numero_serie} ate ${result.ultimo_numero_serie}.`,
+        'success'
+      );
+    } else {
+      mostrarMensagemNumeroSerie(
+        `Lote registrado com sucesso: ${result.primeiro_numero_serie} ate ${result.ultimo_numero_serie}.`,
+        'success'
+      );
+    }
+
+    refs.numeroSerieModeloId.value = '';
+    refs.numeroSerieModeloBusca.value = '';
+    refs.numeroSerieQuantidade.value = '1';
+    renderizarResumoNumeroSerie(null);
+    resetDiagnosticoNumeroSerie();
+    esconderSugestoesNumeroSerieCadastro();
+
+    await Promise.all([
+      carregarProximoNumeroSerie(),
+      carregarRegistrosNumeroSerie()
+    ]);
+  } catch (error) {
+    await atualizarDiagnosticoNumeroSerie();
+    mostrarMensagemNumeroSerie(error.message, 'error');
+  }
+}
+
+function handleRegistrosNumeroSerieActions(event) {
+  const button = event.target.closest('button[data-action][data-registro-id]');
+  if (!button) {
+    return;
+  }
+
+  if (button.dataset.action === 'edit-serial-model') {
+    abrirModalEditarNumeroSerie(button.dataset.registroId);
+  }
+}
+
+function abrirModalEditarNumeroSerie(registroId) {
+  const registro = registrosNumeroSerieCache.find((item) => Number(item.id) === Number(registroId));
+  if (!registro) {
+    mostrarMensagemNumeroSerie('Nao foi possivel localizar o registro selecionado.', 'error');
+    return;
+  }
+
+  refs.numeroSerieEditarMensagem.className = 'message hidden';
+  refs.numeroSerieEditarMensagem.textContent = '';
+  refs.numeroSerieEditarForm.reset();
+  refs.numeroSerieEditarId.value = String(registro.id);
+  refs.numeroSerieEditarNumero.value = registro.numero_serie;
+  refs.numeroSerieEditarModeloId.value = String(registro.id_modelo_servo);
+  refs.numeroSerieEditarModeloBusca.value = `${registro.modelo_servo_codigo} - ${registro.modelo_servo_descricao}`;
+  renderizarResumoNumeroSerieEdicao({
+    id: registro.id_modelo_servo,
+    codigo: registro.modelo_servo_codigo,
+    descricao: registro.modelo_servo_descricao,
+    classificacao: 'SUBMONTAGEM'
+  });
+  esconderSugestoesNumeroSerieEdicao();
+  openModal(refs.numeroSerieEditarModal);
+}
+
+function fecharModalEditarNumeroSerie() {
+  esconderSugestoesNumeroSerieEdicao();
+  closeModal(refs.numeroSerieEditarModal);
+}
+
+async function handleSalvarEdicaoNumeroSerie(event) {
+  event.preventDefault();
+
+  try {
+    const idRegistro = Number.parseInt(refs.numeroSerieEditarId.value, 10);
+    const idModeloServo = Number.parseInt(refs.numeroSerieEditarModeloId.value, 10);
+
+    if (!Number.isInteger(idRegistro)) {
+      throw new Error('O registro selecionado e invalido.');
+    }
+
+    if (!Number.isInteger(idModeloServo)) {
+      throw new Error('Selecione uma submontagem valida para atualizar o modelo.');
+    }
+
+    const response = await fetch(`${submontagemSeriaisApiBaseUrl}/${idRegistro}/modelo-servo`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id_modelo_servo: idModeloServo })
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.message || 'Nao foi possivel atualizar o modelo do numero de serie.');
+    }
+
+    fecharModalEditarNumeroSerie();
+    await carregarRegistrosNumeroSerie();
+    mostrarMensagemNumeroSerie(`Modelo do numero de serie ${result.numero_serie} atualizado com sucesso.`, 'success');
+  } catch (error) {
+    refs.numeroSerieEditarMensagem.textContent = error.message;
+    refs.numeroSerieEditarMensagem.className = 'message error';
+    refs.numeroSerieEditarMensagem.classList.remove('hidden');
+  }
 }
 
 function resetModalEfetuarMontagem() {
@@ -2034,6 +2683,9 @@ function handleModalBackdrop(event) {
   if (event.target.dataset.closeModal === 'montagem-consumir-producao') fecharModalConsumirProducao();
   if (event.target.dataset.closeModal === 'montagem-solicitacao') fecharModalSolicitacao();
   if (event.target.dataset.closeModal === 'montagem-efetuar') fecharModalEfetuarMontagem();
+  if (event.target.dataset.closeModal === 'montagem-numeros-serie') fecharModalNumerosSerie();
+  if (event.target.dataset.closeModal === 'montagem-numero-serie-diagnostico') fecharModalDiagnosticoNumeroSerie();
+  if (event.target.dataset.closeModal === 'montagem-numero-serie-editar') fecharModalEditarNumeroSerie();
   if (event.target.dataset.closeModal === 'montagem-simulacao') fecharModalSimulacao();
   if (event.target.dataset.closeModal === 'montagem-atendimento') fecharModalAtendimento();
   if (event.target.dataset.closeModal === 'montagem-status-solicitacao') fecharModalStatusSolicitacao();
@@ -2049,6 +2701,8 @@ function handleKeyboardShortcuts(event) {
   esconderSugestoes();
   esconderSugestoesSolicitacao();
   esconderSugestoesEfetuarMontagem();
+  esconderSugestoesNumeroSerieCadastro();
+  esconderSugestoesNumeroSerieEdicao();
   esconderSugestoesSubmontagem();
 
   if (!refs.solicitacaoProducaoModal.classList.contains('hidden')) {
@@ -2093,6 +2747,21 @@ function handleKeyboardShortcuts(event) {
 
   if (!refs.efetuarModal.classList.contains('hidden')) {
     fecharModalEfetuarMontagem();
+    return;
+  }
+
+  if (!refs.numeroSerieEditarModal.classList.contains('hidden')) {
+    fecharModalEditarNumeroSerie();
+    return;
+  }
+
+  if (!refs.numeroSerieDiagnosticoModal.classList.contains('hidden')) {
+    fecharModalDiagnosticoNumeroSerie();
+    return;
+  }
+
+  if (!refs.numeroSerieModal.classList.contains('hidden')) {
+    fecharModalNumerosSerie();
     return;
   }
 
@@ -2141,6 +2810,9 @@ function closeModal(modal) {
     refs.consumirProducaoModal,
     refs.solicitacaoModal,
     refs.efetuarModal,
+    refs.numeroSerieModal,
+    refs.numeroSerieDiagnosticoModal,
+    refs.numeroSerieEditarModal,
     refs.simulacaoModal,
     refs.atendimentoModal,
     refs.statusSolicitacaoModal,
@@ -2205,6 +2877,28 @@ function mostrarMensagemTransferencia(texto, tipo) {
   refs.transferenciaMensagem.textContent = texto;
   refs.transferenciaMensagem.className = `message ${tipo}`;
   refs.transferenciaMensagem.classList.remove('hidden');
+}
+
+function mostrarMensagemNumeroSerie(texto, tipo) {
+  refs.numeroSerieMensagem.textContent = texto;
+  refs.numeroSerieMensagem.className = `message ${tipo}`;
+  refs.numeroSerieMensagem.classList.remove('hidden');
+}
+
+function formatarErroNumeroSerie(result) {
+  if (!result || typeof result !== 'object') {
+    return 'Nao foi possivel registrar os numeros de serie.';
+  }
+
+  if (result.details?.tipo !== 'FALTA_COMPONENTE_SUBMONTAGEM' || !Array.isArray(result.details.faltantes)) {
+    return result.message || 'Nao foi possivel registrar os numeros de serie.';
+  }
+
+  const faltantesTexto = result.details.faltantes
+    .map((item) => `${item.codigo}: precisa ${formatDecimal(item.quantidade_necessaria)}, disponivel ${formatDecimal(item.quantidade_disponivel)}, falta ${formatDecimal(item.quantidade_faltante)}`)
+    .join(' | ');
+
+  return `${result.message || 'Nao foi possivel registrar os numeros de serie.'} ${faltantesTexto}`;
 }
 
 function normalizarBusca(value) {

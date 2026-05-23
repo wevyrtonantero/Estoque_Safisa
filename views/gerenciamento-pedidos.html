@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="/img/icon-safisa.ico" type="image/x-icon">
+  <title>SAFISA | Gerenciamento de Pedidos</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <main class="workspace">
+    <header class="topbar">
+      <div class="topbar-copy">
+        <p class="page-kicker">Expedicao</p>
+        <h1 class="page-title">Gerenciamento de Pedidos</h1>
+        <p class="page-subtitle">Crie pedidos, selecione o que sai hoje, acompanhe a montagem e consulte o historico completo da expedicao.</p>
+      </div>
+
+      <div class="topbar-actions">
+        <a class="btn btn-neutral" href="/pagina-expedicao"><span class="btn-label">Voltar para Expedicao</span></a>
+      </div>
+    </header>
+
+    <section class="summary-row">
+      <article class="summary-card">
+        <span>Pedidos ativos</span>
+        <strong id="pedidos-card-ativos">0</strong>
+      </article>
+
+      <article class="summary-card">
+        <span>Aguardando NF</span>
+        <strong id="pedidos-card-nf">0</strong>
+      </article>
+
+      <article class="summary-card">
+        <span>Aguardando transportadora</span>
+        <strong id="pedidos-card-transportadora">0</strong>
+      </article>
+
+      <article class="summary-card">
+        <span>Sai hoje</span>
+        <strong id="pedidos-card-hoje">0</strong>
+      </article>
+
+      <article class="summary-card">
+        <span>Seriais disponiveis</span>
+        <strong id="pedidos-card-seriais">0</strong>
+      </article>
+    </section>
+
+    <div id="pedidos-mensagem" class="message hidden"></div>
+
+    <section class="sector-shell">
+      <aside class="sector-menu">
+        <details class="sector-menu-card">
+          <summary class="sector-menu-summary">
+            <div class="sector-menu-heading">
+              <span class="section-pill">Pedidos</span>
+              <strong>Menu</strong>
+            </div>
+            <span class="sector-menu-trigger" aria-hidden="true">...</span>
+          </summary>
+
+          <div class="sector-menu-panel">
+            <div class="sector-menu-panel-head">
+              <span class="section-pill">Pedidos</span>
+              <strong>Apoio da expedicao</strong>
+              <small>Cadastro, historico e relatorios operacionais.</small>
+            </div>
+
+            <div class="sector-menu-list">
+              <button id="pedidos-btn-novo" class="btn btn-primary" type="button"><span class="btn-label">Novo pedido</span></button>
+              <button id="pedidos-btn-atualizar" class="btn btn-neutral" type="button"><span class="btn-label">Atualizar</span></button>
+              <button id="pedidos-btn-historico" class="btn btn-neutral" type="button"><span class="btn-label">Historico de Pedidos</span></button>
+              <button id="pedidos-btn-relatorio-dia" class="btn btn-secondary" type="button"><span class="btn-label">Relatorio do Dia</span></button>
+              <button id="pedidos-btn-relatorio-geral" class="btn btn-secondary" type="button"><span class="btn-label">Relatorio Geral</span></button>
+            </div>
+          </div>
+        </details>
+      </aside>
+
+      <div class="sector-content">
+        <section class="content-card">
+          <div class="card-top">
+            <div>
+              <span class="section-pill">Operacao do Dia</span>
+              <h2>Separacao e despacho</h2>
+              <p id="pedidos-ativos-total">0 pedido(s) ativo(s)</p>
+            </div>
+          </div>
+
+          <form class="toolbar-form">
+            <div class="field">
+              <label for="pedidos-filtro-busca">Buscar</label>
+              <input id="pedidos-filtro-busca" type="text" placeholder="Cliente, pedido, cidade, vendedora">
+            </div>
+          </form>
+
+          <div id="pedidos-board" class="pedido-board">
+            <section class="pedido-lane pedido-lane-today">
+              <div class="pedido-lane-header">
+                <div>
+                  <span class="section-pill">Sai hoje</span>
+                  <h3>Pedidos para sair hoje</h3>
+                  <p id="pedidos-hoje-total">0 pedido(s)</p>
+                </div>
+              </div>
+
+              <div id="pedidos-hoje-lista" class="pedido-prioridade-lista pedido-prioridade-lista-compact"></div>
+            </section>
+
+            <section class="pedido-lane">
+              <div class="pedido-lane-header">
+                <div>
+                  <span class="section-pill">Base</span>
+                  <h3>Pedidos a serem montados</h3>
+                  <p id="pedidos-base-total">0 pedido(s)</p>
+                </div>
+              </div>
+
+              <div id="pedidos-prioridade-lista" class="pedido-prioridade-lista pedido-prioridade-lista-compact"></div>
+            </section>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <div id="pedido-criacao-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="pedido-criacao"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Expedicao</span>
+          <h2 id="pedido-criacao-titulo">Novo pedido</h2>
+          <p id="pedido-criacao-subtitulo">Cadastre o pedido e monte a lista de itens que vai acompanhar a expedicao.</p>
+        </div>
+
+        <button id="btn-fechar-modal-pedido-criacao" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="pedido-criacao-mensagem" class="message hidden"></div>
+
+      <form id="pedido-criacao-form" class="form-grid">
+        <input id="pedido-id" type="hidden">
+
+        <div class="field span-3">
+          <label for="pedido-codigo">Numero do pedido</label>
+          <input id="pedido-codigo" type="text" maxlength="20" required>
+        </div>
+
+        <div class="field span-6">
+          <label for="pedido-cliente">Cliente</label>
+          <input id="pedido-cliente" type="text" list="pedido-clientes-lista" maxlength="160" required>
+        </div>
+
+        <div class="field span-3">
+          <label for="pedido-cidade">Cidade</label>
+          <input id="pedido-cidade" type="text" maxlength="120" required>
+        </div>
+
+        <div class="field span-3">
+          <label for="pedido-data">Data</label>
+          <input id="pedido-data" type="date" required>
+        </div>
+
+        <div class="field span-4">
+          <label for="pedido-vendedora">Vendedora</label>
+          <input id="pedido-vendedora" type="text" maxlength="120">
+        </div>
+
+        <div class="field span-4">
+          <label for="pedido-transportadora">Transportadora</label>
+          <input id="pedido-transportadora" type="text" list="pedido-transportadoras-lista" maxlength="160">
+        </div>
+
+        <div class="field span-4">
+          <label for="pedido-possui-nf">Com nota fiscal</label>
+          <select id="pedido-possui-nf">
+            <option value="sim">Sim</option>
+            <option value="nao">Nao</option>
+          </select>
+        </div>
+
+        <div class="field span-12">
+          <label for="pedido-observacao">Observacao do pedido</label>
+          <input id="pedido-observacao" type="text" maxlength="500" placeholder="Opcional">
+        </div>
+
+        <div class="span-12 embedded-section">
+          <div class="section-header-inline">
+            <div>
+              <p class="page-kicker">Itens</p>
+              <h3>Pecas que acompanham o pedido</h3>
+            </div>
+            <p id="pedido-itens-total">0 item(ns)</p>
+          </div>
+
+          <div class="toolbar-form">
+            <div class="field">
+              <label for="pedido-item-busca">Codigo ou descricao</label>
+              <div class="autocomplete">
+                <input id="pedido-item-busca" type="text" placeholder="Digite para buscar a peca">
+                <div id="pedido-item-sugestoes" class="autocomplete-panel hidden"></div>
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="pedido-item-quantidade">Quantidade</label>
+              <input id="pedido-item-quantidade" type="number" min="1" step="1" value="1">
+            </div>
+
+            <div class="field">
+              <label>&nbsp;</label>
+              <button id="pedido-btn-adicionar-item" class="btn btn-secondary" type="button">Adicionar item</button>
+            </div>
+          </div>
+
+          <div id="pedido-item-resumo" class="selected-tags empty">Selecione uma peca para adicionar ao pedido.</div>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Codigo</th>
+                  <th>Descricao</th>
+                  <th>Quantidade</th>
+                  <th>Tipo</th>
+                  <th>Acoes</th>
+                </tr>
+              </thead>
+              <tbody id="pedido-itens-tbody">
+                <tr>
+                  <td colspan="5" class="empty-state">Nenhum item adicionado ao pedido.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button id="btn-cancelar-modal-pedido-criacao" class="btn btn-neutral" type="button">Cancelar</button>
+          <button id="pedido-criacao-submit" class="btn btn-primary" type="submit">Criar pedido</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="pedido-detalhe-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="pedido-detalhe"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Pedido</span>
+          <h2 id="pedido-detalhe-titulo">Pedido</h2>
+          <p id="pedido-detalhe-subtitulo">Acompanhe a montagem, a separacao e os numeros de serie vinculados.</p>
+        </div>
+
+        <div class="topbar-actions">
+          <button id="pedido-btn-editar" class="btn btn-secondary btn-small" type="button">Editar pedido</button>
+          <button id="pedido-btn-marcar-coletado" class="btn btn-success btn-small" type="button">Pedido coletado</button>
+          <button id="btn-fechar-modal-pedido-detalhe" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+        </div>
+      </div>
+
+      <div id="pedido-detalhe-mensagem" class="message hidden"></div>
+
+      <div class="selected-tags" id="pedido-detalhe-resumo"></div>
+
+      <div class="toolbar-form">
+        <div class="field">
+          <label for="pedido-detalhe-nf">Numero da nota fiscal</label>
+          <input id="pedido-detalhe-nf" type="text" maxlength="80" placeholder="Ex.: 123456">
+        </div>
+
+        <div class="field">
+          <label for="pedido-detalhe-peso-total">Peso total (kg)</label>
+          <input id="pedido-detalhe-peso-total" type="number" min="0" step="0.001" placeholder="Calculado automaticamente">
+        </div>
+
+        <div class="field">
+          <label for="pedido-detalhe-volumes">Volumes</label>
+          <input id="pedido-detalhe-volumes" type="number" min="0" step="1" placeholder="Qtde de caixas">
+        </div>
+
+        <div class="field">
+          <label>&nbsp;</label>
+          <button id="pedido-btn-salvar-dados-finais" class="btn btn-neutral" type="button">Salvar dados finais</button>
+        </div>
+      </div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Codigo</th>
+              <th>Descricao</th>
+              <th>Quantidade</th>
+              <th>Massa</th>
+              <th>Acoes</th>
+            </tr>
+          </thead>
+          <tbody id="pedido-detalhe-itens-tbody">
+            <tr>
+              <td colspan="5" class="empty-state">Selecione um pedido.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="pedido-seriais-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="pedido-seriais"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Numeros de Serie</span>
+          <h2 id="pedido-seriais-titulo">Numeros disponiveis</h2>
+          <p id="pedido-seriais-subtitulo">Selecione os numeros disponiveis na Expedicao para vincular ao pedido.</p>
+        </div>
+
+        <button id="btn-fechar-modal-pedido-seriais" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="pedido-seriais-mensagem" class="message hidden"></div>
+
+      <div class="selected-tags" id="pedido-seriais-resumo"></div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Selecionar</th>
+              <th>Numero de serie</th>
+              <th>Modelo</th>
+              <th>Montagem</th>
+            </tr>
+          </thead>
+          <tbody id="pedido-seriais-tbody">
+            <tr>
+              <td colspan="4" class="empty-state">Carregando numeros de serie...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="modal-actions">
+        <button id="btn-cancelar-modal-pedido-seriais" class="btn btn-neutral" type="button">Cancelar</button>
+        <button id="pedido-btn-vincular-seriais" class="btn btn-primary" type="button">Vincular selecionados</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="pedido-faltas-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="pedido-faltas"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Pendencias</span>
+          <h2 id="pedido-faltas-titulo">O que falta para este pedido</h2>
+          <p id="pedido-faltas-subtitulo">Lista do que ainda falta para o pedido ficar pronto.</p>
+        </div>
+
+        <button id="btn-fechar-modal-pedido-faltas" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Codigo</th>
+              <th>Descricao</th>
+              <th>Tipo</th>
+              <th>Disponivel</th>
+              <th>Falta</th>
+              <th>Detalhe</th>
+            </tr>
+          </thead>
+          <tbody id="pedido-faltas-tbody">
+            <tr>
+              <td colspan="6" class="empty-state">Nenhuma pendencia carregada.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="pedido-historico-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="pedido-historico"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Historico</span>
+          <h2>Pedidos que ja sairam</h2>
+          <p id="pedidos-historico-total">0 registro(s)</p>
+        </div>
+
+        <button id="btn-fechar-modal-pedido-historico" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Pedido</th>
+              <th>Cliente</th>
+              <th>Cidade</th>
+              <th>Status</th>
+              <th>Data</th>
+              <th>Transportadora</th>
+              <th>Massa</th>
+              <th>Acoes</th>
+            </tr>
+          </thead>
+          <tbody id="pedidos-historico-tbody">
+            <tr>
+              <td colspan="8" class="empty-state">Carregando pedidos...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="pedido-relatorio-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="pedido-relatorio"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Relatorio</span>
+          <h2 id="pedido-relatorio-titulo">Relatorio operacional</h2>
+          <p id="pedido-relatorio-subtitulo">Veja o que precisa montar e separar.</p>
+        </div>
+
+        <div class="topbar-actions">
+          <button id="pedido-btn-imprimir-relatorio" class="btn btn-secondary btn-small" type="button">Imprimir</button>
+          <button id="btn-fechar-modal-pedido-relatorio" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+        </div>
+      </div>
+
+      <div id="pedido-relatorio-resumo" class="selected-tags"></div>
+
+      <div class="content-card compact">
+        <div class="card-top">
+          <div>
+            <span class="section-pill">Montagem</span>
+            <h3>Servos para montar / vincular</h3>
+          </div>
+        </div>
+
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Codigo</th>
+                <th>Descricao</th>
+                <th>Quantidade</th>
+                <th>Clientes</th>
+              </tr>
+            </thead>
+            <tbody id="pedido-relatorio-montagem-tbody">
+              <tr>
+                <td colspan="4" class="empty-state">Nenhum servo pendente.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="content-card compact">
+        <div class="card-top">
+          <div>
+            <span class="section-pill">Kits</span>
+            <h3>Kits para separar</h3>
+          </div>
+        </div>
+
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Codigo</th>
+                <th>Descricao</th>
+                <th>Quantidade</th>
+                <th>Clientes</th>
+              </tr>
+            </thead>
+            <tbody id="pedido-relatorio-kits-tbody">
+              <tr>
+                <td colspan="4" class="empty-state">Nenhum kit pendente.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="content-card compact">
+        <div class="card-top">
+          <div>
+            <span class="section-pill">Itens</span>
+            <h3>Itens para separar</h3>
+          </div>
+        </div>
+
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Codigo</th>
+                <th>Descricao</th>
+                <th>Quantidade</th>
+                <th>Clientes</th>
+              </tr>
+            </thead>
+            <tbody id="pedido-relatorio-itens-tbody">
+              <tr>
+                <td colspan="4" class="empty-state">Nenhum item pendente.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <datalist id="pedido-clientes-lista"></datalist>
+  <datalist id="pedido-transportadoras-lista">
+    <option value="Rodonaves"></option>
+    <option value="Braspress"></option>
+    <option value="Itinerante"></option>
+    <option value="Sedex"></option>
+    <option value="Retira"></option>
+    <option value="Safisa"></option>
+  </datalist>
+
+  <script src="/js/gerenciamento-pedidos.js"></script>
+  <script src="/js/session-indicator.js"></script>
+</body>
+</html>

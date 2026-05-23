@@ -599,7 +599,7 @@ class EstoqueModel {
       throw this.createBusinessError(`A submontagem ${submontagem.codigo} nao possui componentes cadastrados.`);
     }
 
-    const consumos = [];
+    const faltantes = [];
 
     for (const componente of componentes) {
       const quantidadeConsumida = Number(
@@ -609,10 +609,40 @@ class EstoqueModel {
       const quantidadeOrigem = saldoOrigem ? Number(saldoOrigem.quantidade) : 0;
 
       if (quantidadeConsumida > quantidadeOrigem) {
-        throw this.createBusinessError(
-          `Saldo insuficiente em ${componente.codigo} para montar a submontagem ${submontagem.codigo}.`
-        );
+        faltantes.push({
+          id_peca: componente.id_item_componente,
+          codigo: componente.codigo,
+          descricao: componente.descricao,
+          quantidade_necessaria: quantidadeConsumida,
+          quantidade_disponivel: quantidadeOrigem,
+          quantidade_faltante: Number((quantidadeConsumida - quantidadeOrigem).toFixed(2))
+        });
       }
+    }
+
+    if (faltantes.length > 0) {
+      throw this.createBusinessError(
+        `Nao ha componentes suficientes na Montagem para montar a submontagem ${submontagem.codigo}.`,
+        {
+          tipo: 'FALTA_COMPONENTE_SUBMONTAGEM',
+          submontagem: {
+            id: submontagem.id,
+            codigo: submontagem.codigo,
+            descricao: submontagem.descricao
+          },
+          faltantes
+        }
+      );
+    }
+
+    const consumos = [];
+
+    for (const componente of componentes) {
+      const quantidadeConsumida = Number(
+        (Number(componente.quantidade) * Number(quantidadeBase)).toFixed(2)
+      );
+      const saldoOrigem = await this.findSaldoForUpdate(connection, idEstoqueOrigem, componente.id_item_componente);
+      const quantidadeOrigem = saldoOrigem ? Number(saldoOrigem.quantidade) : 0;
 
       const novoSaldoOrigem = Number((quantidadeOrigem - quantidadeConsumida).toFixed(2));
 
