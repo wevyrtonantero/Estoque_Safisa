@@ -85,6 +85,14 @@ app.use(express.static(path.join(__dirname, 'public'), {
     Object.entries(NO_CACHE_HEADERS).forEach(([key, value]) => res.set(key, value));
   }
 }));
+app.use('/kits', express.static(path.join(__dirname, 'kits'), {
+  etag: false,
+  lastModified: false,
+  maxAge: 0,
+  setHeaders(res) {
+    Object.entries(NO_CACHE_HEADERS).forEach(([key, value]) => res.set(key, value));
+  }
+}));
 app.use(attachAuthContext);
 
 // Rotas HTML das paginas do sistema.
@@ -117,10 +125,6 @@ app.get('/pagina-operacao', requirePageRoles(OPERATION_READ_ROLES), (req, res) =
 
 app.get('/pagina-adm', requirePageRoles(ADMIN_READ_ROLES), (req, res) => {
   sendView(res, 'portal-adm.html');
-});
-
-app.get('/pagina-etiquetas', requirePageRoles(ADMIN_READ_ROLES), (req, res) => {
-  sendView(res, 'etiquetas.html');
 });
 
 app.get('/pagina-pecas', requirePageRoles(ADMIN_READ_ROLES), (req, res) => {
@@ -243,7 +247,6 @@ app.use('/api', auditLogRoutes);
 app.use('/api', composicaoVendaRoutes);
 app.use('/api', submontagemSerialRoutes);
 app.use('/api', pedidoExpedicaoRoutes);
-
 // Resposta padrao para qualquer rota nao mapeada.
 app.use((req, res) => {
   res.status(404).json({ message: 'Rota nao encontrada.' });

@@ -2,6 +2,7 @@ const pedidosApiBaseUrl = '/api/pedidos-expedicao';
 const estoqueItensApiBaseUrl = '/api/estoque/itens';
 const submontagemSeriaisApiBaseUrl = '/api/submontagem-seriais';
 const AUTO_REFRESH_MS = 15000;
+const KIT_IMAGE_EXTENSIONS = ['.jpg', '.png', '.jpeg', '.webp'];
 
 let itensCache = [];
 let clientesCache = [];
@@ -58,6 +59,7 @@ const refs = {
   detalheMensagem: document.getElementById('pedido-detalhe-mensagem'),
   detalheTitulo: document.getElementById('pedido-detalhe-titulo'),
   detalheSubtitulo: document.getElementById('pedido-detalhe-subtitulo'),
+  detalheObservacao: document.getElementById('pedido-detalhe-observacao'),
   detalheResumo: document.getElementById('pedido-detalhe-resumo'),
   detalheItensTbody: document.getElementById('pedido-detalhe-itens-tbody'),
   detalheNf: document.getElementById('pedido-detalhe-nf'),
@@ -92,7 +94,12 @@ const refs = {
   relatorioImprimir: document.getElementById('pedido-btn-imprimir-relatorio'),
   relatorioMontagemTbody: document.getElementById('pedido-relatorio-montagem-tbody'),
   relatorioKitsTbody: document.getElementById('pedido-relatorio-kits-tbody'),
-  relatorioItensTbody: document.getElementById('pedido-relatorio-itens-tbody')
+  relatorioItensTbody: document.getElementById('pedido-relatorio-itens-tbody'),
+
+  kitImagemModal: document.getElementById('pedido-kit-imagem-modal'),
+  kitImagemTitulo: document.getElementById('pedido-kit-imagem-titulo'),
+  kitImagemSubtitulo: document.getElementById('pedido-kit-imagem-subtitulo'),
+  kitImagemPreview: document.getElementById('pedido-kit-imagem-preview')
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -158,6 +165,8 @@ function bindEvents() {
   document.getElementById('btn-fechar-modal-pedido-faltas').addEventListener('click', fecharModalFaltas);
   document.getElementById('btn-fechar-modal-pedido-historico').addEventListener('click', fecharModalHistoricoPedidos);
   document.getElementById('btn-fechar-modal-pedido-relatorio').addEventListener('click', fecharModalRelatorio);
+  document.getElementById('btn-fechar-modal-pedido-kit-imagem').addEventListener('click', fecharModalKitImagem);
+  document.getElementById('btn-fechar-modal-pedido-kit-imagem-rodape').addEventListener('click', fecharModalKitImagem);
   refs.relatorioImprimir.addEventListener('click', imprimirRelatorioAtual);
 
   document.addEventListener('click', (event) => {
@@ -314,6 +323,22 @@ function renderizarCardPedido(pedido, options = {}) {
   const acaoProgramacao = lane === 'hoje'
     ? { action: 'tirar-de-hoje', label: 'Voltar' }
     : { action: 'colocar-hoje', label: 'Hoje' };
+  const observacao = String(pedido.observacao || '').trim();
+  const alertaObservacao = observacao
+    ? `
+      <button
+        class="btn btn-small"
+        type="button"
+        data-action="ver-observacao"
+        data-id="${pedido.id}"
+        title="${escapeHtml(observacao)}"
+        aria-label="Ver observacao do pedido"
+        style="min-width:30px;padding:0 10px;background:#f5b942;border-color:#e2a51c;color:#5b3a00;font-weight:900;"
+      >
+        !
+      </button>
+    `
+    : '';
 
   return `
     <article
@@ -346,6 +371,7 @@ function renderizarCardPedido(pedido, options = {}) {
           <button class="btn btn-neutral btn-small" type="button" data-action="abrir-pedido" data-id="${pedido.id}">Ver</button>
           <button class="btn btn-primary btn-small" type="button" data-action="${acaoProgramacao.action}" data-id="${pedido.id}">${acaoProgramacao.label}</button>
           <button class="btn btn-secondary btn-small" type="button" data-action="ver-faltas" data-id="${pedido.id}">${formatInteger(faltas)}</button>
+          ${alertaObservacao}
         </div>
       </div>
     </article>
@@ -380,6 +406,14 @@ function handleListaPedidosActions(event) {
 
   if (actionElement.dataset.action === 'ver-faltas') {
     abrirModalFaltasPedido(pedidoId);
+    return;
+  }
+
+  if (actionElement.dataset.action === 'ver-observacao') {
+    const pedido = pedidosCache.find((item) => item.id === pedidoId);
+    if (pedido && String(pedido.observacao || '').trim()) {
+      mostrarMensagem(`Observacao de ${pedido.cliente_nome}: ${pedido.observacao}`, 'warning');
+    }
     return;
   }
 
@@ -938,6 +972,21 @@ async function abrirDetalhePedido(pedidoId) {
   refs.detalheMensagem.textContent = '';
   refs.detalheTitulo.textContent = `${pedido.codigo_pedido} - ${pedido.cliente_nome}`;
   refs.detalheSubtitulo.textContent = `${pedido.cidade || '-'} | ${pedido.transportadora || '-'} | ${formatarDataCurta(pedido.data_pedido)}`;
+  if (String(pedido.observacao || '').trim()) {
+    refs.detalheObservacao.textContent = `Observacao: ${pedido.observacao}`;
+    refs.detalheObservacao.style.color = '#b42318';
+    refs.detalheObservacao.style.fontWeight = '800';
+    refs.detalheObservacao.style.background = 'rgba(255, 232, 232, 0.92)';
+    refs.detalheObservacao.style.display = 'inline-block';
+    refs.detalheObservacao.style.padding = '6px 10px';
+    refs.detalheObservacao.style.borderRadius = '10px';
+    refs.detalheObservacao.style.marginTop = '8px';
+    refs.detalheObservacao.classList.remove('hidden');
+  } else {
+    refs.detalheObservacao.textContent = '';
+    refs.detalheObservacao.removeAttribute('style');
+    refs.detalheObservacao.classList.add('hidden');
+  }
   refs.detalheNf.value = pedido.numero_nota_fiscal || '';
   refs.detalhePesoTotal.value = formatDecimalInput(
     pedido.peso_total_override_kg ?? pedido.massa_total_calculada_kg ?? pedido.massa_total_kg ?? 0,
@@ -972,6 +1021,26 @@ function renderizarItensPedidoDetalhe(pedido) {
     refs.detalheItensTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhum item no pedido.</td></tr>';
     return;
   }
+
+  const renderizarCodigoItem = (item) => {
+    const kitImageUrl = obterKitImageUrl(item.codigo);
+    if (!kitImageUrl) {
+      return escapeHtml(item.codigo);
+    }
+
+    return `
+      <button
+        class="pedido-kit-link"
+        type="button"
+        data-action="abrir-kit-imagem"
+        data-codigo="${escapeHtml(item.codigo)}"
+        data-imagem-url="${escapeHtml(kitImageUrl)}"
+        style="padding:0;border:0;background:none;color:#14528b;font:inherit;font-weight:800;text-decoration:underline;cursor:pointer;"
+      >
+        ${escapeHtml(item.codigo)}
+      </button>
+    `;
+  };
 
   refs.detalheItensTbody.innerHTML = pedido.itens.map((item) => {
     const vinculos = item.seriais_vinculados || [];
@@ -1022,7 +1091,7 @@ function renderizarItensPedidoDetalhe(pedido) {
 
     return `
       <tr class="${item.concluido ? 'pedido-item-row-complete' : ''}">
-        <td class="table-code">${escapeHtml(item.codigo)}</td>
+        <td class="table-code">${renderizarCodigoItem(item)}</td>
         <td>
           <div class="pedido-item-cell">
             <strong>${escapeHtml(item.descricao)}</strong>
@@ -1043,6 +1112,12 @@ function renderizarItensPedidoDetalhe(pedido) {
 }
 
 async function handleDetalheItemActions(event) {
+  const kitButton = event.target.closest('[data-action="abrir-kit-imagem"][data-codigo][data-imagem-url]');
+  if (kitButton) {
+    abrirModalKitImagem(kitButton.dataset.codigo, kitButton.dataset.imagemUrl);
+    return;
+  }
+
   const serialButton = event.target.closest('[data-action="abrir-seriais"][data-item-id]');
   if (serialButton) {
     await abrirModalSeriaisPedido(Number(serialButton.dataset.itemId));
@@ -1351,6 +1426,20 @@ function fecharModalFaltas() {
   closeModal(refs.faltasModal);
 }
 
+function abrirModalKitImagem(codigo, imageUrl) {
+  refs.kitImagemTitulo.textContent = `${codigo} - imagem do kit`;
+  refs.kitImagemSubtitulo.textContent = 'Referencia visual do codigo selecionado.';
+  refs.kitImagemPreview.src = imageUrl;
+  refs.kitImagemPreview.alt = `Imagem do kit ${codigo}`;
+  openModal(refs.kitImagemModal);
+}
+
+function fecharModalKitImagem() {
+  refs.kitImagemPreview.src = '';
+  refs.kitImagemPreview.alt = 'Imagem do kit';
+  closeModal(refs.kitImagemModal);
+}
+
 function mostrarMensagem(texto, tipo) {
   refs.mensagem.textContent = texto;
   refs.mensagem.className = `message ${tipo}`;
@@ -1379,7 +1468,8 @@ function closeModal(modal) {
     refs.seriaisModal,
     refs.faltasModal,
     refs.historicoModal,
-    refs.relatorioModal
+    refs.relatorioModal,
+    refs.kitImagemModal
   ].some((item) => !item.classList.contains('hidden'));
 
   document.body.classList.toggle('has-modal', algumModalAberto);
@@ -1392,6 +1482,7 @@ function handleModalBackdrop(event) {
   if (event.target.dataset.closeModal === 'pedido-faltas') fecharModalFaltas();
   if (event.target.dataset.closeModal === 'pedido-historico') fecharModalHistoricoPedidos();
   if (event.target.dataset.closeModal === 'pedido-relatorio') fecharModalRelatorio();
+  if (event.target.dataset.closeModal === 'pedido-kit-imagem') fecharModalKitImagem();
 }
 
 function handleKeyboardShortcuts(event) {
@@ -1418,6 +1509,11 @@ function handleKeyboardShortcuts(event) {
 
   if (!refs.relatorioModal.classList.contains('hidden')) {
     fecharModalRelatorio();
+    return;
+  }
+
+  if (!refs.kitImagemModal.classList.contains('hidden')) {
+    fecharModalKitImagem();
     return;
   }
 
@@ -1496,6 +1592,23 @@ function isNumeroSerieModel(item) {
 
   return ['VF', 'MC', 'AL', 'BR', 'SAF', 'CJ', 'MBF'].some((keyword) => codigo.includes(keyword))
     && descricao.includes('SERVO');
+}
+
+function obterKitImageUrl(codigo) {
+  const normalized = String(codigo || '').trim().toUpperCase();
+  if (!normalized) {
+    return '';
+  }
+
+  if (normalized === 'VF-040') {
+    return '/kits/vf-040.png';
+  }
+
+  if (!/^[0-9]+[A-Z]+$/.test(normalized)) {
+    return '';
+  }
+
+  return `/kits/${normalized}.jpg`;
 }
 
 async function fetchJson(url, options = {}) {
