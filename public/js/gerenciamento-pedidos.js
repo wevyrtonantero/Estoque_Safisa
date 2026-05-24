@@ -3,6 +3,8 @@ const estoqueItensApiBaseUrl = '/api/estoque/itens';
 const submontagemSeriaisApiBaseUrl = '/api/submontagem-seriais';
 const AUTO_REFRESH_MS = 15000;
 const KIT_IMAGE_EXTENSIONS = ['.jpg', '.png', '.jpeg', '.webp'];
+const PRINT_HISTORY_ENDPOINT = `${pedidosApiBaseUrl}/etiquetas/historico-impressao`;
+const DEFAULT_PRINTER_NAME = 'IMPRESSORA PADRAO';
 
 let itensCache = [];
 let clientesCache = [];
@@ -14,6 +16,15 @@ let pedidoSelecionadoId = null;
 let pedidoItemSerialSelecionadoId = null;
 let serialDisponiveisContexto = null;
 let autoRefreshHandle = null;
+let jspmReadyPromise = null;
+let jspmDiagnosticsState = {
+  libraryLoaded: false,
+  statusCode: null,
+  statusLabel: 'Nao iniciado',
+  printers: [],
+  lastError: '',
+  checkedAt: null
+};
 
 const refs = {
   mensagem: document.getElementById('pedidos-mensagem'),
@@ -68,6 +79,15 @@ const refs = {
   detalheEditar: document.getElementById('pedido-btn-editar'),
   detalheSalvarDadosFinais: document.getElementById('pedido-btn-salvar-dados-finais'),
   detalheMarcarColetado: document.getElementById('pedido-btn-marcar-coletado'),
+  detalheImprimirCaixas: document.getElementById('pedido-btn-imprimir-caixas'),
+  detalhePrintDiagnostic: document.getElementById('pedido-print-diagnostico'),
+  detalhePrintDiagnosticLib: document.getElementById('pedido-print-diag-lib'),
+  detalhePrintDiagnosticStatus: document.getElementById('pedido-print-diag-status'),
+  detalhePrintDiagnosticPrintersCount: document.getElementById('pedido-print-diag-printers-count'),
+  detalhePrintDiagnosticCheckedAt: document.getElementById('pedido-print-diag-checked-at'),
+  detalhePrintDiagnosticPrinters: document.getElementById('pedido-print-diag-printers'),
+  detalhePrintDiagnosticError: document.getElementById('pedido-print-diag-error'),
+  detalheAtualizarDiagnostico: document.getElementById('pedido-btn-atualizar-diagnostico'),
 
   seriaisModal: document.getElementById('pedido-seriais-modal'),
   seriaisMensagem: document.getElementById('pedido-seriais-mensagem'),
@@ -105,6 +125,8 @@ const refs = {
 document.addEventListener('DOMContentLoaded', async () => {
   bindEvents();
   registrarSincronizacaoEntreAbas();
+  renderizarDiagnosticoJsPrintManager();
+  inicializarJsPrintManager({ silent: true }).catch(() => {});
 
   try {
     await carregarTudo();
@@ -151,6 +173,15 @@ function bindEvents() {
   document.getElementById('btn-fechar-modal-pedido-detalhe').addEventListener('click', fecharModalDetalhe);
   refs.detalheEditar.addEventListener('click', abrirEdicaoPedidoSelecionado);
   refs.detalheSalvarDadosFinais.addEventListener('click', salvarDadosFinaisPedido);
+  refs.detalheImprimirCaixas.addEventListener('click', imprimirEtiquetasCaixaPedidoSelecionado);
+  refs.detalheAtualizarDiagnostico?.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    atualizarDiagnosticoJsPrintManager({ forceRestart: true })
+      .catch((error) => {
+        console.error('Falha ao atualizar diagnostico do JSPrintManager:', error);
+      });
+  });
   document.getElementById('pedido-btn-marcar-coletado').addEventListener('click', marcarPedidoColetado);
   refs.detalheItensTbody.addEventListener('click', handleDetalheItemActions);
   refs.detalheItensTbody.addEventListener('change', handleDetalheItemChanges);
@@ -203,6 +234,344 @@ function registrarSincronizacaoEntreAbas() {
 
   ['pedidos-expedicao', 'submontagem-seriais', 'estoque'].forEach((topic) => {
     window.SafisaSync.subscribe(topic, agendarRefresh);
+  });
+}
+
+function mapearStatusJsPrintManager(statusCode) {
+  const JSPM = window.JSPM;
+  if (!JSPM?.WSStatus) {
+    return 'Biblioteca indisponivel';
+  }
+
+  if (statusCode === JSPM.WSStatus.Open) {
+    return 'Conectado';
+  }
+
+  if (statusCode === JSPM.WSStatus.Closed) {
+    return 'Fechado';
+  }
+
+  if (statusCode === JSPM.WSStatus.Blocked) {
+    return 'Bloqueado';
+  }
+
+  if (statusCode === JSPM.WSStatus.WaitingForUserResponse) {
+    return 'Aguardando permissao';
+  }
+
+  return statusCode == null ? 'Nao iniciado' : `Status ${String(statusCode)}`;
+}
+
+function renderizarDiagnosticoJsPrintManager() {
+  if (!refs.detalhePrintDiagnosticLib) {
+    return;
+  }
+
+  const printers = Array.isArray(jspmDiagnosticsState.printers) ? jspmDiagnosticsState.printers : [];
+  refs.detalhePrintDiagnosticLib.textContent = jspmDiagnosticsState.libraryLoaded ? 'Carregada' : 'Nao carregada';
+  refs.detalhePrintDiagnosticStatus.textContent = jspmDiagnosticsState.statusLabel || 'Nao iniciado';
+  refs.detalhePrintDiagnosticPrintersCount.textContent = String(printers.length);
+  refs.detalhePrintDiagnosticCheckedAt.textContent = jspmDiagnosticsState.checkedAt
+    ? formatDateTime(jspmDiagnosticsState.checkedAt)
+    : '-';
+  refs.detalhePrintDiagnosticError.textContent = jspmDiagnosticsState.lastError || 'Nenhum erro registrado.';
+
+  if (!printers.length) {
+    refs.detalhePrintDiagnosticPrinters.classList.add('empty');
+    refs.detalhePrintDiagnosticPrinters.innerHTML = 'Nenhuma impressora consultada ainda.';
+    return;
+  }
+
+  refs.detalhePrintDiagnosticPrinters.classList.remove('empty');
+  refs.detalhePrintDiagnosticPrinters.innerHTML = printers
+    .map((printerName) => `<span class="selected-tag">${escapeHtml(printerName)}</span>`)
+    .join('');
+}
+
+async function carregarImpressorasJsPrintManager() {
+  const JSPM = window.JSPM;
+  if (!JSPM?.JSPrintManager?.getPrinters) {
+    return [];
+  }
+
+  try {
+    const printers = await Promise.resolve(JSPM.JSPrintManager.getPrinters());
+    return Array.isArray(printers) ? printers : [];
+  } catch (error) {
+    jspmDiagnosticsState.lastError = error.message || 'Nao foi possivel consultar as impressoras.';
+    return [];
+  }
+}
+
+function vincularStatusJsPrintManager() {
+  const JSPM = window.JSPM;
+  if (!JSPM?.JSPrintManager?.WS) {
+    return;
+  }
+
+  const previousHandler = JSPM.JSPrintManager.WS.onStatusChanged;
+  JSPM.JSPrintManager.WS.onStatusChanged = async () => {
+    if (typeof previousHandler === 'function' && previousHandler !== JSPM.JSPrintManager.WS.onStatusChanged) {
+      try {
+        previousHandler();
+      } catch (error) {
+        console.error('Falha no handler anterior do JSPrintManager:', error);
+      }
+    }
+
+    const statusCode = JSPM.JSPrintManager.websocket_status;
+    jspmDiagnosticsState.libraryLoaded = true;
+    jspmDiagnosticsState.statusCode = statusCode;
+    jspmDiagnosticsState.statusLabel = mapearStatusJsPrintManager(statusCode);
+    jspmDiagnosticsState.checkedAt = new Date().toISOString();
+
+    if (statusCode === JSPM.WSStatus.Open) {
+      jspmDiagnosticsState.lastError = '';
+      jspmDiagnosticsState.printers = await carregarImpressorasJsPrintManager();
+    }
+
+    renderizarDiagnosticoJsPrintManager();
+  };
+}
+
+function inicializarJsPrintManager(options = {}) {
+  const { forceRestart = false, silent = false } = options;
+
+  if (!window.JSPM?.JSPrintManager) {
+    jspmDiagnosticsState = {
+      libraryLoaded: false,
+      statusCode: null,
+      statusLabel: 'Biblioteca nao carregada',
+      printers: [],
+      lastError: 'A biblioteca JSPrintManager.js nao esta disponivel nesta pagina.',
+      checkedAt: new Date().toISOString()
+    };
+    renderizarDiagnosticoJsPrintManager();
+    return Promise.reject(new Error(jspmDiagnosticsState.lastError));
+  }
+
+  const JSPM = window.JSPM;
+  const statusAtual = JSPM.JSPrintManager.websocket_status;
+
+  jspmDiagnosticsState.libraryLoaded = true;
+  jspmDiagnosticsState.statusCode = statusAtual;
+  jspmDiagnosticsState.statusLabel = mapearStatusJsPrintManager(statusAtual);
+  jspmDiagnosticsState.checkedAt = new Date().toISOString();
+
+  if (forceRestart) {
+    jspmReadyPromise = null;
+  }
+
+  if (statusAtual === JSPM.WSStatus.Open && !forceRestart) {
+    jspmDiagnosticsState.lastError = '';
+    renderizarDiagnosticoJsPrintManager();
+    return Promise.resolve();
+  }
+
+  if (jspmReadyPromise) {
+    return jspmReadyPromise;
+  }
+
+  JSPM.JSPrintManager.auto_reconnect = true;
+  vincularStatusJsPrintManager();
+
+  jspmReadyPromise = new Promise((resolve, reject) => {
+    let finalizado = false;
+
+    const concluir = (callback) => {
+      if (finalizado) {
+        return;
+      }
+
+      finalizado = true;
+      callback();
+    };
+
+    const resolverStatus = () => {
+      const status = JSPM.JSPrintManager.websocket_status;
+      jspmDiagnosticsState.libraryLoaded = true;
+      jspmDiagnosticsState.statusCode = status;
+      jspmDiagnosticsState.statusLabel = mapearStatusJsPrintManager(status);
+      jspmDiagnosticsState.checkedAt = new Date().toISOString();
+
+      if (status === JSPM.WSStatus.Open) {
+        concluir(async () => {
+          jspmDiagnosticsState.lastError = '';
+          jspmDiagnosticsState.printers = await carregarImpressorasJsPrintManager();
+          renderizarDiagnosticoJsPrintManager();
+          resolve();
+        });
+        return;
+      }
+
+      if (status === JSPM.WSStatus.Blocked) {
+        concluir(() => {
+          jspmDiagnosticsState.lastError = 'O JSPrintManager bloqueou esta pagina nesta maquina.';
+          renderizarDiagnosticoJsPrintManager();
+          reject(new Error(jspmDiagnosticsState.lastError));
+        });
+      }
+    };
+
+    try {
+      Promise.resolve(JSPM.JSPrintManager.start())
+        .catch((error) => {
+          concluir(() => {
+            jspmDiagnosticsState.lastError = error.message || 'Nao foi possivel iniciar o servico local do JSPrintManager.';
+            renderizarDiagnosticoJsPrintManager();
+            reject(error);
+          });
+        });
+    } catch (error) {
+      concluir(() => {
+        jspmDiagnosticsState.lastError = error.message || 'Nao foi possivel iniciar o servico local do JSPrintManager.';
+        renderizarDiagnosticoJsPrintManager();
+        reject(error);
+      });
+      return;
+    }
+
+    if (JSPM.JSPrintManager.WS) {
+      JSPM.JSPrintManager.WS.onStatusChanged = resolverStatus;
+    }
+
+    window.setTimeout(() => {
+      if (finalizado) {
+        return;
+      }
+
+      const status = JSPM.JSPrintManager.websocket_status;
+      if (status === JSPM.WSStatus.Open) {
+        concluir(async () => {
+          jspmDiagnosticsState.lastError = '';
+          jspmDiagnosticsState.printers = await carregarImpressorasJsPrintManager();
+          renderizarDiagnosticoJsPrintManager();
+          resolve();
+        });
+        return;
+      }
+
+      concluir(() => {
+        jspmDiagnosticsState.lastError = silent
+          ? 'Servico local ainda nao respondeu dentro do tempo esperado.'
+          : 'JSPrintManager nao esta instalado ou nao esta em execucao nesta maquina.';
+        jspmDiagnosticsState.printers = [];
+        renderizarDiagnosticoJsPrintManager();
+        reject(new Error(jspmDiagnosticsState.lastError));
+      });
+    }, 6500);
+  });
+
+  jspmReadyPromise.catch(() => {
+    jspmReadyPromise = null;
+  });
+
+  return jspmReadyPromise;
+}
+
+function esperar(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+async function atualizarDiagnosticoJsPrintManager(options = {}) {
+  const { forceRestart = false } = options;
+
+  if (!window.JSPM?.JSPrintManager) {
+    jspmDiagnosticsState = {
+      libraryLoaded: false,
+      statusCode: null,
+      statusLabel: 'Biblioteca nao carregada',
+      printers: [],
+      lastError: 'A biblioteca JSPrintManager.js nao esta disponivel nesta pagina.',
+      checkedAt: new Date().toISOString()
+    };
+    renderizarDiagnosticoJsPrintManager();
+    return jspmDiagnosticsState;
+  }
+
+  try {
+    inicializarJsPrintManager({ forceRestart, silent: true });
+  } catch (error) {
+    console.error('Falha ao iniciar diagnostico do JSPrintManager:', error);
+  }
+
+  const JSPM = window.JSPM;
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < 3200) {
+    const status = JSPM.JSPrintManager.websocket_status;
+    if (status === JSPM.WSStatus.Open || status === JSPM.WSStatus.Blocked) {
+      break;
+    }
+
+    await esperar(200);
+  }
+
+  const statusCode = JSPM.JSPrintManager.websocket_status;
+  jspmDiagnosticsState.libraryLoaded = true;
+  jspmDiagnosticsState.statusCode = statusCode;
+  jspmDiagnosticsState.statusLabel = mapearStatusJsPrintManager(statusCode);
+  jspmDiagnosticsState.checkedAt = new Date().toISOString();
+
+  if (statusCode === JSPM.WSStatus.Open) {
+    jspmDiagnosticsState.lastError = '';
+    jspmDiagnosticsState.printers = await carregarImpressorasJsPrintManager();
+  } else if (statusCode === JSPM.WSStatus.Blocked) {
+    jspmDiagnosticsState.printers = [];
+    jspmDiagnosticsState.lastError = 'O JSPrintManager bloqueou esta pagina.';
+  } else if (!jspmDiagnosticsState.lastError) {
+    jspmDiagnosticsState.printers = [];
+    jspmDiagnosticsState.lastError = 'O servico local ainda nao respondeu.';
+  }
+
+  renderizarDiagnosticoJsPrintManager();
+  return jspmDiagnosticsState;
+}
+
+async function ensureJsPrintManagerReady() {
+  if (!window.JSPM?.JSPrintManager) {
+    throw new Error('Biblioteca JSPrintManager nao carregada nesta pagina.');
+  }
+
+  if (!jspmReadyPromise) {
+    inicializarJsPrintManager({ silent: false });
+  }
+
+  return jspmReadyPromise;
+}
+
+async function enviarZplParaImpressoraPadrao(zplAgrupado) {
+  await ensureJsPrintManagerReady();
+
+  const JSPM = window.JSPM;
+  const printJob = new JSPM.ClientPrintJob();
+  printJob.clientPrinter = new JSPM.DefaultPrinter();
+  printJob.printerCommands = zplAgrupado;
+
+  await Promise.resolve(printJob.sendToClient());
+  return DEFAULT_PRINTER_NAME;
+}
+
+function agruparZplLabels(labels = []) {
+  return labels
+    .map((label) => String(label?.zpl || '').trim())
+    .filter(Boolean)
+    .join('\n');
+}
+
+async function registrarHistoricoImpressao(entries = [], impressoraNome = DEFAULT_PRINTER_NAME) {
+  if (!entries.length) {
+    return;
+  }
+
+  await fetchJson(PRINT_HISTORY_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      impressora_nome: impressoraNome,
+      entries
+    })
   });
 }
 
@@ -1010,6 +1379,9 @@ async function abrirDetalhePedido(pedidoId) {
 
   renderizarItensPedidoDetalhe(pedido);
   openModal(refs.detalheModal);
+  atualizarDiagnosticoJsPrintManager().catch((error) => {
+    console.error('Falha ao atualizar diagnostico do JSPrintManager ao abrir pedido:', error);
+  });
 }
 
 function fecharModalDetalhe() {
@@ -1102,7 +1474,7 @@ function renderizarItensPedidoDetalhe(pedido) {
         <td>${formatDecimal(item.massa_total_kg || 0)} kg</td>
         <td>
           <div class="pedido-prioridade-actions">
-            <button class="icon-btn pedido-print-btn" type="button" title="Imprimir item" aria-label="Imprimir item">&#128424;</button>
+            <button class="icon-btn pedido-print-btn" type="button" title="Imprimir item" aria-label="Imprimir item" data-action="imprimir-item" data-item-id="${item.id}">&#128424;</button>
             ${botoes.join('')}
           </div>
         </td>
@@ -1121,6 +1493,12 @@ async function handleDetalheItemActions(event) {
   const serialButton = event.target.closest('[data-action="abrir-seriais"][data-item-id]');
   if (serialButton) {
     await abrirModalSeriaisPedido(Number(serialButton.dataset.itemId));
+    return;
+  }
+
+  const printButton = event.target.closest('[data-action="imprimir-item"][data-item-id]');
+  if (printButton) {
+    await imprimirEtiquetasItem(Number(printButton.dataset.itemId), printButton);
     return;
   }
 
@@ -1392,6 +1770,93 @@ async function marcarPedidoColetado() {
     await abrirDetalhePedido(atualizado.id);
   } catch (error) {
     mostrarMensagemDetalhe(error.message, 'error');
+  }
+}
+
+async function imprimirEtiquetasItem(itemId, triggerButton = null) {
+  const button = triggerButton || refs.detalheItensTbody.querySelector(`[data-action="imprimir-item"][data-item-id="${itemId}"]`);
+  if (button) {
+    button.classList.add('is-printing');
+    button.setAttribute('aria-busy', 'true');
+  }
+
+  try {
+    const job = await fetchJson(`${pedidosApiBaseUrl}/itens/${itemId}/etiquetas-impressao`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    const zplAgrupado = agruparZplLabels(job.labels || []);
+    if (!zplAgrupado) {
+      throw new Error('Nenhuma etiqueta foi gerada para este item.');
+    }
+
+    const impressoraNome = await enviarZplParaImpressoraPadrao(zplAgrupado);
+    await registrarHistoricoImpressao(
+      (job.labels || []).map((label) => label.history).filter(Boolean),
+      impressoraNome
+    );
+
+    mostrarMensagemDetalhe(
+      `${formatInteger(job.quantidade_etiquetas || 0)} etiqueta(s) do item ${job.codigo_item} enviada(s) para ${impressoraNome.toLowerCase()}.`,
+      'success'
+    );
+  } catch (error) {
+    mostrarMensagemDetalhe(error.message || 'Nao foi possivel imprimir a etiqueta do item.', 'error');
+  } finally {
+    if (button) {
+      button.classList.remove('is-printing');
+      button.removeAttribute('aria-busy');
+    }
+  }
+}
+
+async function imprimirEtiquetasCaixaPedidoSelecionado() {
+  const pedido = obterPedidoSelecionado();
+  if (!pedido) {
+    return;
+  }
+
+  refs.detalheImprimirCaixas.classList.add('is-printing');
+  refs.detalheImprimirCaixas.setAttribute('aria-busy', 'true');
+
+  try {
+    const pedidoComDadosFinais = await fetchJson(`${pedidosApiBaseUrl}/${pedido.id}/dados-finais`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        numero_nota_fiscal: refs.detalheNf.disabled ? undefined : refs.detalheNf.value.trim(),
+        peso_total_override_kg: refs.detalhePesoTotal.value,
+        quantidade_volumes: refs.detalheVolumes.value
+      })
+    });
+    atualizarPedidoCache(pedidoComDadosFinais);
+
+    const job = await fetchJson(`${pedidosApiBaseUrl}/${pedido.id}/caixas-impressao`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+
+    const zplAgrupado = agruparZplLabels(job.labels || []);
+    if (!zplAgrupado) {
+      throw new Error('Nenhuma etiqueta de caixa foi gerada para este pedido.');
+    }
+
+    const impressoraNome = await enviarZplParaImpressoraPadrao(zplAgrupado);
+    await registrarHistoricoImpressao(
+      (job.labels || []).map((label) => label.history).filter(Boolean),
+      impressoraNome
+    );
+
+    mostrarMensagemDetalhe(
+      `${formatInteger(job.quantidade_etiquetas || 0)} etiqueta(s) de caixa enviada(s) para ${impressoraNome.toLowerCase()}.`,
+      'success'
+    );
+  } catch (error) {
+    mostrarMensagemDetalhe(error.message || 'Nao foi possivel imprimir as etiquetas da caixa.', 'error');
+  } finally {
+    refs.detalheImprimirCaixas.classList.remove('is-printing');
+    refs.detalheImprimirCaixas.removeAttribute('aria-busy');
   }
 }
 

@@ -988,7 +988,7 @@ function obterRegistrosNumeroSerieFiltrados() {
     }
 
     if (filtroModelo) {
-      const textoModelo = normalizarBusca(`${registro.modelo_servo_codigo} ${registro.modelo_servo_descricao}`);
+      const textoModelo = normalizarBusca(`${registro.modelo_servo_codigo} ${formatarCodigoVisual(registro.modelo_servo_codigo)} ${registro.modelo_servo_descricao}`);
       if (!textoModelo.includes(filtroModelo)) {
         return false;
       }
@@ -1027,7 +1027,7 @@ function renderizarRegistrosNumeroSerie() {
   refs.numeroSerieTbody.innerHTML = registros.map((registro) => `
     <tr>
       <td class="table-code">${escapeHtml(registro.numero_serie)}</td>
-      <td class="table-description">${escapeHtml(`${registro.modelo_servo_codigo} - ${registro.modelo_servo_descricao}`)}</td>
+      <td class="table-description">${escapeHtml(montarRotuloCodigoDescricao(registro.modelo_servo_codigo, registro.modelo_servo_descricao))}</td>
       <td>${formatarDataHora(registro.data_montagem)}</td>
       <td>${escapeHtml(registro.montador_nome || '-')}</td>
       <td>${renderizarPedidoRegistroNumeroSerie(registro)}</td>
@@ -1059,6 +1059,14 @@ function renderizarPedidoRegistroNumeroSerie(registro) {
   `;
 }
 
+function formatarCodigoVisual(codigo) {
+  return String(codigo || '').replace(/^SM-/i, '');
+}
+
+function montarRotuloCodigoDescricao(codigo, descricao) {
+  return `${formatarCodigoVisual(codigo)} - ${descricao}`;
+}
+
 function filtrarSubmontagensPorTermo(termo) {
   const filtro = normalizarBusca(termo);
 
@@ -1069,7 +1077,7 @@ function filtrarSubmontagensPorTermo(termo) {
         return true;
       }
 
-      return normalizarBusca(`${item.codigo} ${item.descricao}`).includes(filtro);
+      return normalizarBusca(`${item.codigo} ${formatarCodigoVisual(item.codigo)} ${item.descricao}`).includes(filtro);
     })
     .filter((item, index, lista) => lista.findIndex((entry) => Number(entry.id) === Number(item.id)) === index)
     .slice(0, 8);
@@ -1094,7 +1102,7 @@ function renderizarSugestoesNumeroSerieCadastro(termo) {
     itens,
     (item) => ({
       id: item.id,
-      title: `${item.codigo} - ${item.descricao}`,
+      title: montarRotuloCodigoDescricao(item.codigo, item.descricao),
       subtitle: item.classificacao === 'ITEM'
         ? `Item seriado | Saldo Montagem: ${formatInteger(obterSaldoMontagem(item.id))}`
         : `Submontagem | Componentes: ${formatInteger(item.total_componentes || 0)}`
@@ -1111,7 +1119,7 @@ function renderizarSugestoesNumeroSerieEdicao(termo) {
     itens,
     (item) => ({
       id: item.id,
-      title: `${item.codigo} - ${item.descricao}`,
+      title: montarRotuloCodigoDescricao(item.codigo, item.descricao),
       subtitle: item.classificacao === 'ITEM'
         ? `Item seriado | Saldo Montagem: ${formatInteger(obterSaldoMontagem(item.id))}`
         : `Submontagem | Componentes: ${formatInteger(item.total_componentes || 0)}`
@@ -1133,7 +1141,7 @@ function handleSugestaoNumeroSerieCadastroClick(event) {
   }
 
   refs.numeroSerieModeloId.value = String(item.id);
-  refs.numeroSerieModeloBusca.value = `${item.codigo} - ${item.descricao}`;
+  refs.numeroSerieModeloBusca.value = montarRotuloCodigoDescricao(item.codigo, item.descricao);
   renderizarResumoNumeroSerie(item);
   esconderSugestoesNumeroSerieCadastro();
   atualizarDiagnosticoNumeroSerie();
@@ -1152,7 +1160,7 @@ function handleSugestaoNumeroSerieEdicaoClick(event) {
   }
 
   refs.numeroSerieEditarModeloId.value = String(item.id);
-  refs.numeroSerieEditarModeloBusca.value = `${item.codigo} - ${item.descricao}`;
+  refs.numeroSerieEditarModeloBusca.value = montarRotuloCodigoDescricao(item.codigo, item.descricao);
   renderizarResumoNumeroSerieEdicao(item);
   esconderSugestoesNumeroSerieEdicao();
 }
@@ -1167,7 +1175,7 @@ function renderizarResumoNumeroSerie(item) {
   refs.numeroSerieResumo.classList.remove('empty');
   refs.numeroSerieResumo.classList.add('selected-tags');
   refs.numeroSerieResumo.innerHTML = `
-    <span class="selected-tag">${escapeHtml(item.codigo)}</span>
+    <span class="selected-tag">${escapeHtml(formatarCodigoVisual(item.codigo))}</span>
     <span class="selected-tag">${escapeHtml(item.descricao)}</span>
     <span class="selected-tag">${escapeHtml(`Classificacao: ${item.classificacao}`)}</span>
     <span class="selected-tag">${escapeHtml(item.classificacao === 'ITEM'
@@ -1186,7 +1194,7 @@ function renderizarResumoNumeroSerieEdicao(item) {
   refs.numeroSerieEditarResumo.classList.remove('empty');
   refs.numeroSerieEditarResumo.classList.add('selected-tags');
   refs.numeroSerieEditarResumo.innerHTML = `
-    <span class="selected-tag">${escapeHtml(item.codigo)}</span>
+    <span class="selected-tag">${escapeHtml(formatarCodigoVisual(item.codigo))}</span>
     <span class="selected-tag">${escapeHtml(item.descricao)}</span>
     <span class="selected-tag">${escapeHtml(`Classificacao: ${item.classificacao}`)}</span>
   `;
@@ -1242,7 +1250,7 @@ async function atualizarDiagnosticoNumeroSerie() {
 
   const modelo = [...submontagensCache, ...itensCache].find((item) => Number(item.id) === modeloId);
   refs.numeroSerieDiagnosticoTitulo.textContent = modelo
-    ? `${modelo.codigo} - ${modelo.descricao}`
+    ? montarRotuloCodigoDescricao(modelo.codigo, modelo.descricao)
     : 'Diagnostico da submontagem';
   refs.numeroSerieDiagnosticoSubtitulo.textContent = `Quantidade desejada: ${formatInteger(quantidade)} | Consulta somente o estoque da Montagem.`;
   refs.numeroSerieDiagnosticoCapacidadeChip.textContent = 'Capacidade atual: calculando...';
@@ -1285,7 +1293,7 @@ async function atualizarDiagnosticoNumeroSerie() {
       } else {
         refs.numeroSerieDiagnosticoTbody.innerHTML = `
           <tr>
-            <td class="table-code">${escapeHtml(modelo.codigo)}</td>
+            <td class="table-code">${escapeHtml(formatarCodigoVisual(modelo.codigo))}</td>
             <td class="table-description">${escapeHtml(modelo.descricao)}</td>
             <td class="table-quantity">${formatDecimal(quantidade)}</td>
             <td class="table-quantity">${formatDecimal(saldoMontagem)}</td>
@@ -1488,7 +1496,7 @@ function abrirModalEditarNumeroSerie(registroId) {
   refs.numeroSerieEditarId.value = String(registro.id);
   refs.numeroSerieEditarNumero.value = registro.numero_serie;
   refs.numeroSerieEditarModeloId.value = String(registro.id_modelo_servo);
-  refs.numeroSerieEditarModeloBusca.value = `${registro.modelo_servo_codigo} - ${registro.modelo_servo_descricao}`;
+  refs.numeroSerieEditarModeloBusca.value = montarRotuloCodigoDescricao(registro.modelo_servo_codigo, registro.modelo_servo_descricao);
   renderizarResumoNumeroSerieEdicao({
     id: registro.id_modelo_servo,
     codigo: registro.modelo_servo_codigo,

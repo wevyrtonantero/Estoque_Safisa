@@ -15,6 +15,9 @@ router.patch('/pedidos-expedicao/:id/programacao-hoje', requireApiRoles(OPERATIO
 router.get('/pedidos-expedicao/:id', requireApiRoles(OPERATION_READ_ROLES), PedidoExpedicaoController.getById);
 router.get('/pedidos-expedicao/itens/:itemId/seriais', requireApiRoles(OPERATION_READ_ROLES), PedidoExpedicaoController.getItemSeriais);
 router.post('/pedidos-expedicao/itens/:itemId/seriais', requireApiRoles(OPERATION_WRITE_ROLES), PedidoExpedicaoController.bindSeriais);
+router.post('/pedidos-expedicao/itens/:itemId/etiquetas-impressao', requireApiRoles(OPERATION_READ_ROLES), PedidoExpedicaoController.gerarEtiquetasItem);
+router.post('/pedidos-expedicao/:id/caixas-impressao', requireApiRoles(OPERATION_READ_ROLES), PedidoExpedicaoController.gerarEtiquetasCaixa);
+router.post('/pedidos-expedicao/etiquetas/historico-impressao', requireApiRoles(OPERATION_READ_ROLES), PedidoExpedicaoController.registrarHistoricoImpressao);
 router.delete('/pedidos-expedicao/seriais/:bindingId', requireApiRoles(OPERATION_WRITE_ROLES), PedidoExpedicaoController.unbindSerial);
 router.patch('/pedidos-expedicao/itens/:itemId/separado', requireApiRoles(OPERATION_WRITE_ROLES), PedidoExpedicaoController.toggleItemSeparado);
 router.patch('/pedidos-expedicao/:id/nota-fiscal', requireApiRoles(OPERATION_WRITE_ROLES), PedidoExpedicaoController.updateNotaFiscal);

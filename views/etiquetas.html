@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="/img/icon-safisa.ico" type="image/x-icon">
+  <title>SAFISA | Gerenciamento de Etiquetas</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <main class="workspace etiqueta-page">
+    <header class="etiqueta-header-simple">
+      <div>
+        <h1>Gerenciamento de Etiquetas</h1>
+      </div>
+
+      <div class="etiqueta-header-actions">
+        <a class="btn btn-secondary" href="/pagina-adm">Voltar</a>
+        <button id="btn-abrir-lista-etiquetas" class="btn btn-neutral" type="button">Ver etiquetas cadastradas</button>
+      </div>
+    </header>
+
+    <section class="content-card compact etiqueta-print-diagnostic-card">
+      <div class="pedido-print-diagnostic-body etiqueta-print-diagnostic-body">
+        <div class="pedido-print-diagnostic-summary etiqueta-print-diagnostic-summary">
+          <div class="pedido-print-diagnostic-heading">
+            <span class="section-pill">Impressao</span>
+            <strong>Teste da impressora</strong>
+          </div>
+          <button id="etiqueta-btn-atualizar-diagnostico" class="btn btn-neutral btn-small" type="button">Atualizar diagnostico</button>
+        </div>
+
+        <div class="pedido-print-diagnostic-grid">
+          <article class="pedido-print-diagnostic-item">
+            <span>Biblioteca</span>
+            <strong id="etiqueta-print-diag-lib">-</strong>
+          </article>
+
+          <article class="pedido-print-diagnostic-item">
+            <span>WebSocket</span>
+            <strong id="etiqueta-print-diag-status">-</strong>
+          </article>
+
+          <article class="pedido-print-diagnostic-item">
+            <span>Impressoras</span>
+            <strong id="etiqueta-print-diag-printers-count">-</strong>
+          </article>
+
+          <article class="pedido-print-diagnostic-item">
+            <span>Ultima checagem</span>
+            <strong id="etiqueta-print-diag-checked-at">-</strong>
+          </article>
+        </div>
+
+        <div class="pedido-print-diagnostic-printers">
+          <span class="pedido-print-diagnostic-label">Impressoras encontradas</span>
+          <div id="etiqueta-print-diag-printers" class="selected-tags empty">Nenhuma impressora consultada ainda.</div>
+        </div>
+
+        <div class="etiqueta-print-diagnostic-selector">
+          <div class="field">
+            <label for="etiqueta-print-printer-select">Impressora preferida</label>
+            <select id="etiqueta-print-printer-select">
+              <option value="">Impressora padrao do Windows</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="pedido-print-diagnostic-error">
+          <span class="pedido-print-diagnostic-label">Erro / observacao</span>
+          <p id="etiqueta-print-diag-error" class="search-helper">Sem diagnostico ainda.</p>
+        </div>
+      </div>
+    </section>
+
+    <div id="etiqueta-page-message" class="message hidden"></div>
+
+    <section class="etiqueta-board">
+      <div class="etiqueta-column etiqueta-column-main">
+        <article class="content-card compact">
+          <div class="card-top">
+            <div>
+              <span class="section-pill">Busca</span>
+              <h2>Buscar por codigo</h2>
+              <p>Informe o codigo do kit/servo para carregar a etiqueta existente ou abrir um novo cadastro.</p>
+            </div>
+          </div>
+
+          <form id="etiqueta-busca-form" class="toolbar-form">
+            <div class="field">
+              <label for="etiqueta-busca-codigo">Codigo da peca/kit</label>
+              <input id="etiqueta-busca-codigo" type="text" placeholder="Ex.: 1F, 1B, 2A, 50F">
+            </div>
+
+            <button class="btn btn-secondary" type="submit">Buscar</button>
+            <button id="btn-nova-etiqueta" class="btn btn-neutral" type="button">Nova etiqueta</button>
+          </form>
+        </article>
+
+        <article class="content-card compact">
+          <div class="card-top">
+            <div>
+              <span class="section-pill">Cadastro</span>
+              <h2 id="etiqueta-form-title">Nova etiqueta</h2>
+              <p id="etiqueta-form-subtitle">Numero de serie e data/hora entram automaticos na impressao.</p>
+            </div>
+          </div>
+
+          <div id="etiqueta-form-message" class="message hidden"></div>
+
+          <form id="etiqueta-form" class="form-grid">
+            <input id="etiqueta-id" type="hidden">
+
+            <details class="span-12 etiqueta-layout-details etiqueta-editor-details" open>
+              <summary>Dados da etiqueta</summary>
+              <div class="form-grid etiqueta-layout-grid">
+                <div class="field span-4">
+                  <label for="etiqueta-codigo-item">Template do codigo / Codigo do item</label>
+                  <input id="etiqueta-codigo-item" type="text" maxlength="80" required>
+                </div>
+
+                <div class="field span-4">
+                  <label for="etiqueta-categoria">Categoria</label>
+                  <select id="etiqueta-categoria">
+                    <option value="SERVO_COM_KIT">Servo com kit</option>
+                    <option value="SERVO_SEM_KIT">Servo sem kit</option>
+                    <option value="ITEM_AVULSO">Item avulso</option>
+                    <option value="CAIXA">Caixa</option>
+                  </select>
+                </div>
+
+                <div class="field span-8">
+                  <label for="etiqueta-titulo">Titulo</label>
+                  <input id="etiqueta-titulo" type="text" maxlength="160" placeholder="Ex.: MBF015 - 1F" required>
+                </div>
+
+                <div class="field span-12">
+                  <label for="etiqueta-aplicacao-1">Aplicacao linha 1</label>
+                  <input id="etiqueta-aplicacao-1" type="text" maxlength="255">
+                </div>
+
+                <div class="field span-12">
+                  <label for="etiqueta-aplicacao-2">Aplicacao linha 2</label>
+                  <input id="etiqueta-aplicacao-2" type="text" maxlength="255">
+                </div>
+
+                <div class="field span-12">
+                  <label for="etiqueta-aplicacao-3">Aplicacao linha 3</label>
+                  <input id="etiqueta-aplicacao-3" type="text" maxlength="255">
+                </div>
+
+                <div class="field span-4">
+                  <label for="etiqueta-codigo-barras">Codigo de barras</label>
+                  <input id="etiqueta-codigo-barras" type="text" maxlength="160" required>
+                </div>
+
+                <div class="field span-4">
+                  <label for="etiqueta-ativo">Status</label>
+                  <select id="etiqueta-ativo">
+                    <option value="true">Ativa</option>
+                    <option value="false">Inativa</option>
+                  </select>
+                </div>
+
+                <div class="span-12">
+                  <div class="message success etiqueta-auto-note">
+                    Numero de serie e data/hora entram automaticos na impressao.
+                  </div>
+                </div>
+
+                <div id="etiqueta-auto-categoria-note" class="span-12 message warning hidden">
+                  Nesta categoria, os textos da etiqueta serao preenchidos automaticamente com os dados do pedido.
+                </div>
+              </div>
+            </details>
+
+            <div id="etiqueta-layout-dirty" class="span-12 message warning hidden">
+              Layout alterado. Clique em Salvar etiqueta para gravar.
+            </div>
+
+            <details class="span-12 etiqueta-layout-details">
+              <summary>Ajustes de layout</summary>
+              <div id="layout-adjustments-container" class="etiqueta-layout-grid"></div>
+            </details>
+
+            <div class="span-12 etiqueta-preset-panel">
+              <div class="etiqueta-preset-head">
+                <strong>Presets de categoria</strong>
+                <span>Com kit e sem kit ficam editaveis por codigo. Avulsa e caixa servem como base automatica do pedido.</span>
+              </div>
+              <div class="etiqueta-preset-actions">
+                <button id="btn-preset-com-kit" class="btn btn-neutral" type="button">Preset com kit</button>
+                <button id="btn-aplicar-sem-kit" class="btn btn-neutral" type="button">Preset sem kit</button>
+                <button id="btn-preset-avulsa" class="btn btn-neutral" type="button">Preset avulsa</button>
+                <button id="btn-preset-caixa" class="btn btn-neutral" type="button">Preset caixa</button>
+              </div>
+            </div>
+
+            <div class="span-12 modal-actions etiqueta-compact-actions">
+              <button id="btn-salvar-etiqueta" class="btn btn-primary" type="submit">Salvar etiqueta</button>
+              <button id="btn-restaurar-layout" class="btn btn-neutral" type="button">Restaurar salvo</button>
+              <button id="btn-replicar-layout" class="btn btn-neutral" type="button" disabled>Replicar layout da categoria</button>
+              <button id="btn-gerar-zpl-teste" class="btn btn-neutral" type="button" disabled>Gerar ZPL de teste</button>
+            </div>
+          </form>
+        </article>
+      </div>
+
+      <div class="etiqueta-column etiqueta-column-preview">
+        <article class="content-card compact etiqueta-preview-card">
+          <div class="card-top">
+            <div>
+              <span class="section-pill">Previa</span>
+              <h2>Simulacao visual da etiqueta</h2>
+              <p>Preview 10 x 10 cm, aproximando a area util de 800 x 800 dots.</p>
+            </div>
+          </div>
+
+          <div class="etiqueta-preview-shell">
+            <div class="etiqueta-preview-meta">Etiqueta 10 x 10 cm | 800 x 800 dots</div>
+            <div class="etiqueta-preview" id="etiqueta-preview">
+              <div class="etiqueta-preview-logo-area">
+                <div class="etiqueta-preview-logo" id="preview-logo">SAFISA</div>
+              </div>
+              <div class="etiqueta-preview-title" id="preview-titulo">MBF015 - 1F</div>
+              <div class="etiqueta-preview-divider" id="preview-divider-top"></div>
+              <div class="etiqueta-preview-label" id="preview-label-aplicacao">Aplicacao:</div>
+              <div class="etiqueta-preview-application" id="preview-aplicacao-1">Mercedes Benz - Caminhao</div>
+              <div class="etiqueta-preview-application" id="preview-aplicacao-2">Cara Chata 1214/1218/1418/1714/1718</div>
+              <div class="etiqueta-preview-application" id="preview-aplicacao-3">2318/2418</div>
+              <div class="etiqueta-preview-divider" id="preview-divider-bottom"></div>
+              <div class="etiqueta-preview-label" id="preview-label-serial">Numero de Serie</div>
+              <div class="etiqueta-preview-serial" id="preview-serial">A-00000</div>
+              <div class="etiqueta-preview-barcode" id="preview-barcode">
+              </div>
+              <div class="etiqueta-preview-barcode-text" id="preview-barcode-text">789976744814</div>
+              <div class="etiqueta-preview-datetime" id="preview-datahora">24/05/2026 14:35:12</div>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <div id="modal-lista-etiquetas" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="modal-lista-etiquetas"></div>
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <h2>Etiquetas cadastradas</h2>
+          <p id="etiqueta-total-registros">0 etiqueta(s) encontrada(s)</p>
+        </div>
+        <button class="icon-btn" type="button" data-close-modal="modal-lista-etiquetas" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div class="table-wrapper table-wrapper-compact etiqueta-table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Codigo</th>
+              <th>Categoria</th>
+              <th>Titulo</th>
+              <th>Codigo de barras</th>
+              <th>Status</th>
+              <th>Acoes</th>
+            </tr>
+          </thead>
+          <tbody id="etiqueta-lista-tbody">
+            <tr>
+              <td colspan="6" class="empty-state">Carregando etiquetas...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-zpl-teste" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="modal-zpl-teste"></div>
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <h2>ZPL gerado no backend</h2>
+          <p>Use esse conteudo para auditoria tecnica ou copie para testar no Labelary.</p>
+        </div>
+        <button class="icon-btn" type="button" data-close-modal="modal-zpl-teste" aria-label="Fechar modal">X</button>
+      </div>
+
+      <textarea id="etiqueta-zpl-output" class="etiqueta-zpl-output" readonly placeholder="O ZPL gerado vai aparecer aqui."></textarea>
+
+      <div class="message success etiqueta-labelary-note">
+        Clique em "Testar no Labelary" para abrir o site e colar o ZPL manualmente.
+      </div>
+
+      <div class="modal-actions">
+        <button id="btn-copiar-zpl" class="btn btn-secondary" type="button">Copiar ZPL</button>
+        <button id="btn-abrir-labelary" class="btn btn-neutral" type="button">Testar no Labelary</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/vendor/JSPrintManager.js"></script>
+  <script src="/js/etiquetas.js"></script>
+  <script src="/js/session-indicator.js"></script>
+</body>
+</html>

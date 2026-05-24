@@ -22,6 +22,7 @@ const solicitacaoEstoqueRoutes = require('./src/routes/solicitacaoEstoqueRoutes'
 const solicitacaoProducaoRoutes = require('./src/routes/solicitacaoProducaoRoutes');
 const painelRoutes = require('./src/routes/painelRoutes');
 const usuarioRoutes = require('./src/routes/usuarioRoutes');
+const etiquetaRoutes = require('./src/routes/etiquetaRoutes');
 const auditLogRoutes = require('./src/routes/auditLogRoutes');
 const authRoutes = require('./src/routes/authRoutes');
 const composicaoVendaRoutes = require('./src/routes/composicaoVendaRoutes');
@@ -35,6 +36,8 @@ const ExpedicaoSaidaModel = require('./src/models/ExpedicaoSaidaModel');
 const ProducaoModel = require('./src/models/ProducaoModel');
 const SubmontagemSerialModel = require('./src/models/SubmontagemSerialModel');
 const PedidoExpedicaoModel = require('./src/models/PedidoExpedicaoModel');
+const EtiquetaModel = require('./src/models/EtiquetaModel');
+const EtiquetaHistoricoModel = require('./src/models/EtiquetaHistoricoModel');
 const { attachAuthContext, requirePageRoles } = require('./src/middleware/authMiddleware');
 const { ALL_ROLES, ADMIN_READ_ROLES, OPERATION_READ_ROLES, SUPERADMIN_ONLY_ROLES, STOCK_READ_ROLES } = require('./src/security/roles');
 const { testConnection } = require('./database/connection');
@@ -125,6 +128,10 @@ app.get('/pagina-operacao', requirePageRoles(OPERATION_READ_ROLES), (req, res) =
 
 app.get('/pagina-adm', requirePageRoles(ADMIN_READ_ROLES), (req, res) => {
   sendView(res, 'portal-adm.html');
+});
+
+app.get('/pagina-etiquetas', requirePageRoles(ADMIN_READ_ROLES), (req, res) => {
+  sendView(res, 'etiquetas.html');
 });
 
 app.get('/pagina-pecas', requirePageRoles(ADMIN_READ_ROLES), (req, res) => {
@@ -243,6 +250,7 @@ app.use('/api', solicitacaoEstoqueRoutes);
 app.use('/api', solicitacaoProducaoRoutes);
 app.use('/api', painelRoutes);
 app.use('/api', usuarioRoutes);
+app.use('/api', etiquetaRoutes);
 app.use('/api', auditLogRoutes);
 app.use('/api', composicaoVendaRoutes);
 app.use('/api', submontagemSerialRoutes);
@@ -270,6 +278,8 @@ app.listen(PORT, async () => {
     await ProducaoModel.ensureSchema();
     await SubmontagemSerialModel.ensureSchema();
     await PedidoExpedicaoModel.ensureSchema();
+    await EtiquetaModel.ensureSchema();
+    await EtiquetaHistoricoModel.ensureSchema();
   } catch (error) {
     console.error('Nao foi possivel validar a conexao com o MySQL:', error.message);
   }

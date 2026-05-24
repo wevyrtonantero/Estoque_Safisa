@@ -50,6 +50,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   await Promise.all([carregarItensSimples(), carregarSubmontagens()]);
 });
 
+function formatarCodigoVisual(codigo) {
+  return String(codigo || '').replace(/^SM-/i, '');
+}
+
+function montarRotuloCodigoDescricao(codigo, descricao) {
+  return `${formatarCodigoVisual(codigo)} - ${descricao}`;
+}
+
 function bindEvents() {
   document.getElementById('btn-nova-submontagem').addEventListener('click', abrirNovaSubmontagem);
   document.getElementById('btn-imprimir-estrutura').addEventListener('click', imprimirEstruturaAtual);
@@ -235,7 +243,7 @@ function renderizarTabelaSubmontagens() {
 
   refs.tabelaSubmontagens.innerHTML = submontagensCache.map((submontagem) => `
     <tr>
-      <td class="table-code">${escapeHtml(submontagem.codigo)}</td>
+      <td class="table-code">${escapeHtml(formatarCodigoVisual(submontagem.codigo))}</td>
       <td class="table-description">${escapeHtml(submontagem.descricao)}</td>
       <td>${formatInteger(submontagem.total_componentes || 0)}</td>
       <td>${formatDecimal(submontagem.massa_kg || 0, 3)} kg</td>
@@ -318,9 +326,9 @@ async function selecionarSubmontagem(submontagem, carregarEstrutura = true, abri
   try {
     const submontagemDetalhada = await carregarDetalhesSubmontagem(submontagem.id);
     submontagemAtual = submontagemDetalhada;
-    document.getElementById('estrutura-titulo').textContent = `Estrutura de ${submontagemDetalhada.codigo}`;
+    document.getElementById('estrutura-titulo').textContent = `Estrutura de ${formatarCodigoVisual(submontagemDetalhada.codigo)}`;
     document.getElementById('estrutura-subtitulo').textContent = submontagemDetalhada.descricao;
-    document.getElementById('estrutura-codigo').textContent = `${submontagemDetalhada.codigo} - ${submontagemDetalhada.descricao}`;
+    document.getElementById('estrutura-codigo').textContent = montarRotuloCodigoDescricao(submontagemDetalhada.codigo, submontagemDetalhada.descricao);
     document.getElementById('estrutura-detalhe').textContent = `Submontagem produzida | Componentes cadastrados: ${submontagemDetalhada.total_componentes || 0}`;
     document.getElementById('estrutura-total-componentes').textContent = `Componentes: ${submontagemDetalhada.total_componentes || 0}`;
     document.getElementById('estrutura-massa-total').textContent = `Massa: ${formatDecimal(submontagemDetalhada.massa_kg || 0, 3)} kg`;
@@ -374,7 +382,7 @@ function renderizarEstruturaAtual() {
 
   refs.tabelaEstrutura.innerHTML = componentesEstruturaCache.map((component) => `
     <tr>
-      <td class="table-code">${escapeHtml(component.codigo_componente)}</td>
+      <td class="table-code">${escapeHtml(formatarCodigoVisual(component.codigo_componente))}</td>
       <td class="table-description">${escapeHtml(component.descricao_componente)}</td>
       <td>${formatInteger(component.quantidade)}</td>
       <td>${escapeHtml(component.tipo_componente || '-')}</td>
@@ -419,7 +427,7 @@ async function carregarSubmontagemParaEdicao(id) {
     renderizarTabelaDraft();
     document.getElementById('btn-atualizar-submontagem').disabled = false;
     document.getElementById('btn-salvar-submontagem').disabled = true;
-    document.getElementById('submontagem-modal-title').textContent = `Editar ${submontagem.codigo}`;
+    document.getElementById('submontagem-modal-title').textContent = `Editar ${formatarCodigoVisual(submontagem.codigo)}`;
     openModal(refs.submontagemModal);
   } catch (error) {
     showMessage(refs.mensagem, error.message, 'error');
@@ -444,7 +452,7 @@ function renderizarTabelaDraft() {
   } else {
     refs.tabelaDraft.innerHTML = componentesDraft.map((component) => `
       <tr>
-        <td class="table-code">${escapeHtml(component.codigo_componente)}</td>
+        <td class="table-code">${escapeHtml(formatarCodigoVisual(component.codigo_componente))}</td>
         <td class="table-description">${escapeHtml(component.descricao_componente)}</td>
         <td>${formatInteger(component.quantidade)}</td>
         <td>${formatDecimal(Number(component.quantidade) * Number(component.massa_kg || 0), 3)} kg</td>
@@ -517,7 +525,7 @@ function abrirNovoComponenteLive() {
   modoComponente = 'live';
   resetFormComponente();
   document.getElementById('componente-modal-title').textContent = 'Adicionar Componente';
-  document.getElementById('componente-modal-subtitle').textContent = `${submontagemAtual.codigo} - ${submontagemAtual.descricao}`;
+  document.getElementById('componente-modal-subtitle').textContent = montarRotuloCodigoDescricao(submontagemAtual.codigo, submontagemAtual.descricao);
   openModal(refs.componenteModal);
 }
 
@@ -533,7 +541,7 @@ function abrirEdicaoComponenteLive(componente) {
   modoComponente = 'live';
   preencherFormularioComponente(componente);
   document.getElementById('componente-modal-title').textContent = 'Editar Componente';
-  document.getElementById('componente-modal-subtitle').textContent = `${submontagemAtual.codigo} - ${submontagemAtual.descricao}`;
+  document.getElementById('componente-modal-subtitle').textContent = montarRotuloCodigoDescricao(submontagemAtual.codigo, submontagemAtual.descricao);
   openModal(refs.componenteModal);
 }
 
@@ -541,7 +549,7 @@ function preencherFormularioComponente(componente) {
   editandoComponenteId = Number(componente.id_item_componente);
   campos.componenteItemIdAtual.value = componente.id_item_componente;
   campos.componenteItemId.value = componente.id_item_componente;
-  campos.componenteItemBusca.value = `${componente.codigo_componente} - ${componente.descricao_componente}`;
+  campos.componenteItemBusca.value = montarRotuloCodigoDescricao(componente.codigo_componente, componente.descricao_componente);
   campos.componenteQuantidade.value = Number(componente.quantidade);
   campos.componenteObservacao.value = componente.observacao || '';
   document.getElementById('btn-atualizar-componente').disabled = false;
@@ -836,7 +844,7 @@ function imprimirEstruturaAtual() {
     ? '<tr><td colspan="6">Nenhum componente cadastrado.</td></tr>'
     : componentesEstruturaCache.map((component) => `
       <tr>
-        <td>${escapeHtml(component.codigo_componente)}</td>
+        <td>${escapeHtml(formatarCodigoVisual(component.codigo_componente))}</td>
         <td>${escapeHtml(component.descricao_componente)}</td>
         <td>${formatInteger(component.quantidade)}</td>
         <td>${escapeHtml(component.tipo_componente || '-')}</td>
@@ -857,7 +865,7 @@ function imprimirEstruturaAtual() {
     <html lang="pt-BR">
     <head>
       <meta charset="UTF-8">
-      <title>Estrutura ${escapeHtml(submontagemAtual.codigo)}</title>
+      <title>Estrutura ${escapeHtml(formatarCodigoVisual(submontagemAtual.codigo))}</title>
       <style>
         body { font-family: Arial, sans-serif; margin: 24px; color: #111827; }
         h1 { margin-bottom: 4px; font-size: 24px; }
@@ -870,7 +878,7 @@ function imprimirEstruturaAtual() {
       </style>
     </head>
     <body>
-      <h1>${escapeHtml(submontagemAtual.codigo)} - ${escapeHtml(submontagemAtual.descricao)}</h1>
+      <h1>${escapeHtml(formatarCodigoVisual(submontagemAtual.codigo))} - ${escapeHtml(submontagemAtual.descricao)}</h1>
       <p>${escapeHtml(document.getElementById('estrutura-detalhe').textContent)}</p>
       <div class="chips">
         <span>${escapeHtml(document.getElementById('estrutura-total-componentes').textContent)}</span>
@@ -915,7 +923,7 @@ function renderizarSugestoesItens(termo) {
 
   campos.componenteSugestoes.innerHTML = itensFiltrados.map((item) => `
     <button type="button" class="autocomplete-option" data-item-id="${item.id}">
-      <strong>${escapeHtml(item.codigo)} - ${escapeHtml(item.descricao)}</strong>
+      <strong>${escapeHtml(formatarCodigoVisual(item.codigo))} - ${escapeHtml(item.descricao)}</strong>
       <span>${escapeHtml(`${item.tipo} | Massa: ${formatDecimal(item.massa_kg || 0, 3)} kg`)}</span>
     </button>
   `).join('');

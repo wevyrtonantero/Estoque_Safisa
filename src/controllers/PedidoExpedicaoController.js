@@ -1,4 +1,5 @@
 const PedidoExpedicaoModel = require('../models/PedidoExpedicaoModel');
+const PedidoEtiquetaService = require('../services/PedidoEtiquetaService');
 const { recordAuditLog } = require('../audit/auditLogger');
 
 function normalizeOptionalInteger(value) {
@@ -260,6 +261,81 @@ const PedidoExpedicaoController = {
       }
 
       return res.status(500).json({ message: 'Erro ao vincular os numeros de serie ao pedido.' });
+    }
+  },
+
+  async gerarEtiquetasItem(req, res) {
+    try {
+      const itemId = normalizeOptionalInteger(req.params.itemId);
+      if (!Number.isInteger(itemId)) {
+        return res.status(400).json({ message: 'O item do pedido informado e invalido.' });
+      }
+
+      const job = await PedidoEtiquetaService.buildItemPrintJob(itemId);
+      return res.status(200).json(job);
+    } catch (error) {
+      console.error('Erro ao gerar etiquetas do item do pedido:', error);
+
+      if (error.statusCode) {
+        return res.status(error.statusCode).json({
+          message: error.message,
+          details: error.details || null
+        });
+      }
+
+      return res.status(500).json({ message: error.message || 'Erro ao gerar as etiquetas do item.' });
+    }
+  },
+
+  async gerarEtiquetasCaixa(req, res) {
+    try {
+      const pedidoId = normalizeOptionalInteger(req.params.id);
+      if (!Number.isInteger(pedidoId)) {
+        return res.status(400).json({ message: 'O pedido informado e invalido.' });
+      }
+
+      const job = await PedidoEtiquetaService.buildCaixaPrintJob(pedidoId);
+      return res.status(200).json(job);
+    } catch (error) {
+      console.error('Erro ao gerar etiquetas de caixa do pedido:', error);
+
+      if (error.statusCode) {
+        return res.status(error.statusCode).json({
+          message: error.message,
+          details: error.details || null
+        });
+      }
+
+      return res.status(500).json({ message: error.message || 'Erro ao gerar as etiquetas da caixa.' });
+    }
+  },
+
+  async registrarHistoricoImpressao(req, res) {
+    try {
+      const historico = await PedidoEtiquetaService.registerPrintHistory(
+        Array.isArray(req.body?.entries) ? req.body.entries : [],
+        {
+          impressora_nome: req.body?.impressora_nome,
+          id_usuario: req.currentUser?.id || null,
+          usuario_nome: req.currentUser?.nome || null
+        }
+      );
+
+      return res.status(201).json({
+        message: 'Historico de impressao registrado com sucesso.',
+        total: historico.length
+      });
+    } catch (error) {
+      console.error('Erro ao registrar historico de impressao das etiquetas:', error);
+
+      if (error.statusCode) {
+        return res.status(error.statusCode).json({
+          message: error.message,
+          details: error.details || null
+        });
+      }
+
+      return res.status(500).json({ message: error.message || 'Erro ao registrar o historico de impressao.' });
     }
   },
 
