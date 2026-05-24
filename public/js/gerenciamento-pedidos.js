@@ -72,6 +72,7 @@ const refs = {
   seriaisTitulo: document.getElementById('pedido-seriais-titulo'),
   seriaisSubtitulo: document.getElementById('pedido-seriais-subtitulo'),
   seriaisResumo: document.getElementById('pedido-seriais-resumo'),
+  seriaisVinculados: document.getElementById('pedido-seriais-vinculados'),
   seriaisTbody: document.getElementById('pedido-seriais-tbody'),
 
   faltasModal: document.getElementById('pedido-faltas-modal'),
@@ -80,6 +81,9 @@ const refs = {
   faltasTbody: document.getElementById('pedido-faltas-tbody'),
 
   historicoModal: document.getElementById('pedido-historico-modal'),
+  historicoFiltroCliente: document.getElementById('pedido-historico-filtro-cliente'),
+  historicoFiltroTransportadora: document.getElementById('pedido-historico-filtro-transportadora'),
+  historicoFiltroPedido: document.getElementById('pedido-historico-filtro-pedido'),
 
   relatorioModal: document.getElementById('pedido-relatorio-modal'),
   relatorioTitulo: document.getElementById('pedido-relatorio-titulo'),
@@ -93,9 +97,11 @@ const refs = {
 
 document.addEventListener('DOMContentLoaded', async () => {
   bindEvents();
+  registrarSincronizacaoEntreAbas();
 
   try {
     await carregarTudo();
+    await abrirPedidoViaQueryString();
     iniciarAtualizacaoAutomatica();
   } catch (error) {
     mostrarMensagem(error.message || 'Nao foi possivel carregar a tela de pedidos.', 'error');
@@ -116,6 +122,10 @@ function bindEvents() {
   refs.pedidosHojeLista.addEventListener('click', handleListaPedidosActions);
   refs.prioridadeLista.addEventListener('click', handleListaPedidosActions);
   refs.historicoTbody.addEventListener('click', handleHistoricoActions);
+  refs.historicoFiltroCliente.addEventListener('input', () => renderizarHistoricoPedidos(obterHistoricoFiltrado()));
+  refs.historicoFiltroTransportadora.addEventListener('input', () => renderizarHistoricoPedidos(obterHistoricoFiltrado()));
+  refs.historicoFiltroPedido.addEventListener('input', () => renderizarHistoricoPedidos(obterHistoricoFiltrado()));
+  document.getElementById('pedido-historico-filtro-limpar').addEventListener('click', limparFiltrosHistorico);
 
   document.getElementById('btn-fechar-modal-pedido-criacao').addEventListener('click', fecharModalCriacao);
   document.getElementById('btn-cancelar-modal-pedido-criacao').addEventListener('click', fecharModalCriacao);
@@ -141,6 +151,9 @@ function bindEvents() {
   document.getElementById('btn-fechar-modal-pedido-seriais').addEventListener('click', fecharModalSeriais);
   document.getElementById('btn-cancelar-modal-pedido-seriais').addEventListener('click', fecharModalSeriais);
   document.getElementById('pedido-btn-vincular-seriais').addEventListener('click', vincularSeriaisSelecionados);
+  refs.seriaisTbody.addEventListener('click', handleSeriaisModalClick);
+  refs.seriaisTbody.addEventListener('change', handleSeriaisModalChange);
+  refs.seriaisVinculados.addEventListener('click', handleSeriaisVinculadosActions);
 
   document.getElementById('btn-fechar-modal-pedido-faltas').addEventListener('click', fecharModalFaltas);
   document.getElementById('btn-fechar-modal-pedido-historico').addEventListener('click', fecharModalHistoricoPedidos);
@@ -156,6 +169,31 @@ function bindEvents() {
   document.addEventListener('keydown', handleKeyboardShortcuts);
   document.querySelectorAll('[data-close-modal]').forEach((element) => {
     element.addEventListener('click', handleModalBackdrop);
+  });
+}
+
+function notificarAtualizacaoOperacional(topics, payload = {}) {
+  window.SafisaSync?.notify?.(topics, payload);
+}
+
+function registrarSincronizacaoEntreAbas() {
+  if (!window.SafisaSync?.subscribe) {
+    return;
+  }
+
+  let refreshTimer = null;
+  const agendarRefresh = () => {
+    window.clearTimeout(refreshTimer);
+    refreshTimer = window.setTimeout(() => {
+      carregarTudo()
+        .catch((error) => {
+          console.error('Falha ao sincronizar pedidos entre abas:', error);
+        });
+    }, 180);
+  };
+
+  ['pedidos-expedicao', 'submontagem-seriais', 'estoque'].forEach((topic) => {
+    window.SafisaSync.subscribe(topic, agendarRefresh);
   });
 }
 
@@ -221,7 +259,7 @@ function obterPedidosFiltrados() {
 function renderizarPedidos() {
   const pedidosFiltrados = obterPedidosFiltrados();
   const ativos = pedidosFiltrados.filter((pedido) => pedido.status !== 'PEDIDO COLETADO');
-  const historico = pedidosCache.filter((pedido) => pedido.status === 'PEDIDO COLETADO');
+  const historico = obterHistoricoFiltrado();
   const ativosOrdenados = [...ativos].sort((a, b) => a.prioridade_ordem - b.prioridade_ordem || a.id - b.id);
   const pedidosHoje = ativosOrdenados.filter((pedido) => isPedidoProgramadoHoje(pedido));
   const pedidosBase = ativosOrdenados.filter((pedido) => !isPedidoProgramadoHoje(pedido));
@@ -254,17 +292,18 @@ function renderizarHistoricoPedidos(historico) {
   refs.historicoTbody.innerHTML = historico.length
     ? historico.map((pedido) => `
       <tr>
-        <td class="table-code">${escapeHtml(pedido.codigo_pedido)}</td>
         <td>${escapeHtml(pedido.cliente_nome)}</td>
+        <td class="table-code">${escapeHtml(pedido.codigo_pedido)}</td>
         <td>${escapeHtml(pedido.cidade || '-')}</td>
-        <td>${renderStatusPedido(pedido.status)}</td>
-        <td>${formatarDataCurta(pedido.data_coleta || pedido.data_pedido)}</td>
+        <td>${renderStatusPedido('COLETADO')}</td>
+        <td>${formatDate(pedido.data_coleta || pedido.data_pedido)}</td>
         <td>${escapeHtml(pedido.transportadora || '-')}</td>
         <td>${formatDecimal(pedido.massa_total_kg || 0)} kg</td>
+        <td>${escapeHtml(String(pedido.quantidade_volumes ?? '-'))}</td>
         <td><button class="btn btn-neutral btn-small" type="button" data-action="abrir-pedido" data-id="${pedido.id}">Ver</button></td>
       </tr>
     `).join('')
-    : '<tr><td colspan="8" class="empty-state">Nenhum pedido coletado ainda.</td></tr>';
+    : '<tr><td colspan="9" class="empty-state">Nenhum pedido coletado ainda.</td></tr>';
 }
 
 function renderizarCardPedido(pedido, options = {}) {
@@ -292,7 +331,7 @@ function renderizarCardPedido(pedido, options = {}) {
           </div>
 
           <div class="selected-tags pedido-prioridade-tags">
-            <span class="selected-tag ${pedido.pode_atender ? 'status-ready' : 'status-pending'}">${pedido.pode_atender ? 'Pode montar' : 'Falta material'}</span>
+            <span class="selected-tag ${obterClasseChipPedido(pedido)}">${escapeHtml(obterTextoChipPedido(pedido))}</span>
           </div>
         </div>
 
@@ -370,6 +409,66 @@ function abrirModalHistoricoPedidos() {
 
 function fecharModalHistoricoPedidos() {
   closeModal(refs.historicoModal);
+}
+
+function limparFiltrosHistorico() {
+  refs.historicoFiltroCliente.value = '';
+  refs.historicoFiltroTransportadora.value = '';
+  refs.historicoFiltroPedido.value = '';
+  renderizarHistoricoPedidos(obterHistoricoFiltrado());
+}
+
+function obterHistoricoFiltrado() {
+  const filtroCliente = normalizarBusca(refs.historicoFiltroCliente?.value?.trim());
+  const filtroTransportadora = normalizarBusca(refs.historicoFiltroTransportadora?.value?.trim());
+  const filtroPedido = normalizarBusca(refs.historicoFiltroPedido?.value?.trim());
+
+  return pedidosCache
+    .filter((pedido) => pedido.status === 'PEDIDO COLETADO')
+    .filter((pedido) => {
+      if (filtroCliente && !normalizarBusca(pedido.cliente_nome).includes(filtroCliente)) {
+        return false;
+      }
+
+      if (filtroTransportadora && !normalizarBusca(pedido.transportadora).includes(filtroTransportadora)) {
+        return false;
+      }
+
+      if (filtroPedido && !normalizarBusca(pedido.codigo_pedido).includes(filtroPedido)) {
+        return false;
+      }
+
+      return true;
+    });
+}
+
+function obterTextoChipPedido(pedido) {
+  if (!pedido.pode_atender && ['AGUARDANDO MONTAGEM', 'EM MONTAGEM'].includes(pedido.status)) {
+    return 'Faltam itens';
+  }
+
+  if (pedido.status === 'PEDIDO COLETADO') {
+    return 'COLETADO';
+  }
+
+  return pedido.status || 'AGUARDANDO MONTAGEM';
+}
+
+function obterClasseChipPedido(pedido) {
+  const texto = obterTextoChipPedido(pedido);
+  if (texto === 'Faltam itens') {
+    return 'status-pending';
+  }
+
+  if (texto === 'AGUARDANDO TRANSPORTADORA' || texto === 'COLETADO') {
+    return 'status-ready';
+  }
+
+  if (texto === 'AGUARDANDO NF') {
+    return 'status-warning';
+  }
+
+  return 'status-neutral';
 }
 
 function abrirModalRelatorio(tipo) {
@@ -575,6 +674,7 @@ async function atualizarProgramacaoHojePedido(pedidoId, programadoHoje) {
   atualizarPedidoCache(atualizado);
   renderizarPedidos();
   atualizarIndicadores();
+  notificarAtualizacaoOperacional(['pedidos-expedicao']);
   mostrarMensagem(
     programadoHoje
       ? `Pedido ${pedido.codigo_pedido} adicionado em Sai hoje.`
@@ -816,6 +916,7 @@ async function handleCriarPedido(event) {
     });
 
     fecharModalCriacao();
+    notificarAtualizacaoOperacional(['pedidos-expedicao']);
     mostrarMensagem(Number.isInteger(pedidoId) ? 'Pedido atualizado com sucesso.' : 'Pedido criado com sucesso.', 'success');
     await carregarTudo();
     if (Number.isInteger(pedidoId)) {
@@ -882,9 +983,6 @@ function renderizarItensPedidoDetalhe(pedido) {
             ? vinculos.map((serial) => `
               <span class="selected-tag">
                 ${escapeHtml(serial.numero_serie)}
-                ${pedido.status === 'PEDIDO COLETADO'
-                  ? ''
-                  : `<button type="button" class="tag-inline-action" data-action="desvincular-serial" data-binding-id="${serial.id}" aria-label="Desvincular ${escapeHtml(serial.numero_serie)}">x</button>`}
               </span>
             `).join('')
             : '<span class="selected-tag">Nenhum numero vinculado</span>'}
@@ -902,7 +1000,7 @@ function renderizarItensPedidoDetalhe(pedido) {
           data-item-id="${item.id}"
           ${pedido.status === 'PEDIDO COLETADO' ? 'disabled' : ''}
         >
-          Vincular seriais
+          Vincular servo
         </button>
       `);
     }
@@ -951,10 +1049,6 @@ async function handleDetalheItemActions(event) {
     return;
   }
 
-  const desvincularButton = event.target.closest('[data-action="desvincular-serial"][data-binding-id]');
-  if (desvincularButton) {
-    await desvincularSerialPedido(Number(desvincularButton.dataset.bindingId));
-  }
 }
 
 async function handleDetalheItemChanges(event) {
@@ -976,6 +1070,7 @@ async function handleDetalheItemChanges(event) {
     renderizarItensPedidoDetalhe(pedido);
     atualizarIndicadores();
     renderizarPedidos();
+    notificarAtualizacaoOperacional(['pedidos-expedicao']);
     refs.detalheResumo.innerHTML = `
       <span class="selected-tag">${escapeHtml(pedido.status)}</span>
       <span class="selected-tag">Itens: ${formatInteger(pedido.itens_concluidos || 0)}/${formatInteger(pedido.total_itens || 0)}</span>
@@ -996,7 +1091,7 @@ async function abrirModalSeriaisPedido(itemId) {
 
   refs.seriaisMensagem.className = 'message hidden';
   refs.seriaisMensagem.textContent = '';
-  refs.seriaisTitulo.textContent = `${result.item.codigo} - numeros disponiveis`;
+  refs.seriaisTitulo.textContent = `${result.item.codigo} - vincular servo`;
   refs.seriaisSubtitulo.textContent = `Modelo serial: ${result.item.modelo_serial_codigo} | Necessario: ${formatInteger(result.item.quantidade_seriais_necessarios || result.item.quantidade)} | Vinculados: ${formatInteger(result.vinculados.length)}`;
   refs.seriaisResumo.innerHTML = `
     <span class="selected-tag">Pedido: ${escapeHtml((obterPedidoSelecionado() || {}).codigo_pedido || '-')}</span>
@@ -1005,11 +1100,27 @@ async function abrirModalSeriaisPedido(itemId) {
     <span class="selected-tag">Disponiveis: ${formatInteger(result.disponiveis.length)}</span>
   `;
 
+  refs.seriaisVinculados.classList.remove('empty');
+  refs.seriaisVinculados.innerHTML = result.vinculados.length
+    ? result.vinculados.map((serial) => `
+      <span class="selected-tag">
+        ${escapeHtml(serial.numero_serie)}
+        ${serial.data_saida
+          ? '<span class="tag-inline-label">Coletado</span>'
+          : `<button type="button" class="tag-inline-action is-neutral" data-action="desvincular-serial-modal" data-binding-id="${serial.id}">Remover</button>`}
+      </span>
+    `).join('')
+    : 'Nenhum servo vinculado ainda.';
+
+  if (!result.vinculados.length) {
+    refs.seriaisVinculados.classList.add('empty');
+  }
+
   if (!result.disponiveis.length) {
     refs.seriaisTbody.innerHTML = '<tr><td colspan="4" class="empty-state">Nenhum numero de serie disponivel para este modelo.</td></tr>';
   } else {
     refs.seriaisTbody.innerHTML = result.disponiveis.map((serial) => `
-      <tr>
+      <tr class="pedido-serial-row" data-serial-row="${serial.id}">
         <td><input type="checkbox" class="pedido-serial-checkbox" value="${serial.id}"></td>
         <td class="table-code">${escapeHtml(serial.numero_serie)}</td>
         <td>${escapeHtml(`${serial.modelo_servo_codigo} - ${serial.modelo_servo_descricao}`)}</td>
@@ -1023,6 +1134,46 @@ async function abrirModalSeriaisPedido(itemId) {
 
 function fecharModalSeriais() {
   closeModal(refs.seriaisModal);
+}
+
+function handleSeriaisModalClick(event) {
+  const row = event.target.closest('tr[data-serial-row]');
+  if (!row || event.target.closest('input, button, a, label')) {
+    return;
+  }
+
+  const checkbox = row.querySelector('.pedido-serial-checkbox');
+  if (!checkbox) {
+    return;
+  }
+
+  checkbox.checked = !checkbox.checked;
+  atualizarEstadoLinhaSerial(row, checkbox.checked);
+}
+
+function handleSeriaisModalChange(event) {
+  const checkbox = event.target.closest('.pedido-serial-checkbox');
+  if (!checkbox) {
+    return;
+  }
+
+  const row = checkbox.closest('tr[data-serial-row]');
+  if (row) {
+    atualizarEstadoLinhaSerial(row, checkbox.checked);
+  }
+}
+
+function atualizarEstadoLinhaSerial(row, checked) {
+  row.classList.toggle('is-selected', Boolean(checked));
+}
+
+async function handleSeriaisVinculadosActions(event) {
+  const button = event.target.closest('[data-action="desvincular-serial-modal"][data-binding-id]');
+  if (!button) {
+    return;
+  }
+
+  await desvincularSerialPedido(Number(button.dataset.bindingId), { keepSerialModalOpen: true });
 }
 
 async function vincularSeriaisSelecionados() {
@@ -1053,6 +1204,7 @@ async function vincularSeriaisSelecionados() {
     fecharModalSeriais();
     renderizarPedidos();
     atualizarIndicadores();
+    notificarAtualizacaoOperacional(['pedidos-expedicao', 'submontagem-seriais', 'estoque']);
 
     if (pedidoSelecionadoId === pedido.id) {
       renderizarItensPedidoDetalhe(pedido);
@@ -1071,7 +1223,7 @@ async function vincularSeriaisSelecionados() {
   }
 }
 
-async function desvincularSerialPedido(bindingId) {
+async function desvincularSerialPedido(bindingId, options = {}) {
   try {
     const pedido = await fetchJson(`${pedidosApiBaseUrl}/seriais/${bindingId}`, {
       method: 'DELETE'
@@ -1080,6 +1232,7 @@ async function desvincularSerialPedido(bindingId) {
     atualizarPedidoCache(pedido);
     renderizarPedidos();
     atualizarIndicadores();
+    notificarAtualizacaoOperacional(['pedidos-expedicao', 'submontagem-seriais', 'estoque']);
 
     if (pedidoSelecionadoId === pedido.id) {
       renderizarItensPedidoDetalhe(pedido);
@@ -1091,7 +1244,18 @@ async function desvincularSerialPedido(bindingId) {
         <span class="selected-tag">Seriais vinculados: ${formatInteger(contarSeriaisPedido(pedido))}</span>
       `;
     }
+
+    if (options.keepSerialModalOpen && pedidoItemSerialSelecionadoId) {
+      await abrirModalSeriaisPedido(pedidoItemSerialSelecionadoId);
+    }
   } catch (error) {
+    if (options.keepSerialModalOpen) {
+      refs.seriaisMensagem.textContent = error.message || 'Nao foi possivel remover o servo vinculado.';
+      refs.seriaisMensagem.className = 'message error';
+      refs.seriaisMensagem.classList.remove('hidden');
+      return;
+    }
+
     mostrarMensagemDetalhe(error.message, 'error');
   }
 }
@@ -1116,6 +1280,7 @@ async function salvarDadosFinaisPedido() {
     atualizarPedidoCache(atualizado);
     renderizarPedidos();
     atualizarIndicadores();
+    notificarAtualizacaoOperacional(['pedidos-expedicao']);
     mostrarMensagemDetalhe('Dados finais do pedido salvos com sucesso.', 'success');
     await abrirDetalhePedido(atualizado.id);
   } catch (error) {
@@ -1130,6 +1295,16 @@ async function marcarPedidoColetado() {
   }
 
   try {
+    await fetchJson(`${pedidosApiBaseUrl}/${pedido.id}/dados-finais`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        numero_nota_fiscal: refs.detalheNf.disabled ? undefined : refs.detalheNf.value.trim(),
+        peso_total_override_kg: refs.detalhePesoTotal.value,
+        quantidade_volumes: refs.detalheVolumes.value
+      })
+    });
+
     const atualizado = await fetchJson(`${pedidosApiBaseUrl}/${pedido.id}/coletar`, {
       method: 'POST'
     });
@@ -1137,6 +1312,7 @@ async function marcarPedidoColetado() {
     atualizarPedidoCache(atualizado);
     renderizarPedidos();
     atualizarIndicadores();
+    notificarAtualizacaoOperacional(['pedidos-expedicao', 'submontagem-seriais', 'estoque']);
     mostrarMensagem('Pedido coletado com sucesso.', 'success');
     await abrirDetalhePedido(atualizado.id);
   } catch (error) {
@@ -1289,12 +1465,6 @@ function iniciarAtualizacaoAutomatica() {
 
     try {
       await carregarTudo();
-      if (pedidoSelecionadoId && !refs.detalheModal.classList.contains('hidden')) {
-        const pedidoAtual = pedidosCache.find((pedido) => pedido.id === Number(pedidoSelecionadoId));
-        if (pedidoAtual) {
-          await abrirDetalhePedido(pedidoAtual.id);
-        }
-      }
     } catch (_) {
       // Atualizacao silenciosa para nao ficar poluindo a tela.
     }
@@ -1320,6 +1490,10 @@ function normalizeDateInput(value) {
 function isNumeroSerieModel(item) {
   const codigo = String(item?.codigo || '').toUpperCase();
   const descricao = String(item?.descricao || '').toUpperCase();
+  if (['600', '550', '401RB', '401', '500', '450', '400', '350', '300', '250', '150', '100', '001'].includes(codigo)) {
+    return true;
+  }
+
   return ['VF', 'MC', 'AL', 'BR', 'SAF', 'CJ', 'MBF'].some((keyword) => codigo.includes(keyword))
     && descricao.includes('SERVO');
 }
@@ -1381,8 +1555,23 @@ function getTodayDateInput() {
   return `${year}-${month}-${day}`;
 }
 
+async function abrirPedidoViaQueryString() {
+  const params = new URLSearchParams(window.location.search);
+  const codigoPedido = params.get('pedido');
+  if (!codigoPedido) {
+    return;
+  }
+
+  const pedido = pedidosCache.find((item) => String(item.codigo_pedido || '').trim() === String(codigoPedido).trim());
+  if (!pedido) {
+    return;
+  }
+
+  await abrirDetalhePedido(pedido.id);
+}
+
 function renderStatusPedido(status) {
-  const className = status === 'PEDIDO COLETADO'
+  const className = status === 'PEDIDO COLETADO' || status === 'COLETADO'
     ? 'status-chip is-success'
     : (status === 'AGUARDANDO NF' ? 'status-chip is-warning' : 'status-chip');
 

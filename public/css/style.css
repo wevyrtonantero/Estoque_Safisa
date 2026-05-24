@@ -977,6 +977,29 @@ textarea {
   background: var(--primary-700);
 }
 
+.selected-tag .tag-inline-action,
+.selected-tag .tag-inline-action.is-neutral {
+  width: auto;
+  height: auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--primary-900);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.tag-inline-label {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(30, 139, 104, 0.12);
+  color: #156a50;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
 .compact-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) auto minmax(0, 1fr) minmax(260px, 1fr);
@@ -1415,15 +1438,13 @@ textarea {
 .consulta-stock-table th:nth-child(10),
 .consulta-stock-table td:nth-child(10),
 .consulta-stock-table th:nth-child(11),
-.consulta-stock-table td:nth-child(11),
-.consulta-stock-table th:nth-child(12),
-.consulta-stock-table td:nth-child(12) {
+.consulta-stock-table td:nth-child(11) {
   width: 88px;
   text-align: right;
 }
 
-.consulta-stock-table th:nth-child(13),
-.consulta-stock-table td:nth-child(13) {
+.consulta-stock-table th:nth-child(12),
+.consulta-stock-table td:nth-child(12) {
   width: 118px;
 }
 
@@ -1436,28 +1457,48 @@ textarea {
   background: rgba(31, 122, 140, 0.055);
 }
 
+.consulta-stock-table th:nth-child(6),
+.consulta-stock-table td:nth-child(6) {
+  background: rgba(112, 92, 168, 0.065);
+}
+
 .consulta-stock-table th:nth-child(7),
 .consulta-stock-table td:nth-child(7) {
-  background: rgba(112, 92, 168, 0.065);
+  background: rgba(205, 151, 33, 0.075);
 }
 
 .consulta-stock-table th:nth-child(8),
 .consulta-stock-table td:nth-child(8) {
-  background: rgba(205, 151, 33, 0.075);
+  background: rgba(35, 105, 180, 0.06);
 }
 
 .consulta-stock-table th:nth-child(9),
 .consulta-stock-table td:nth-child(9) {
-  background: rgba(35, 105, 180, 0.06);
+  background: rgba(181, 88, 76, 0.065);
 }
 
 .consulta-stock-table th:nth-child(10),
 .consulta-stock-table td:nth-child(10) {
-  background: rgba(181, 88, 76, 0.065);
+  background: rgba(35, 105, 180, 0.045);
 }
 
 .table-row-critical {
   background: rgba(214, 69, 69, 0.08) !important;
+}
+
+.table-balance-negative {
+  color: #b42318;
+  font-weight: 800;
+}
+
+.table-balance-positive {
+  color: #067647;
+  font-weight: 800;
+}
+
+.table-coverage-cell .table-primary-line,
+.table-coverage-cell .table-note {
+  white-space: nowrap;
 }
 
 table {
@@ -1545,6 +1586,12 @@ tbody tr:hover {
 
 .table-muted {
   color: var(--text-soft);
+}
+
+.table-subtext {
+  margin-top: 3px;
+  color: var(--text-soft);
+  font-size: 0.84rem;
 }
 
 .table-description {
@@ -2650,6 +2697,16 @@ tbody tr:hover {
   color: #b13a3a;
 }
 
+.status-warning {
+  background: rgba(236, 171, 61, 0.18);
+  color: #8f6110;
+}
+
+.status-neutral {
+  background: rgba(53, 102, 150, 0.12);
+  color: var(--primary-900);
+}
+
 .pedido-page .workspace {
   width: min(1660px, calc(100% - 20px));
   padding-top: 12px;
@@ -2734,6 +2791,14 @@ tbody tr:hover {
   padding: 0 0 0 6px;
   cursor: pointer;
   font: inherit;
+}
+
+.pedido-serial-row {
+  cursor: pointer;
+}
+
+.pedido-serial-row.is-selected td {
+  background: rgba(231, 241, 251, 0.72);
 }
 
 .pedido-item-checkbox {

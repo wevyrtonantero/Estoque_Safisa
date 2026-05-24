@@ -481,7 +481,13 @@ const PedidoExpedicaoController = {
 
       const pedido = await PedidoExpedicaoModel.marcarColetado(
         id,
-        req.currentUser?.id || null
+        req.currentUser
+          ? {
+            id: req.currentUser.id,
+            login: req.currentUser.login,
+            nome: req.currentUser.nome
+          }
+          : null
       );
 
       await recordAuditLog(req, {

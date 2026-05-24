@@ -156,6 +156,7 @@ const refs = {
 
 document.addEventListener('DOMContentLoaded', async () => {
   bindEvents();
+  registrarSincronizacaoEntreAbas();
 
   try {
     await carregarTudo();
@@ -480,6 +481,30 @@ async function carregarEstruturasParaSugestoesVenda(termo) {
   }
 
   await Promise.allSettled(candidatos.map((item) => garantirDisponibilidadeVendaCarregada(item)));
+}
+
+function notificarAtualizacaoOperacional(topics, payload = {}) {
+  window.SafisaSync?.notify?.(topics, payload);
+}
+
+function registrarSincronizacaoEntreAbas() {
+  if (!window.SafisaSync?.subscribe) {
+    return;
+  }
+
+  let refreshTimer = null;
+  const agendarRefresh = () => {
+    window.clearTimeout(refreshTimer);
+    refreshTimer = window.setTimeout(() => {
+      carregarTudo().catch((error) => {
+        console.error('Falha ao sincronizar Expedicao entre abas:', error);
+      });
+    }, 180);
+  };
+
+  ['estoque', 'pedidos-expedicao', 'submontagem-seriais', 'solicitacoes-estoque', 'producao'].forEach((topic) => {
+    window.SafisaSync.subscribe(topic, agendarRefresh);
+  });
 }
 
 async function garantirDisponibilidadeVendaCarregada(item, visitados = new Set()) {
@@ -2167,6 +2192,9 @@ async function baixarSaida() {
     carregarEstoqueMontagem(),
     carregarHistoricoSaidas()
   ]);
+  if (baixados > 0) {
+    notificarAtualizacaoOperacional(['estoque', 'submontagem-seriais']);
+  }
 
   if (pendencias.length) {
     abrirModalFaltas(consolidarPendenciasVenda(pendencias));
@@ -2300,6 +2328,7 @@ async function handleConsumirProducao(event) {
     fecharModalConsumirProducao();
     mostrarMensagem('Quantidade transferida da producao para a Expedicao.', 'success');
     await Promise.all([carregarProducaoEmAndamento(), carregarEstoqueExpedicao()]);
+    notificarAtualizacaoOperacional(['producao', 'estoque']);
   } catch (error) {
     refs.consumirProducaoMensagem.textContent = error.message;
     refs.consumirProducaoMensagem.className = 'message error';
@@ -2469,6 +2498,7 @@ async function handlePedidosActions(event) {
 
     mostrarMensagem('Pedido da Expedicao excluido com sucesso.', 'success');
     await carregarPedidosExpedicao();
+    notificarAtualizacaoOperacional(['solicitacoes-estoque']);
   } catch (error) {
     mostrarMensagem(error.message, 'error');
   }
@@ -2520,6 +2550,9 @@ async function excluirTodosPedidosExpedicao() {
   }
 
   await carregarPedidosExpedicao();
+  if (ok > 0) {
+    notificarAtualizacaoOperacional(['solicitacoes-estoque']);
+  }
 }
 
 function renderizarHistorico() {

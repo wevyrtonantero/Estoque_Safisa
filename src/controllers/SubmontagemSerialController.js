@@ -47,6 +47,7 @@ const SubmontagemSerialController = {
       const registros = await SubmontagemSerialModel.findAll({
         numero_serie: req.query.numero_serie ? String(req.query.numero_serie).trim() : '',
         numero_pedido: req.query.numero_pedido ? String(req.query.numero_pedido).trim() : '',
+        cliente_nome: req.query.cliente_nome ? String(req.query.cliente_nome).trim() : '',
         montador_nome: req.query.montador_nome ? String(req.query.montador_nome).trim() : '',
         id_modelo_servo: normalizeOptionalInteger(req.query.id_modelo_servo),
         data_montagem_inicio: req.query.data_montagem_inicio ? String(req.query.data_montagem_inicio).trim() : '',

@@ -4,6 +4,21 @@ const EstoqueModel = require('./EstoqueModel');
 const SERIAL_BLOCK_SIZE = 100000;
 const SERIAL_PREFIX_START = 'A'.charCodeAt(0);
 const ELIGIBLE_CODE_KEYWORDS = Object.freeze(['VF', 'MC', 'AL', 'BR', 'SAF', 'CJ', 'MBF']);
+const ELIGIBLE_ITEM_CODES = Object.freeze([
+  '600',
+  '550',
+  '401RB',
+  '401',
+  '500',
+  '450',
+  '400',
+  '350',
+  '300',
+  '250',
+  '150',
+  '100',
+  '001'
+]);
 
 function normalizeOptionalInteger(value) {
   if (value === undefined || value === null || value === '') {
@@ -22,6 +37,10 @@ class SubmontagemSerialModel {
   static isEligibleModel(codigo, descricao = '') {
     const normalized = String(codigo || '').trim().toUpperCase();
     const normalizedDescription = String(descricao || '').trim().toUpperCase();
+    if (ELIGIBLE_ITEM_CODES.includes(normalized)) {
+      return true;
+    }
+
     return ELIGIBLE_CODE_KEYWORDS.some((keyword) => normalized.includes(keyword))
       && normalizedDescription.includes('SERVO');
   }
@@ -85,6 +104,7 @@ class SubmontagemSerialModel {
       id_montador: row.id_montador === null ? null : Number(row.id_montador),
       montador_nome: row.montador_nome,
       numero_pedido: row.numero_pedido || null,
+      cliente_nome: row.cliente_nome || null,
       data_saida: row.data_saida || null,
       created_at: row.created_at || null,
       updated_at: row.updated_at || null
@@ -107,7 +127,8 @@ class SubmontagemSerialModel {
       return null;
     }
 
-    if (String(row.classificacao || '').trim().toUpperCase() !== 'SUBMONTAGEM') {
+    const classificacao = String(row.classificacao || '').trim().toUpperCase();
+    if (!['SUBMONTAGEM', 'ITEM'].includes(classificacao)) {
       return null;
     }
 
@@ -118,7 +139,8 @@ class SubmontagemSerialModel {
     return {
       id: Number(row.id),
       codigo: row.codigo,
-      descricao: row.descricao
+      descricao: row.descricao,
+      classificacao
     };
   }
 
@@ -160,6 +182,11 @@ class SubmontagemSerialModel {
     if (filters.numero_pedido) {
       conditions.push('COALESCE(s.numero_pedido, \'\') LIKE ?');
       params.push(`%${filters.numero_pedido}%`);
+    }
+
+    if (filters.cliente_nome) {
+      conditions.push('COALESCE(p.cliente_nome, \'\') LIKE ?');
+      params.push(`%${filters.cliente_nome}%`);
     }
 
     if (filters.montador_nome) {
@@ -204,8 +231,12 @@ class SubmontagemSerialModel {
 
     const [rows] = await db.query(
       `
-        SELECT *
+        SELECT
+          s.*,
+          p.cliente_nome
         FROM submontagem_seriais s
+        LEFT JOIN pedidos_expedicao p
+          ON p.codigo_pedido = s.numero_pedido
         WHERE ${whereClause}
         ORDER BY s.numero_sequencial DESC
         LIMIT ${limit}
@@ -333,7 +364,7 @@ class SubmontagemSerialModel {
 
     const modeloServo = await this.findModeloServoById(idModeloServo, db);
     if (!modeloServo) {
-      throw this.createBusinessError('O modelo de servo informado nao foi encontrado como submontagem elegivel para numero de serie.');
+      throw this.createBusinessError('O modelo informado nao foi encontrado como modelo elegivel para numero de serie.');
     }
 
     const connection = await db.getConnection();
@@ -349,7 +380,7 @@ class SubmontagemSerialModel {
       }
 
       if (!estoqueExpedicao || Number(estoqueExpedicao.ativo) !== 1) {
-        throw this.createBusinessError('O estoque da Expedicao nao esta disponivel para receber a submontagem pronta.');
+        throw this.createBusinessError('O estoque da Expedicao nao esta disponivel para receber o modelo seriado.');
       }
 
       const [rows] = await connection.query(
@@ -365,39 +396,88 @@ class SubmontagemSerialModel {
       const lastSequence = rows[0]?.numero_sequencial ? Number(rows[0].numero_sequencial) : 61123;
       const observacaoMovimento = `Montagem com registro de numero de serie por ${montadorNome}. Envio automatico para a Expedicao.`;
 
-      const componentesConsumidos = await EstoqueModel.consumeSubmontagemComponentsFromStock(
-        connection,
-        modeloServo,
-        quantidade,
-        estoqueMontagem.id,
-        estoqueExpedicao.nome,
-        observacaoMovimento
-      );
+      let componentesConsumidos = [];
 
-      const saldoAtualSubmontagem = await EstoqueModel.findSaldoForUpdate(
-        connection,
-        estoqueExpedicao.id,
-        modeloServo.id
-      );
-      const quantidadeAtualSubmontagem = saldoAtualSubmontagem ? Number(saldoAtualSubmontagem.quantidade) : 0;
-      const novoSaldoSubmontagem = Number((quantidadeAtualSubmontagem + Number(quantidade)).toFixed(2));
+      if (modeloServo.classificacao === 'SUBMONTAGEM') {
+        componentesConsumidos = await EstoqueModel.consumeSubmontagemComponentsFromStock(
+          connection,
+          modeloServo,
+          quantidade,
+          estoqueMontagem.id,
+          estoqueExpedicao.nome,
+          observacaoMovimento
+        );
 
-      await EstoqueModel.persistSaldo(
-        connection,
-        estoqueExpedicao.id,
-        modeloServo.id,
-        novoSaldoSubmontagem,
-        saldoAtualSubmontagem
-      );
+        const saldoAtualSubmontagem = await EstoqueModel.findSaldoForUpdate(
+          connection,
+          estoqueExpedicao.id,
+          modeloServo.id
+        );
+        const quantidadeAtualSubmontagem = saldoAtualSubmontagem ? Number(saldoAtualSubmontagem.quantidade) : 0;
+        const novoSaldoSubmontagem = Number((quantidadeAtualSubmontagem + Number(quantidade)).toFixed(2));
 
-      await EstoqueModel.createMovimentacao(connection, {
-        id_peca: modeloServo.id,
-        id_estoque_origem: estoqueMontagem.id,
-        id_estoque_destino: estoqueExpedicao.id,
-        tipo_movimentacao: 'ENTRADA_INICIAL',
-        quantidade,
-        observacao: `${observacaoMovimento} Submontagem montada e encaminhada para a Expedicao.`.slice(0, 255)
-      });
+        await EstoqueModel.persistSaldo(
+          connection,
+          estoqueExpedicao.id,
+          modeloServo.id,
+          novoSaldoSubmontagem,
+          saldoAtualSubmontagem
+        );
+
+        await EstoqueModel.createMovimentacao(connection, {
+          id_peca: modeloServo.id,
+          id_estoque_origem: estoqueMontagem.id,
+          id_estoque_destino: estoqueExpedicao.id,
+          tipo_movimentacao: 'ENTRADA_INICIAL',
+          quantidade,
+          observacao: `${observacaoMovimento} Submontagem montada e encaminhada para a Expedicao.`.slice(0, 255)
+        });
+      } else {
+        const saldoAtualItem = await EstoqueModel.findSaldoForUpdate(
+          connection,
+          estoqueMontagem.id,
+          modeloServo.id
+        );
+        const quantidadeAtualItem = saldoAtualItem ? Number(saldoAtualItem.quantidade) : 0;
+
+        if (Number(quantidade) > quantidadeAtualItem) {
+          throw this.createBusinessError(`Saldo insuficiente na Montagem para registrar numero de serie em ${modeloServo.codigo}.`);
+        }
+
+        const novoSaldoMontagem = Number((quantidadeAtualItem - Number(quantidade)).toFixed(2));
+        await EstoqueModel.persistSaldo(
+          connection,
+          estoqueMontagem.id,
+          modeloServo.id,
+          novoSaldoMontagem,
+          saldoAtualItem
+        );
+
+        const saldoAtualExpedicao = await EstoqueModel.findSaldoForUpdate(
+          connection,
+          estoqueExpedicao.id,
+          modeloServo.id
+        );
+        const quantidadeAtualExpedicao = saldoAtualExpedicao ? Number(saldoAtualExpedicao.quantidade) : 0;
+        const novoSaldoExpedicao = Number((quantidadeAtualExpedicao + Number(quantidade)).toFixed(2));
+
+        await EstoqueModel.persistSaldo(
+          connection,
+          estoqueExpedicao.id,
+          modeloServo.id,
+          novoSaldoExpedicao,
+          saldoAtualExpedicao
+        );
+
+        await EstoqueModel.createMovimentacao(connection, {
+          id_peca: modeloServo.id,
+          id_estoque_origem: estoqueMontagem.id,
+          id_estoque_destino: estoqueExpedicao.id,
+          tipo_movimentacao: 'TRANSFERENCIA',
+          quantidade,
+          observacao: `${observacaoMovimento} Item seriado encaminhado para a Expedicao.`.slice(0, 255)
+        });
+      }
 
       const createdRecords = [];
 

@@ -1,5 +1,6 @@
 const { pool } = require('../../database/connection');
 const EstoqueModel = require('./EstoqueModel');
+const ExpedicaoSaidaModel = require('./ExpedicaoSaidaModel');
 const SubmontagemSerialModel = require('./SubmontagemSerialModel');
 const ComposicaoVendaModel = require('./ComposicaoVendaModel');
 
@@ -55,6 +56,41 @@ function normalizeOptionalDecimal(value) {
   return Number.isFinite(normalized) ? normalized : null;
 }
 
+function normalizeDateOnly(value) {
+  if (!value) {
+    return '';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getTodayDateOnly() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function compareOrderAge(a, b) {
+  const aDate = normalizeDateOnly(a?.data_pedido);
+  const bDate = normalizeDateOnly(b?.data_pedido);
+
+  if (aDate && bDate && aDate !== bDate) {
+    return aDate.localeCompare(bDate);
+  }
+
+  return Number(a?.id || 0) - Number(b?.id || 0);
+}
+
 class PedidoExpedicaoModel {
   static STATUS = STATUS;
 
@@ -65,6 +101,23 @@ class PedidoExpedicaoModel {
       error.details = details;
     }
     return error;
+  }
+
+  static compareReservationPriority(a, b) {
+    const today = getTodayDateOnly();
+    const aIsToday = normalizeDateOnly(a?.data_programacao_saida) === today;
+    const bIsToday = normalizeDateOnly(b?.data_programacao_saida) === today;
+
+    if (aIsToday !== bIsToday) {
+      return aIsToday ? -1 : 1;
+    }
+
+    if (aIsToday && bIsToday) {
+      return Number(a?.prioridade_ordem || 0) - Number(b?.prioridade_ordem || 0)
+        || compareOrderAge(a, b);
+    }
+
+    return compareOrderAge(a, b);
   }
 
   static async ensureSchema(db = pool) {
@@ -1027,7 +1080,7 @@ class PedidoExpedicaoModel {
 
     const activeOrders = [...pedidosMap.values()]
       .filter((pedido) => !pedido.data_coleta)
-      .sort((a, b) => a.prioridade_ordem - b.prioridade_ordem || a.id - b.id);
+      .sort((a, b) => this.compareReservationPriority(a, b));
 
     const serialModelIds = [...new Set(
       [...pedidosMap.values()]
@@ -1291,6 +1344,41 @@ class PedidoExpedicaoModel {
       const item = rows[0] || null;
       if (!item) {
         throw this.createBusinessError('Item do pedido nao encontrado.');
+      }
+
+      if (separado) {
+        const pedido = await this.findById(Number(item.id_pedido), connection);
+        const itemHydrated = pedido?.itens?.find((entry) => Number(entry.id) === Number(item.id));
+        if (!pedido || !itemHydrated) {
+          throw this.createBusinessError('Pedido nao encontrado para validar a separacao.');
+        }
+
+        const estoqueExpedicao = await EstoqueModel.findStockByName(EstoqueModel.EXPEDICAO_NOME, connection);
+        if (!estoqueExpedicao || Number(estoqueExpedicao.ativo) !== 1) {
+          throw this.createBusinessError('O estoque da Expedicao nao esta disponivel para validar a separacao.');
+        }
+
+        for (const componente of itemHydrated.componentes_avulsos || []) {
+          const quantidadeNecessaria = Number(
+            (Number(itemHydrated.quantidade || 0) * Number(componente.quantidade_por_item_venda || 0)).toFixed(2)
+          );
+          if (quantidadeNecessaria <= 0) {
+            continue;
+          }
+
+          const saldoExpedicao = await EstoqueModel.findSaldoForUpdate(
+            connection,
+            estoqueExpedicao.id,
+            Number(componente.id_peca)
+          );
+          const quantidadeDisponivel = saldoExpedicao ? Number(saldoExpedicao.quantidade) : 0;
+
+          if (quantidadeDisponivel < quantidadeNecessaria) {
+            throw this.createBusinessError(
+              `Nao e possivel marcar OK. Faltam ${Number((quantidadeNecessaria - quantidadeDisponivel).toFixed(2))} unidade(s) de ${componente.codigo} na Expedicao.`
+            );
+          }
+        }
       }
 
       await connection.query(
@@ -1800,7 +1888,7 @@ class PedidoExpedicaoModel {
     }
   }
 
-  static async marcarColetado(idPedido, usuarioId = null, db = pool) {
+  static async marcarColetado(idPedido, usuario = null, db = pool) {
     await this.ensureSchema(db);
 
     const pedidoId = normalizeOptionalInteger(idPedido);
@@ -1822,6 +1910,10 @@ class PedidoExpedicaoModel {
         throw this.createBusinessError('Informe o numero da nota fiscal antes de coletar o pedido.');
       }
 
+      if (!Number.isInteger(pedido.quantidade_volumes) || Number(pedido.quantidade_volumes) <= 0) {
+        throw this.createBusinessError('Informe a quantidade de volumes antes de coletar o pedido.');
+      }
+
       if (pedido.itens.some((item) => !item.concluido)) {
         throw this.createBusinessError('Finalize todos os itens do pedido antes da coleta.');
       }
@@ -1831,49 +1923,43 @@ class PedidoExpedicaoModel {
         throw this.createBusinessError('O estoque da Expedicao nao esta disponivel para a baixa final do pedido.');
       }
 
-      const estoqueMontagem = await EstoqueModel.findStockByName(EstoqueModel.MONTAGEM_NOME, connection);
-      if (!estoqueMontagem || Number(estoqueMontagem.ativo) !== 1) {
-        throw this.createBusinessError('O estoque da Montagem nao esta disponivel para complementar a baixa final do pedido.');
-      }
-
-      const baixarSaldo = async (idEstoque, idPeca, codigo, quantidadeBaixa, observacao) => {
-        const saldoAtual = await EstoqueModel.findSaldoForUpdate(connection, idEstoque, idPeca);
-        const quantidadeAtual = saldoAtual ? Number(saldoAtual.quantidade) : 0;
-
-        if (quantidadeBaixa > quantidadeAtual) {
-          return {
-            sucesso: false,
-            quantidadeAtual
-          };
+      const actor = usuario && typeof usuario === 'object'
+        ? {
+          id: usuario.id ?? null,
+          login: usuario.login || null,
+          nome: usuario.nome || null
         }
-
-        const novoSaldo = Number((quantidadeAtual - quantidadeBaixa).toFixed(2));
-        await EstoqueModel.persistSaldo(
-          connection,
-          idEstoque,
-          idPeca,
-          novoSaldo,
-          saldoAtual
-        );
-
-        await EstoqueModel.createMovimentacao(connection, {
-          id_peca: idPeca,
-          id_estoque_origem: idEstoque,
-          id_estoque_destino: null,
-          tipo_movimentacao: 'SAIDA',
-          quantidade: quantidadeBaixa,
-          observacao
-        });
-
-        return {
-          sucesso: true,
-          quantidadeAtual,
-          novoSaldo
+        : {
+          id: Number.isInteger(usuario) ? usuario : null,
+          login: null,
+          nome: null
         };
-      };
+
+      const solicitacoesSaida = [];
+      const movimentosSaida = [];
+      const observacaoSaidaBase = [
+        `Pedido ${pedido.codigo_pedido}`,
+        pedido.cliente_nome ? `Cliente ${pedido.cliente_nome}` : '',
+        pedido.transportadora ? `Transportadora ${pedido.transportadora}` : '',
+        pedido.numero_nota_fiscal ? `NF ${pedido.numero_nota_fiscal}` : ''
+      ].filter(Boolean).join(' | ').slice(0, 255);
 
       for (const item of pedido.itens) {
         const componentesBaixa = [];
+        const solicitacaoRef = Number(item.id);
+        const ehComposicaoVenda = Array.isArray(item.composicao_venda) && item.composicao_venda.length > 0;
+
+        solicitacoesSaida.push({
+          solicitacao_ref: solicitacaoRef,
+          id_peca: Number(item.id_peca),
+          codigo: item.codigo,
+          descricao: item.descricao,
+          classificacao: item.classificacao,
+          quantidade_solicitada: Number(item.quantidade || 0),
+          quantidade_submontagem_pronta: item.exige_numero_serie ? Number(item.quantidade || 0) : 0,
+          quantidade_composicao_venda: ehComposicaoVenda ? Number(item.quantidade || 0) : 0,
+          quantidade_componentes: item.exige_separacao_manual ? Number(item.quantidade || 0) : 0
+        });
 
         if (item.componente_serial) {
           componentesBaixa.push({
@@ -1882,6 +1968,8 @@ class PedidoExpedicaoModel {
             descricao: item.componente_serial.descricao,
             quantidade: Number(item.quantidade_seriais_necessarios || 0),
             somente_expedicao: true,
+            forma_atendimento: ehComposicaoVenda ? 'COMPOSICAO_VENDA' : 'PRONTO',
+            solicitacao_ref: solicitacaoRef,
             observacao: `Coleta do pedido ${pedido.codigo_pedido}: baixa do modelo serial ${item.componente_serial.codigo}.`
           });
         }
@@ -1893,6 +1981,8 @@ class PedidoExpedicaoModel {
             descricao: componente.descricao,
             quantidade: Number((Number(item.quantidade || 0) * Number(componente.quantidade_por_item_venda || 0)).toFixed(2)),
             somente_expedicao: false,
+            forma_atendimento: ehComposicaoVenda ? 'COMPOSICAO_VENDA' : 'PRONTO',
+            solicitacao_ref: solicitacaoRef,
             observacao: `Coleta do pedido ${pedido.codigo_pedido}: baixa do componente ${componente.codigo}.`
           });
         }
@@ -1920,7 +2010,7 @@ class PedidoExpedicaoModel {
               saldoExpedicao
             );
 
-            await EstoqueModel.createMovimentacao(connection, {
+            const idMovimentacao = await EstoqueModel.createMovimentacao(connection, {
               id_peca: componente.id_peca,
               id_estoque_origem: estoqueExpedicao.id,
               id_estoque_destino: null,
@@ -1928,45 +2018,50 @@ class PedidoExpedicaoModel {
               quantidade: componente.quantidade,
               observacao: observacaoBase
             });
+
+            movimentosSaida.push({
+              id_peca: componente.id_peca,
+              quantidade: componente.quantidade,
+              observacao: observacaoBase,
+              solicitacao_ref: componente.solicitacao_ref,
+              id_peca_solicitada: Number(item.id_peca),
+              forma_atendimento: componente.forma_atendimento,
+              id_movimentacao_estoque: idMovimentacao
+            });
             continue;
           }
 
-          const baixaExpedicao = Math.min(componente.quantidade, quantidadeExpedicao);
-          const restante = Number((componente.quantidade - baixaExpedicao).toFixed(2));
-
-          if (baixaExpedicao > 0) {
-            const novoSaldoExpedicao = Number((quantidadeExpedicao - baixaExpedicao).toFixed(2));
-            await EstoqueModel.persistSaldo(
-              connection,
-              estoqueExpedicao.id,
-              componente.id_peca,
-              novoSaldoExpedicao,
-              saldoExpedicao
-            );
-
-            await EstoqueModel.createMovimentacao(connection, {
-              id_peca: componente.id_peca,
-              id_estoque_origem: estoqueExpedicao.id,
-              id_estoque_destino: null,
-              tipo_movimentacao: 'SAIDA',
-              quantidade: baixaExpedicao,
-              observacao: observacaoBase
-            });
+          if (componente.quantidade > quantidadeExpedicao) {
+            throw this.createBusinessError(`Saldo insuficiente na Expedicao para baixar ${componente.codigo} na coleta do pedido ${pedido.codigo_pedido}.`);
           }
 
-          if (restante > 0) {
-            const resultadoMontagem = await baixarSaldo(
-              estoqueMontagem.id,
-              componente.id_peca,
-              componente.codigo,
-              restante,
-              observacaoBase
-            );
+          const novoSaldoExpedicao = Number((quantidadeExpedicao - componente.quantidade).toFixed(2));
+          await EstoqueModel.persistSaldo(
+            connection,
+            estoqueExpedicao.id,
+            componente.id_peca,
+            novoSaldoExpedicao,
+            saldoExpedicao
+          );
 
-            if (!resultadoMontagem.sucesso) {
-              throw this.createBusinessError(`Saldo insuficiente para baixar ${componente.codigo} na coleta do pedido ${pedido.codigo_pedido}.`);
-            }
-          }
+          const idMovimentacao = await EstoqueModel.createMovimentacao(connection, {
+            id_peca: componente.id_peca,
+            id_estoque_origem: estoqueExpedicao.id,
+            id_estoque_destino: null,
+            tipo_movimentacao: 'SAIDA',
+            quantidade: componente.quantidade,
+            observacao: observacaoBase
+          });
+
+          movimentosSaida.push({
+            id_peca: componente.id_peca,
+            quantidade: componente.quantidade,
+            observacao: observacaoBase,
+            solicitacao_ref: componente.solicitacao_ref,
+            id_peca_solicitada: Number(item.id_peca),
+            forma_atendimento: componente.forma_atendimento,
+            id_movimentacao_estoque: idMovimentacao
+          });
         }
 
         if (item.exige_numero_serie && item.seriais_vinculados.length) {
@@ -1986,6 +2081,16 @@ class PedidoExpedicaoModel {
         }
       }
 
+      if (solicitacoesSaida.length && movimentosSaida.length) {
+        await ExpedicaoSaidaModel.createFromProcess(connection, {
+          tipo_saida: 'VENDA',
+          observacao: observacaoSaidaBase,
+          usuario: actor,
+          solicitacoes: solicitacoesSaida,
+          movimentos: movimentosSaida
+        });
+      }
+
       await connection.query(
         `
           UPDATE pedidos_expedicao
@@ -1995,7 +2100,7 @@ class PedidoExpedicaoModel {
             updated_by = ?
           WHERE id = ?
         `,
-        [STATUS.PEDIDO_COLETADO, usuarioId, pedidoId]
+        [STATUS.PEDIDO_COLETADO, actor.id, pedidoId]
       );
 
       await connection.commit();

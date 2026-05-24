@@ -12,8 +12,8 @@
     <header class="topbar">
       <div class="topbar-copy">
         <p class="page-kicker">Consulta operacional</p>
-        <h1 class="page-title">Visao Consolidada de Estoques</h1>
-        <p class="page-subtitle">Saldo por setor, pecas em processo, consumo mensal e previsao de cobertura.</p>
+        <h1 id="consulta-page-title" class="page-title">Consulta TV Global</h1>
+        <p id="consulta-page-subtitle" class="page-subtitle">Saldo utilizavel, pedidos lancados e previsao de cobertura por peca.</p>
       </div>
     </header>
 
@@ -24,17 +24,17 @@
       </article>
 
       <article class="summary-card">
-        <span>Saldo total</span>
+        <span>Saldo util</span>
         <strong id="consulta-card-saldo">0</strong>
       </article>
 
       <article class="summary-card">
-        <span>Ate 7 dias</span>
+        <span>Com devo</span>
         <strong id="consulta-card-alerta">0</strong>
       </article>
 
       <article class="summary-card">
-        <span>Sem qtd/mes</span>
+        <span>Pedidos lanc.</span>
         <strong id="consulta-card-sem-consumo">0</strong>
       </article>
     </section>
@@ -61,6 +61,8 @@
 
             <div class="sector-menu-list">
               <button id="consulta-btn-atualizar" class="btn btn-neutral" type="button"><span class="btn-label">Atualizar</span></button>
+              <button id="consulta-btn-global" class="btn btn-secondary" type="button"><span class="btn-label">Consulta Global</span></button>
+              <button id="consulta-btn-dia" class="btn btn-secondary" type="button"><span class="btn-label">Consulta do Dia</span></button>
               <button id="consulta-btn-tela-cheia" class="btn btn-secondary" type="button"><span class="btn-label">Tela Cheia</span></button>
               <a href="/pagina-producao" class="btn btn-secondary"><span class="btn-label">Producao</span></a>
               <a href="/pagina-almoxarifado" class="btn btn-secondary"><span class="btn-label">Almoxarifado</span></a>
@@ -120,19 +122,18 @@
                   <th>Almox.</th>
                   <th>Mont.</th>
                   <th>Exp.</th>
-                  <th>Setores</th>
                   <th>Trat.</th>
                   <th>Inacab.</th>
                   <th>Prod.</th>
                   <th>Retrab.</th>
-                  <th>Total</th>
-                  <th>Qtd/mes</th>
+                  <th>Pedidos</th>
+                  <th>Saldo</th>
                   <th>Dura ate</th>
                 </tr>
               </thead>
               <tbody id="consulta-estoques-tbody">
                 <tr>
-                  <td colspan="13" class="empty-state">Carregando consulta...</td>
+                  <td colspan="12" class="empty-state">Carregando consulta...</td>
                 </tr>
               </tbody>
             </table>
@@ -143,6 +144,7 @@
   </main>
 
   <script src="/js/sector-menu.js"></script>
+  <script src="/js/app-sync.js"></script>
   <script src="/js/consulta-estoques.js"></script>
   <script src="/js/table-print.js"></script>
   <script src="/js/session-indicator.js"></script>

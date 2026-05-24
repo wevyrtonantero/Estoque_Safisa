@@ -13,6 +13,7 @@ const ConsultaEstoqueController = {
         codigo: req.query.codigo ? String(req.query.codigo).trim() : '',
         descricao: req.query.descricao ? String(req.query.descricao).trim() : '',
         fornecedor: req.query.fornecedor ? String(req.query.fornecedor).trim() : '',
+        escopo: req.query.escopo ? String(req.query.escopo).trim() : '',
         base_cobertura: req.query.base_cobertura ? String(req.query.base_cobertura).trim() : '',
         estado: ESTADOS_VALIDOS.includes(estado) ? estado : '',
         data_ate: req.query.data_ate ? String(req.query.data_ate).trim() : '',

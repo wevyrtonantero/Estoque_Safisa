@@ -329,6 +329,7 @@
       <div id="pedido-seriais-mensagem" class="message hidden"></div>
 
       <div class="selected-tags" id="pedido-seriais-resumo"></div>
+      <div id="pedido-seriais-vinculados" class="selected-tags empty">Nenhum servo vinculado ainda.</div>
 
       <div class="table-wrapper">
         <table>
@@ -350,7 +351,7 @@
 
       <div class="modal-actions">
         <button id="btn-cancelar-modal-pedido-seriais" class="btn btn-neutral" type="button">Cancelar</button>
-        <button id="pedido-btn-vincular-seriais" class="btn btn-primary" type="button">Vincular selecionados</button>
+        <button id="pedido-btn-vincular-seriais" class="btn btn-primary" type="button">Vincular servo</button>
       </div>
     </div>
   </div>
@@ -405,23 +406,43 @@
         <button id="btn-fechar-modal-pedido-historico" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
       </div>
 
+      <form class="toolbar-form">
+        <div class="field">
+          <label for="pedido-historico-filtro-cliente">Cliente</label>
+          <input id="pedido-historico-filtro-cliente" type="text" placeholder="Parte do nome">
+        </div>
+
+        <div class="field">
+          <label for="pedido-historico-filtro-transportadora">Transportadora</label>
+          <input id="pedido-historico-filtro-transportadora" type="text" placeholder="Parte do nome">
+        </div>
+
+        <div class="field">
+          <label for="pedido-historico-filtro-pedido">Numero do pedido</label>
+          <input id="pedido-historico-filtro-pedido" type="text" placeholder="Ex.: PED-000003">
+        </div>
+
+        <button id="pedido-historico-filtro-limpar" class="btn btn-neutral" type="button">Limpar</button>
+      </form>
+
       <div class="table-wrapper">
         <table>
           <thead>
             <tr>
-              <th>Pedido</th>
               <th>Cliente</th>
+              <th>Pedido</th>
               <th>Cidade</th>
               <th>Status</th>
-              <th>Data</th>
+              <th>Coleta</th>
               <th>Transportadora</th>
-              <th>Massa</th>
+              <th>Peso</th>
+              <th>Volumes</th>
               <th>Acoes</th>
             </tr>
           </thead>
           <tbody id="pedidos-historico-tbody">
             <tr>
-              <td colspan="8" class="empty-state">Carregando pedidos...</td>
+              <td colspan="9" class="empty-state">Carregando pedidos...</td>
             </tr>
           </tbody>
         </table>
@@ -541,6 +562,7 @@
     <option value="Safisa"></option>
   </datalist>
 
+  <script src="/js/app-sync.js"></script>
   <script src="/js/gerenciamento-pedidos.js"></script>
   <script src="/js/session-indicator.js"></script>
 </body>

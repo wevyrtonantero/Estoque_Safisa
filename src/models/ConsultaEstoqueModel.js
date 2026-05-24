@@ -1,4 +1,5 @@
 const { pool } = require('../../database/connection');
+const PedidoExpedicaoModel = require('./PedidoExpedicaoModel');
 
 class ConsultaEstoqueModel {
   static BASES_COBERTURA = Object.freeze({
@@ -22,11 +23,23 @@ class ConsultaEstoqueModel {
     OK: 'OK'
   });
 
+  static ESCOPOS_PEDIDO = Object.freeze({
+    GLOBAL: 'global',
+    DIA: 'dia'
+  });
+
   static normalizeBase(value) {
     const normalized = String(value || '').trim().toLowerCase();
     return Object.values(this.BASES_COBERTURA).includes(normalized)
       ? normalized
       : this.BASES_COBERTURA.TOTAL;
+  }
+
+  static normalizeEscopo(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    return Object.values(this.ESCOPOS_PEDIDO).includes(normalized)
+      ? normalized
+      : this.ESCOPOS_PEDIDO.GLOBAL;
   }
 
   static normalizeBoolean(value, defaultValue = false) {
@@ -40,6 +53,29 @@ class ConsultaEstoqueModel {
   static normalizeDateOnly(value) {
     const normalized = String(value || '').trim();
     return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : '';
+  }
+
+  static normalizeDateValue(value) {
+    if (!value) {
+      return '';
+    }
+
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+      return this.formatDateOnly(value);
+    }
+
+    const normalized = String(value).trim();
+    const match = normalized.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (match) {
+      return match[1];
+    }
+
+    const parsed = new Date(normalized);
+    if (!Number.isNaN(parsed.getTime())) {
+      return this.formatDateOnly(parsed);
+    }
+
+    return '';
   }
 
   static formatDateOnly(date) {
@@ -114,6 +150,23 @@ class ConsultaEstoqueModel {
       data_cobertura: dataCobertura,
       estado_cobertura: estado
     };
+  }
+
+  static buildCoverageFromQuantity(quantidadeBase, consumoMensal, base, today) {
+    const row = {
+      quantidade_saida_mes: consumoMensal,
+      somatorio_total: quantidadeBase,
+      somatorio_operacional: quantidadeBase,
+      estoque_almoxarifado: quantidadeBase,
+      estoque_producao: quantidadeBase,
+      estoque_montagem: quantidadeBase,
+      estoque_expedicao: quantidadeBase,
+      tratamento_externo: quantidadeBase,
+      pecas_inacabadas: quantidadeBase,
+      retrabalho: quantidadeBase
+    };
+
+    return this.buildCoverage(row, base, today);
   }
 
   static supplierSummarySubquery() {
@@ -196,16 +249,176 @@ class ConsultaEstoqueModel {
   static buildIndicators(rows) {
     return rows.reduce((acc, row) => {
       acc.registros += 1;
-      acc.saldo_total += Number(row.somatorio_total || 0);
+      acc.saldo_util += Number(row.saldo_util || 0);
+      acc.pedidos_lancados += Number(row.quantidade_pedidos_lancados || 0);
       acc.ate_7 += ['ZERADO', 'ATE_7'].includes(row.estado_cobertura) ? 1 : 0;
       acc.sem_consumo += row.estado_cobertura === this.ESTADOS.SEM_CONSUMO ? 1 : 0;
+      acc.com_devo += Number(row.saldo_util || 0) < 0 ? 1 : 0;
       return acc;
     }, {
       registros: 0,
-      saldo_total: 0,
+      saldo_util: 0,
+      pedidos_lancados: 0,
       ate_7: 0,
-      sem_consumo: 0
+      sem_consumo: 0,
+      com_devo: 0
     });
+  }
+
+  static shouldIncludePedidoInEscopo(pedido, escopo, today) {
+    if (escopo !== this.ESCOPOS_PEDIDO.DIA) {
+      return true;
+    }
+
+    return this.normalizeDateValue(pedido?.data_programacao_saida) === today;
+  }
+
+  static async buildPecaMetaMap(idsPeca = []) {
+    const ids = [...new Set(idsPeca.map((value) => Number(value)).filter((value) => Number.isInteger(value)))];
+    if (!ids.length) {
+      return new Map();
+    }
+
+    const placeholders = ids.map(() => '?').join(', ');
+    const [rows] = await pool.query(
+      `
+        SELECT
+          id,
+          codigo,
+          descricao,
+          classificacao
+        FROM pecas
+        WHERE id IN (${placeholders})
+      `,
+      ids
+    );
+
+    const map = new Map();
+    rows.forEach((row) => {
+      map.set(Number(row.id), {
+        id: Number(row.id),
+        codigo: row.codigo,
+        descricao: row.descricao,
+        classificacao: row.classificacao
+      });
+    });
+
+    return map;
+  }
+
+  static async buildSubmontagemStructureMap(idsSubmontagem = []) {
+    const ids = [...new Set(idsSubmontagem.map((value) => Number(value)).filter((value) => Number.isInteger(value)))];
+    if (!ids.length) {
+      return new Map();
+    }
+
+    const placeholders = ids.map(() => '?').join(', ');
+    const [rows] = await pool.query(
+      `
+        SELECT
+          es.id_submontagem,
+          es.id_item_componente,
+          es.quantidade,
+          p.codigo,
+          p.descricao,
+          p.classificacao
+        FROM estrutura_submontagem es
+        INNER JOIN pecas p ON p.id = es.id_item_componente
+        WHERE es.id_submontagem IN (${placeholders})
+        ORDER BY es.id_submontagem ASC, p.codigo ASC
+      `,
+      ids
+    );
+
+    const map = new Map();
+    ids.forEach((idSubmontagem) => {
+      map.set(Number(idSubmontagem), []);
+    });
+
+    rows.forEach((row) => {
+      const idSubmontagem = Number(row.id_submontagem);
+      if (!map.has(idSubmontagem)) {
+        map.set(idSubmontagem, []);
+      }
+
+      map.get(idSubmontagem).push({
+        id_peca: Number(row.id_item_componente),
+        codigo: row.codigo,
+        descricao: row.descricao,
+        classificacao: row.classificacao,
+        quantidade: Number(row.quantidade || 0)
+      });
+    });
+
+    return map;
+  }
+
+  static aggregatePedidosDemand(pedidos = [], pecaMetaMap = new Map(), structureMap = new Map()) {
+    const demandas = new Map();
+
+    const acumular = (idPeca, codigo, descricao, quantidade) => {
+      const normalizedId = Number(idPeca);
+      const normalizedQuantidade = Number((Number(quantidade || 0)).toFixed(2));
+
+      if (!Number.isInteger(normalizedId) || normalizedQuantidade <= 0) {
+        return;
+      }
+
+      const atual = demandas.get(normalizedId) || {
+        id_peca: normalizedId,
+        codigo: codigo || '',
+        descricao: descricao || '',
+        quantidade: 0
+      };
+
+      atual.quantidade = Number((Number(atual.quantidade || 0) + normalizedQuantidade).toFixed(2));
+      demandas.set(normalizedId, atual);
+    };
+
+    const acumularExpandido = (idPeca, codigo, descricao, quantidade) => {
+      const meta = pecaMetaMap.get(Number(idPeca));
+
+      if (meta?.classificacao === 'SUBMONTAGEM') {
+        const estrutura = structureMap.get(Number(idPeca)) || [];
+        estrutura.forEach((componente) => {
+          const quantidadeExpandida = Number(quantidade || 0) * Number(componente.quantidade || 0);
+          acumular(
+            componente.id_peca,
+            componente.codigo,
+            componente.descricao,
+            quantidadeExpandida
+          );
+        });
+        return;
+      }
+
+      acumular(idPeca, meta?.codigo || codigo, meta?.descricao || descricao, quantidade);
+    };
+
+    pedidos.forEach((pedido) => {
+      (pedido.itens || []).forEach((item) => {
+        if (item.componente_serial) {
+          acumularExpandido(
+            item.componente_serial.id_peca,
+            item.componente_serial.codigo,
+            item.componente_serial.descricao,
+            Number(item.quantidade_seriais_necessarios || 0)
+          );
+        }
+
+        (item.componentes_avulsos || []).forEach((componente) => {
+          const quantidade = Number(item.quantidade || 0) * Number(componente.quantidade_por_item_venda || 0);
+          acumularExpandido(
+            componente.id_peca,
+            componente.codigo,
+            componente.descricao,
+            quantidade
+          );
+        });
+      });
+    });
+
+    return demandas;
   }
 
   static async findResumo(filters = {}) {
@@ -323,8 +536,23 @@ class ConsultaEstoqueModel {
     );
 
     const base = this.normalizeBase(filters.base_cobertura);
+    const escopo = this.normalizeEscopo(filters.escopo);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    const todayIso = this.formatDateOnly(today);
+
+    const pedidosAtivos = await PedidoExpedicaoModel.findAll({ ativos: true });
+    const pedidosEscopo = pedidosAtivos.filter((pedido) => this.shouldIncludePedidoInEscopo(pedido, escopo, todayIso));
+    const idsDemandados = [...new Set(
+      pedidosEscopo.flatMap((pedido) => (pedido.itens || []).flatMap((item) => [
+        ...(item.componente_serial ? [Number(item.componente_serial.id_peca)] : []),
+        ...(item.componentes_avulsos || []).map((componente) => Number(componente.id_peca))
+      ]))
+    )].filter((value) => Number.isInteger(value));
+    const pecaMetaMap = await this.buildPecaMetaMap(idsDemandados);
+    const submontagemIds = idsDemandados.filter((idPeca) => pecaMetaMap.get(idPeca)?.classificacao === 'SUBMONTAGEM');
+    const structureMap = await this.buildSubmontagemStructureMap(submontagemIds);
+    const demandasPedidos = this.aggregatePedidosDemand(pedidosEscopo, pecaMetaMap, structureMap);
 
     const enrichedRows = rows.map((row) => {
       const estoqueAlmoxarifado = Number(row.estoque_almoxarifado || 0);
@@ -336,6 +564,8 @@ class ConsultaEstoqueModel {
       const retrabalho = Number(row.retrabalho || 0);
       const somatorioOperacional = Number((estoqueAlmoxarifado + estoqueMontagem + estoqueExpedicao).toFixed(2));
       const somatorioTotal = Number((somatorioOperacional + tratamentoExterno + pecasInacabadas + estoqueProducao + retrabalho).toFixed(2));
+      const quantidadePedidosLancados = Number(demandasPedidos.get(Number(row.id_peca))?.quantidade || 0);
+      const saldoUtil = Number((somatorioOperacional - quantidadePedidosLancados).toFixed(2));
       const normalizedRow = {
         ...row,
         quantidade_saida_mes: Number(row.quantidade_saida_mes || 0),
@@ -347,12 +577,22 @@ class ConsultaEstoqueModel {
         tratamento_externo: tratamentoExterno,
         pecas_inacabadas: pecasInacabadas,
         retrabalho,
-        somatorio_total: somatorioTotal
+        somatorio_total: somatorioTotal,
+        quantidade_pedidos_lancados: quantidadePedidosLancados,
+        saldo_util: saldoUtil,
+        escopo_pedidos: escopo
       };
+
+      const cobertura = this.buildCoverageFromQuantity(
+        saldoUtil,
+        normalizedRow.quantidade_saida_mes,
+        base,
+        today
+      );
 
       return {
         ...normalizedRow,
-        ...this.buildCoverage(normalizedRow, base, today)
+        ...cobertura
       };
     });
 
@@ -361,7 +601,8 @@ class ConsultaEstoqueModel {
 
     return {
       filtros: {
-        base_cobertura: base
+        base_cobertura: base,
+        escopo
       },
       indicadores: this.buildIndicators(sortedRows),
       itens: sortedRows
