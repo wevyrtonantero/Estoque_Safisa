@@ -34,15 +34,27 @@ function padSerialNumber(value) {
 }
 
 class SubmontagemSerialModel {
-  static isEligibleModel(codigo, descricao = '') {
+  static isEligibleModel(codigo, descricao = '', classificacao = '') {
     const normalized = String(codigo || '').trim().toUpperCase();
-    const normalizedDescription = String(descricao || '').trim().toUpperCase();
+    const normalizedClassificacao = String(classificacao || '').trim().toUpperCase();
+
+    if (!normalized) {
+      return false;
+    }
+
     if (ELIGIBLE_ITEM_CODES.includes(normalized)) {
       return true;
     }
 
-    return ELIGIBLE_CODE_KEYWORDS.some((keyword) => normalized.includes(keyword))
-      && normalizedDescription.includes('SERVO');
+    if (normalized.includes('/')) {
+      return false;
+    }
+
+    if (normalizedClassificacao === 'ITEM') {
+      return false;
+    }
+
+    return ELIGIBLE_CODE_KEYWORDS.some((keyword) => normalized.includes(keyword));
   }
 
   static createBusinessError(message) {
@@ -132,7 +144,7 @@ class SubmontagemSerialModel {
       return null;
     }
 
-    if (!this.isEligibleModel(row.codigo, row.descricao)) {
+    if (!this.isEligibleModel(row.codigo, row.descricao, classificacao)) {
       return null;
     }
 
@@ -226,8 +238,8 @@ class SubmontagemSerialModel {
 
     const { whereClause, params } = this.buildWhereClause(filters);
     const limit = Number.isInteger(filters.limit) && filters.limit > 0
-      ? Math.min(filters.limit, 1000)
-      : 200;
+      ? Math.min(filters.limit, 100)
+      : 100;
 
     const [rows] = await db.query(
       `
@@ -602,6 +614,84 @@ class SubmontagemSerialModel {
     );
 
     return this.findById(id, db);
+  }
+
+  static async reconcileExpedicaoStockWithAvailableSeriais(db = pool) {
+    await this.ensureSchema(db);
+
+    const connection = await db.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      const estoqueExpedicao = await EstoqueModel.findStockByName(EstoqueModel.EXPEDICAO_NOME, connection);
+      if (!estoqueExpedicao || Number(estoqueExpedicao.ativo) !== 1) {
+        throw this.createBusinessError('O estoque da Expedicao nao esta disponivel para equalizar os seriais.');
+      }
+
+      const [rows] = await connection.query(`
+        SELECT
+          p.id,
+          p.codigo,
+          p.descricao,
+          p.classificacao,
+          COUNT(CASE WHEN s.numero_pedido IS NULL AND s.data_saida IS NULL THEN 1 END) AS quantidade_disponivel
+        FROM pecas p
+        LEFT JOIN submontagem_seriais s ON s.id_modelo_servo = p.id
+        WHERE p.classificacao IN ('SUBMONTAGEM', 'ITEM')
+        GROUP BY p.id, p.codigo, p.descricao, p.classificacao
+        ORDER BY p.codigo ASC
+      `);
+
+      const ajustes = [];
+
+      for (const row of rows) {
+        if (!this.isEligibleModel(row.codigo, row.descricao, row.classificacao)) {
+          continue;
+        }
+
+        const quantidadeEsperada = Number(row.quantidade_disponivel || 0);
+        const saldoAtual = await EstoqueModel.findSaldoForUpdate(connection, estoqueExpedicao.id, Number(row.id));
+        const quantidadeAtual = saldoAtual ? Number(saldoAtual.quantidade) : 0;
+
+        if (quantidadeAtual === quantidadeEsperada) {
+          continue;
+        }
+
+        await EstoqueModel.persistSaldo(
+          connection,
+          estoqueExpedicao.id,
+          Number(row.id),
+          quantidadeEsperada,
+          saldoAtual
+        );
+
+        await EstoqueModel.createMovimentacao(connection, {
+          id_peca: Number(row.id),
+          id_estoque_origem: quantidadeEsperada < quantidadeAtual ? estoqueExpedicao.id : null,
+          id_estoque_destino: quantidadeEsperada > quantidadeAtual ? estoqueExpedicao.id : null,
+          tipo_movimentacao: 'AJUSTE',
+          quantidade: Math.abs(Number((quantidadeEsperada - quantidadeAtual).toFixed(2))),
+          observacao: `Equalizacao automatica pelo controle de seriais disponiveis: ${row.codigo}.`.slice(0, 255)
+        });
+
+        ajustes.push({
+          id_modelo_servo: Number(row.id),
+          codigo: row.codigo,
+          descricao: row.descricao,
+          saldo_anterior: quantidadeAtual,
+          saldo_novo: quantidadeEsperada
+        });
+      }
+
+      await connection.commit();
+      return ajustes;
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
   }
 }
 

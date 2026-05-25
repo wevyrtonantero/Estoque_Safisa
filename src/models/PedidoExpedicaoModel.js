@@ -236,6 +236,80 @@ class PedidoExpedicaoModel {
     return rows[0] || null;
   }
 
+  static async releaseSerialBindingInTransaction(connection, bindingId) {
+    const [rows] = await connection.query(
+      `
+        SELECT
+          pis.*,
+          i.id_pedido
+        FROM pedido_expedicao_item_seriais pis
+        INNER JOIN pedido_expedicao_itens i ON i.id = pis.id_pedido_item
+        WHERE pis.id = ?
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [bindingId]
+    );
+
+    const vinculo = rows[0] || null;
+    if (!vinculo) {
+      throw this.createBusinessError('Vinculo de numero de serie nao encontrado.');
+    }
+
+    const serial = await SubmontagemSerialModel.findById(Number(vinculo.id_submontagem_serial), connection);
+    if (!serial) {
+      throw this.createBusinessError('Numero de serie vinculado nao encontrado.');
+    }
+
+    if (serial.data_saida) {
+      throw this.createBusinessError('Nao e possivel desvincular um numero de serie que ja saiu com o pedido.');
+    }
+
+    await connection.query('DELETE FROM pedido_expedicao_item_seriais WHERE id = ?', [bindingId]);
+    await connection.query(
+      `
+        UPDATE submontagem_seriais
+        SET numero_pedido = NULL
+        WHERE id = ?
+      `,
+      [serial.id]
+    );
+
+    const estoqueExpedicao = await EstoqueModel.findStockByName(EstoqueModel.EXPEDICAO_NOME, connection);
+    if (!estoqueExpedicao || Number(estoqueExpedicao.ativo) !== 1) {
+      throw this.createBusinessError('O estoque da Expedicao nao esta disponivel para devolver a reserva do numero de serie.');
+    }
+
+    const saldoExpedicao = await EstoqueModel.findSaldoForUpdate(
+      connection,
+      estoqueExpedicao.id,
+      Number(serial.id_modelo_servo)
+    );
+    const quantidadeDisponivel = saldoExpedicao ? Number(saldoExpedicao.quantidade) : 0;
+
+    await EstoqueModel.persistSaldo(
+      connection,
+      estoqueExpedicao.id,
+      Number(serial.id_modelo_servo),
+      Number((quantidadeDisponivel + 1).toFixed(2)),
+      saldoExpedicao
+    );
+
+    await EstoqueModel.createMovimentacao(connection, {
+      id_peca: Number(serial.id_modelo_servo),
+      id_estoque_origem: null,
+      id_estoque_destino: estoqueExpedicao.id,
+      tipo_movimentacao: 'AJUSTE',
+      quantidade: 1,
+      observacao: `Retorno de reserva do numero de serie ${serial.numero_serie} ao estoque da Expedicao.`.slice(0, 255)
+    });
+
+    return {
+      vinculo,
+      serial
+    };
+  }
+
   static async findResumoClientes(filters = {}, connection = pool) {
     await this.ensureSchema(connection);
 
@@ -490,29 +564,10 @@ class PedidoExpedicaoModel {
         throw this.createBusinessError('Nao e possivel editar um pedido que ja foi coletado.');
       }
 
-      const possuiMovimentoNosItens = pedidoAtual.itens.some((item) => (
-        (item.seriais_vinculados || []).length > 0 || item.separado_avulso
-      ));
-
       const itensNormalizados = itens.map((item) => ({
         id_peca: normalizeOptionalInteger(item.id_peca),
         quantidade: normalizeOptionalInteger(item.quantidade)
       }));
-
-      const estruturaAtual = JSON.stringify(
-        pedidoAtual.itens
-          .map((item) => ({ id_peca: Number(item.id_peca), quantidade: Number(item.quantidade) }))
-          .sort((a, b) => a.id_peca - b.id_peca)
-      );
-      const estruturaNova = JSON.stringify(
-        itensNormalizados
-          .map((item) => ({ id_peca: Number(item.id_peca), quantidade: Number(item.quantidade) }))
-          .sort((a, b) => a.id_peca - b.id_peca)
-      );
-
-      if (possuiMovimentoNosItens && estruturaAtual !== estruturaNova) {
-        throw this.createBusinessError('Este pedido ja tem montagem iniciada. Agora voce pode editar os dados gerais, mas nao trocar a estrutura dos itens.');
-      }
 
       await connection.query(
         `
@@ -547,25 +602,49 @@ class PedidoExpedicaoModel {
         ]
       );
 
-      if (!possuiMovimentoNosItens) {
-        await connection.query('DELETE FROM pedido_expedicao_itens WHERE id_pedido = ?', [pedidoId]);
+      const itensAtuaisPorPeca = new Map(
+        pedidoAtual.itens.map((item) => [Number(item.id_peca), item])
+      );
+      const itensNovosPorPeca = new Map();
 
-        for (const item of itensNormalizados) {
-          if (!Number.isInteger(item.id_peca)) {
-            throw this.createBusinessError('Uma das pecas do pedido nao foi encontrada.');
-          }
+      for (const item of itensNormalizados) {
+        if (!Number.isInteger(item.id_peca)) {
+          throw this.createBusinessError('Uma das pecas do pedido nao foi encontrada.');
+        }
 
-          if (!Number.isInteger(item.quantidade) || item.quantidade <= 0) {
-            throw this.createBusinessError('A quantidade de cada item deve ser um numero inteiro maior que zero.');
-          }
+        if (!Number.isInteger(item.quantidade) || item.quantidade <= 0) {
+          throw this.createBusinessError('A quantidade de cada item deve ser um numero inteiro maior que zero.');
+        }
 
-          const peca = await this.findPecaById(item.id_peca, connection);
-          if (!peca) {
-            throw this.createBusinessError('Uma das pecas do pedido nao foi encontrada.');
-          }
+        if (itensNovosPorPeca.has(Number(item.id_peca))) {
+          throw this.createBusinessError('Nao repita a mesma peca no pedido. Ajuste apenas a quantidade.');
+        }
 
-          const exigeNumeroSerie = SubmontagemSerialModel.isEligibleModel(peca.codigo, peca.descricao) ? 1 : 0;
+        itensNovosPorPeca.set(Number(item.id_peca), item);
+      }
 
+      for (const itemAtual of pedidoAtual.itens) {
+        if (itensNovosPorPeca.has(Number(itemAtual.id_peca))) {
+          continue;
+        }
+
+        for (const serial of itemAtual.seriais_vinculados || []) {
+          await this.releaseSerialBindingInTransaction(connection, Number(serial.id));
+        }
+
+        await connection.query('DELETE FROM pedido_expedicao_itens WHERE id = ?', [Number(itemAtual.id)]);
+      }
+
+      for (const item of itensNormalizados) {
+        const itemAtual = itensAtuaisPorPeca.get(Number(item.id_peca));
+        const peca = await this.findPecaById(item.id_peca, connection);
+        if (!peca) {
+          throw this.createBusinessError('Uma das pecas do pedido nao foi encontrada.');
+        }
+
+        const exigeNumeroSerie = SubmontagemSerialModel.isEligibleModel(peca.codigo, peca.descricao, peca.classificacao) ? 1 : 0;
+
+        if (!itemAtual) {
           await connection.query(
             `
               INSERT INTO pedido_expedicao_itens (
@@ -591,7 +670,49 @@ class PedidoExpedicaoModel {
               exigeNumeroSerie
             ]
           );
+          continue;
         }
+
+        const quantidadeAnterior = Number(itemAtual.quantidade || 0);
+        const quantidadeNova = Number(item.quantidade || 0);
+        const quantidadePorItemVenda = Number(itemAtual.componente_serial?.quantidade_por_item_venda || 1);
+        const seriaisVinculados = Array.isArray(itemAtual.seriais_vinculados) ? itemAtual.seriais_vinculados : [];
+        const quantidadeSeriaisNecessariosNova = exigeNumeroSerie
+          ? Math.max(1, quantidadeNova * quantidadePorItemVenda)
+          : 0;
+
+        if (exigeNumeroSerie && seriaisVinculados.length > quantidadeSeriaisNecessariosNova) {
+          const excedentes = seriaisVinculados.slice(quantidadeSeriaisNecessariosNova);
+          for (const serial of excedentes) {
+            await this.releaseSerialBindingInTransaction(connection, Number(serial.id));
+          }
+        }
+
+        await connection.query(
+          `
+            UPDATE pedido_expedicao_itens
+            SET
+              codigo = ?,
+              descricao = ?,
+              classificacao = ?,
+              quantidade = ?,
+              massa_unitaria_kg = ?,
+              exige_numero_serie = ?,
+              separado_avulso = ?,
+              updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+          `,
+          [
+            peca.codigo,
+            peca.descricao,
+            peca.classificacao,
+            quantidadeNova,
+            peca.massa_kg || null,
+            exigeNumeroSerie,
+            quantidadeNova !== quantidadeAnterior ? 0 : Number(itemAtual.separado_avulso || 0),
+            Number(itemAtual.id)
+          ]
+        );
       }
 
       await this.recalculateStatus(connection, pedidoId, data.usuario_id || null);
@@ -603,6 +724,46 @@ class PedidoExpedicaoModel {
         throw this.createBusinessError('Ja existe um pedido com esse numero.');
       }
 
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }
+
+  static async delete(id, usuarioId = null, db = pool) {
+    await this.ensureSchema(db);
+
+    const pedidoId = normalizeOptionalInteger(id);
+    if (!Number.isInteger(pedidoId)) {
+      throw this.createBusinessError('O pedido informado e invalido.');
+    }
+
+    const connection = await db.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      const pedido = await this.findById(pedidoId, connection);
+      if (!pedido) {
+        throw this.createBusinessError('Pedido nao encontrado.');
+      }
+
+      if (pedido.status === STATUS.PEDIDO_COLETADO) {
+        throw this.createBusinessError('Nao e possivel excluir um pedido que ja foi coletado.');
+      }
+
+      for (const item of pedido.itens || []) {
+        for (const serial of item.seriais_vinculados || []) {
+          await this.releaseSerialBindingInTransaction(connection, Number(serial.id));
+        }
+      }
+
+      await connection.query('DELETE FROM pedidos_expedicao WHERE id = ?', [pedidoId]);
+      await connection.commit();
+
+      return pedido;
+    } catch (error) {
       await connection.rollback();
       throw error;
     } finally {
@@ -1739,6 +1900,11 @@ class PedidoExpedicaoModel {
         throw this.createBusinessError('Pedido nao encontrado.');
       }
 
+      const estoqueExpedicao = await EstoqueModel.findStockByName(EstoqueModel.EXPEDICAO_NOME, connection);
+      if (!estoqueExpedicao || Number(estoqueExpedicao.ativo) !== 1) {
+        throw this.createBusinessError('O estoque da Expedicao nao esta disponivel para reservar os numeros de serie.');
+      }
+
       const [vinculadosRows] = await connection.query(
         `
           SELECT COUNT(*) AS quantidade
@@ -1802,6 +1968,34 @@ class PedidoExpedicaoModel {
           `,
           [pedidoHydrated.codigo_pedido, serial.id]
         );
+
+        const saldoExpedicao = await EstoqueModel.findSaldoForUpdate(
+          connection,
+          estoqueExpedicao.id,
+          Number(serial.id_modelo_servo)
+        );
+        const quantidadeDisponivel = saldoExpedicao ? Number(saldoExpedicao.quantidade) : 0;
+
+        if (quantidadeDisponivel < 1) {
+          throw this.createBusinessError(`Saldo insuficiente na Expedicao para reservar o numero de serie ${serial.numero_serie}.`);
+        }
+
+        await EstoqueModel.persistSaldo(
+          connection,
+          estoqueExpedicao.id,
+          Number(serial.id_modelo_servo),
+          Number((quantidadeDisponivel - 1).toFixed(2)),
+          saldoExpedicao
+        );
+
+        await EstoqueModel.createMovimentacao(connection, {
+          id_peca: Number(serial.id_modelo_servo),
+          id_estoque_origem: estoqueExpedicao.id,
+          id_estoque_destino: null,
+          tipo_movimentacao: 'AJUSTE',
+          quantidade: 1,
+          observacao: `Reserva do numero de serie ${serial.numero_serie} para o pedido ${pedidoHydrated.codigo_pedido}.`.slice(0, 255)
+        });
       }
 
       await this.recalculateStatus(connection, Number(item.id_pedido), usuarioId);
@@ -1853,28 +2047,7 @@ class PedidoExpedicaoModel {
         throw this.createBusinessError('Pedido nao encontrado.');
       }
 
-      const serial = await SubmontagemSerialModel.findById(Number(vinculo.id_submontagem_serial), connection);
-      if (!serial) {
-        throw this.createBusinessError('Numero de serie vinculado nao encontrado.');
-      }
-
-      if (serial.data_saida) {
-        throw this.createBusinessError('Nao e possivel desvincular um numero de serie que ja saiu com o pedido.');
-      }
-
-      await connection.query(
-        'DELETE FROM pedido_expedicao_item_seriais WHERE id = ?',
-        [bindingId]
-      );
-
-      await connection.query(
-        `
-          UPDATE submontagem_seriais
-          SET numero_pedido = NULL
-          WHERE id = ?
-        `,
-        [serial.id]
-      );
+      await this.releaseSerialBindingInTransaction(connection, bindingId);
 
       await this.recalculateStatus(connection, Number(vinculo.id_pedido), usuarioId);
       await connection.commit();
@@ -1967,10 +2140,11 @@ class PedidoExpedicaoModel {
             codigo: item.componente_serial.codigo,
             descricao: item.componente_serial.descricao,
             quantidade: Number(item.quantidade_seriais_necessarios || 0),
-            somente_expedicao: true,
+            somente_expedicao: false,
+            baixa_ja_reservada: true,
             forma_atendimento: ehComposicaoVenda ? 'COMPOSICAO_VENDA' : 'PRONTO',
             solicitacao_ref: solicitacaoRef,
-            observacao: `Coleta do pedido ${pedido.codigo_pedido}: baixa do modelo serial ${item.componente_serial.codigo}.`
+            observacao: `Coleta do pedido ${pedido.codigo_pedido}: confirmacao de venda do modelo serial ${item.componente_serial.codigo}.`
           });
         }
 
@@ -1993,32 +2167,7 @@ class PedidoExpedicaoModel {
           }
 
           const observacaoBase = `${componente.observacao} Cliente ${pedido.cliente_nome}.`.slice(0, 255);
-          const saldoExpedicao = await EstoqueModel.findSaldoForUpdate(connection, estoqueExpedicao.id, componente.id_peca);
-          const quantidadeExpedicao = saldoExpedicao ? Number(saldoExpedicao.quantidade) : 0;
-
-          if (componente.somente_expedicao) {
-            if (componente.quantidade > quantidadeExpedicao) {
-              throw this.createBusinessError(`Saldo insuficiente na Expedicao para baixar ${componente.codigo} no momento da coleta.`);
-            }
-
-            const novoSaldoExpedicao = Number((quantidadeExpedicao - componente.quantidade).toFixed(2));
-            await EstoqueModel.persistSaldo(
-              connection,
-              estoqueExpedicao.id,
-              componente.id_peca,
-              novoSaldoExpedicao,
-              saldoExpedicao
-            );
-
-            const idMovimentacao = await EstoqueModel.createMovimentacao(connection, {
-              id_peca: componente.id_peca,
-              id_estoque_origem: estoqueExpedicao.id,
-              id_estoque_destino: null,
-              tipo_movimentacao: 'SAIDA',
-              quantidade: componente.quantidade,
-              observacao: observacaoBase
-            });
-
+          if (componente.baixa_ja_reservada) {
             movimentosSaida.push({
               id_peca: componente.id_peca,
               quantidade: componente.quantidade,
@@ -2026,10 +2175,13 @@ class PedidoExpedicaoModel {
               solicitacao_ref: componente.solicitacao_ref,
               id_peca_solicitada: Number(item.id_peca),
               forma_atendimento: componente.forma_atendimento,
-              id_movimentacao_estoque: idMovimentacao
+              id_movimentacao_estoque: null
             });
             continue;
           }
+
+          const saldoExpedicao = await EstoqueModel.findSaldoForUpdate(connection, estoqueExpedicao.id, componente.id_peca);
+          const quantidadeExpedicao = saldoExpedicao ? Number(saldoExpedicao.quantidade) : 0;
 
           if (componente.quantidade > quantidadeExpedicao) {
             throw this.createBusinessError(`Saldo insuficiente na Expedicao para baixar ${componente.codigo} na coleta do pedido ${pedido.codigo_pedido}.`);

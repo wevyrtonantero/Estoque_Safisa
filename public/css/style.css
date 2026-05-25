@@ -1727,9 +1727,46 @@ textarea {
   transition: background var(--transition), transform var(--transition);
 }
 
+.icon-btn svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
 .icon-btn:hover {
   transform: translateY(-1px);
   background: rgba(18, 66, 118, 0.14);
+}
+
+.icon-btn.icon-btn-primary {
+  color: var(--primary-800);
+  background: rgba(46, 116, 181, 0.12);
+}
+
+.icon-btn.icon-btn-primary:hover {
+  background: rgba(46, 116, 181, 0.2);
+}
+
+.icon-btn.icon-btn-success {
+  color: #166e53;
+  background: rgba(30, 139, 104, 0.15);
+}
+
+.icon-btn.icon-btn-success:hover {
+  background: rgba(30, 139, 104, 0.24);
+}
+
+.icon-btn.icon-btn-danger {
+  color: var(--danger-dark);
+  background: rgba(214, 69, 69, 0.14);
+}
+
+.icon-btn.icon-btn-danger:hover {
+  background: rgba(214, 69, 69, 0.22);
 }
 
 .icon-btn-menu {
@@ -2534,6 +2571,26 @@ tbody tr:hover {
   color: var(--primary-900);
 }
 
+.pedido-confirm-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid rgba(18, 66, 118, 0.14);
+  border-radius: 14px;
+  background: rgba(245, 249, 253, 0.88);
+  color: var(--primary-900);
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.pedido-confirm-check input {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  flex: 0 0 auto;
+}
+
 @keyframes modal-enter {
   from {
     opacity: 0;
@@ -3161,6 +3218,12 @@ tbody tr:hover {
   cursor: pointer;
 }
 
+.pedido-prioridade-card.is-dragging {
+  opacity: 0.55;
+  border-style: dashed;
+  box-shadow: 0 10px 24px rgba(10, 34, 61, 0.12);
+}
+
 .pedido-prioridade-card.is-ready {
   border-color: rgba(30, 139, 104, 0.55);
 }
@@ -3179,6 +3242,11 @@ tbody tr:hover {
   letter-spacing: 0.02em;
   font-size: 0.72rem;
   user-select: none;
+  cursor: grab;
+}
+
+.pedido-prioridade-card.is-dragging .pedido-prioridade-handle {
+  cursor: grabbing;
 }
 
 .pedido-prioridade-main {
@@ -3342,7 +3410,26 @@ tbody tr:hover {
 .pedido-item-serial-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 3px;
+}
+
+.pedido-item-serial-list .selected-tag {
+  flex: 0 0 auto;
+  min-height: 20px;
+  padding: 2px 6px;
+  font-size: 0.66rem;
+  line-height: 1;
+  border-radius: 999px;
+}
+
+.pedido-item-serial-list .tag-inline-action {
+  padding-left: 4px;
+  font-size: 0.66rem;
+}
+
+.pedido-item-serial-list .tag-inline-label,
+.pedido-item-serial-list .pedido-serial-empty-tag {
+  font-size: 0.66rem;
 }
 
 .tag-inline-action {
@@ -3376,10 +3463,51 @@ tbody tr:hover {
 }
 
 .pedido-print-btn {
-  font-size: 0.95rem;
   width: 38px;
   height: 38px;
   min-height: 38px;
+  color: #14528b;
+  background: rgba(228, 239, 250, 0.92);
+  border: 1px solid rgba(121, 158, 204, 0.36);
+}
+
+.pedido-print-btn:hover {
+  background: rgba(213, 231, 249, 0.98);
+  border-color: rgba(77, 128, 187, 0.48);
+}
+
+.pedido-print-btn svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+  margin: 0 auto;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.pedido-kit-imagem-dialog {
+  width: min(1180px, 96vw);
+}
+
+.pedido-kit-imagem-stage {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 560px;
+  padding: 8px 4px 14px;
+}
+
+.pedido-kit-imagem-preview {
+  width: 100%;
+  max-width: 100%;
+  max-height: 80vh;
+  object-fit: contain;
+  border-radius: 12px;
+  border: 1px solid rgba(120, 150, 190, 0.25);
+  background: #fff;
 }
 
 @keyframes portalButtonPulse {
@@ -3397,6 +3525,19 @@ tbody tr:hover {
 }
 
 @media (max-width: 720px) {
+  .pedido-kit-imagem-dialog {
+    width: min(96vw, 960px);
+  }
+
+  .pedido-kit-imagem-stage {
+    min-height: 360px;
+    padding-inline: 0;
+  }
+
+  .pedido-kit-imagem-preview {
+    max-height: 68vh;
+  }
+
   .portal-shell {
     width: calc(100% - 20px);
     max-width: 100%;

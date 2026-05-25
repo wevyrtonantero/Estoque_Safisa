@@ -84,7 +84,7 @@ class PedidoEtiquetaService {
     };
   }
 
-  static async buildItemPrintJob(idPedidoItem) {
+  static async buildItemPrintJob(idPedidoItem, options = {}) {
     const itemId = normalizeOptionalInteger(idPedidoItem);
     if (!Number.isInteger(itemId)) {
       throw this.createBusinessError('O item do pedido informado e invalido.');
@@ -114,7 +114,21 @@ class PedidoEtiquetaService {
         throw this.createBusinessError('Vincule ao menos um numero de serie antes de imprimir a etiqueta deste item.');
       }
 
-      const labels = seriais.map((serial, index) => {
+      const selectedBindingIds = Array.isArray(options.binding_ids)
+        ? options.binding_ids
+          .map((value) => normalizeOptionalInteger(value))
+          .filter((value) => Number.isInteger(value))
+        : [];
+
+      const seriaisParaImprimir = selectedBindingIds.length
+        ? seriais.filter((serial) => selectedBindingIds.includes(Number(serial.id)))
+        : seriais;
+
+      if (!seriaisParaImprimir.length) {
+        throw this.createBusinessError('Selecione ao menos um numero de serie valido para imprimir.');
+      }
+
+      const labels = seriaisParaImprimir.map((serial, index) => {
         const numeroSerie = String(serial.numero_serie || '').trim();
         const zpl = gerarZplEtiqueta(etiqueta, {
           numeroSerie,

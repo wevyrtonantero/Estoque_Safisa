@@ -11,6 +11,7 @@ router.get('/pedidos-expedicao/clientes', requireApiRoles(OPERATION_READ_ROLES),
 router.patch('/pedidos-expedicao/prioridades', requireApiRoles(OPERATION_WRITE_ROLES), PedidoExpedicaoController.reorder);
 router.post('/pedidos-expedicao', requireApiRoles(OPERATION_WRITE_ROLES), PedidoExpedicaoController.create);
 router.patch('/pedidos-expedicao/:id', requireApiRoles(OPERATION_WRITE_ROLES), PedidoExpedicaoController.update);
+router.delete('/pedidos-expedicao/:id', requireApiRoles(OPERATION_WRITE_ROLES), PedidoExpedicaoController.delete);
 router.patch('/pedidos-expedicao/:id/programacao-hoje', requireApiRoles(OPERATION_WRITE_ROLES), PedidoExpedicaoController.updateProgramacaoHoje);
 router.get('/pedidos-expedicao/:id', requireApiRoles(OPERATION_READ_ROLES), PedidoExpedicaoController.getById);
 router.get('/pedidos-expedicao/itens/:itemId/seriais', requireApiRoles(OPERATION_READ_ROLES), PedidoExpedicaoController.getItemSeriais);

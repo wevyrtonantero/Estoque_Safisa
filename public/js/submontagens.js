@@ -51,7 +51,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 function formatarCodigoVisual(codigo) {
-  return String(codigo || '').replace(/^SM-/i, '');
+  return String(codigo || '');
 }
 
 function montarRotuloCodigoDescricao(codigo, descricao) {

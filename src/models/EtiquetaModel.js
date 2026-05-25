@@ -123,41 +123,32 @@ class EtiquetaModel {
 
   static async findPecaByCodigo(codigoItem, db = pool) {
     const codigoNormalizado = String(codigoItem || '').trim().toUpperCase();
-    const tentativas = [codigoNormalizado];
-    if (codigoNormalizado && !codigoNormalizado.startsWith('SM-')) {
-      tentativas.push(`SM-${codigoNormalizado}`);
+    const [rows] = await db.query(
+      `
+        SELECT
+          id,
+          codigo,
+          descricao,
+          classificacao
+        FROM pecas
+        WHERE codigo = ?
+          AND classificacao IN ('ITEM', 'SUBMONTAGEM')
+        LIMIT 1
+      `,
+      [codigoNormalizado]
+    );
+
+    const row = rows[0] || null;
+    if (!row) {
+      return null;
     }
 
-    for (const tentativa of tentativas) {
-      const [rows] = await db.query(
-        `
-          SELECT
-            id,
-            codigo,
-            descricao,
-            classificacao
-          FROM pecas
-          WHERE codigo = ?
-            AND classificacao IN ('ITEM', 'SUBMONTAGEM')
-          LIMIT 1
-        `,
-        [tentativa]
-      );
-
-      const row = rows[0] || null;
-      if (!row) {
-        continue;
-      }
-
-      return {
-        id: Number(row.id),
-        codigo: row.codigo,
-        descricao: row.descricao,
-        classificacao: row.classificacao
-      };
-    }
-
-    return null;
+    return {
+      id: Number(row.id),
+      codigo: row.codigo,
+      descricao: row.descricao,
+      classificacao: row.classificacao
+    };
   }
 
   static async findAll(filters = {}, db = pool) {
@@ -215,56 +206,34 @@ class EtiquetaModel {
   static async findByCodigo(codigoItem, db = pool) {
     await this.ensureSchema(db);
     const codigoNormalizado = String(codigoItem || '').trim().toUpperCase();
-    const tentativas = [codigoNormalizado];
-    if (codigoNormalizado && !codigoNormalizado.startsWith('SM-')) {
-      tentativas.push(`SM-${codigoNormalizado}`);
-    }
+    const [rows] = await db.query(
+      `
+        SELECT *
+        FROM etiquetas
+        WHERE codigo_item = ?
+        LIMIT 1
+      `,
+      [codigoNormalizado]
+    );
 
-    for (const tentativa of tentativas) {
-      const [rows] = await db.query(
-        `
-          SELECT *
-          FROM etiquetas
-          WHERE codigo_item = ?
-          LIMIT 1
-        `,
-        [tentativa]
-      );
-
-      if (rows[0]) {
-        return this.mapRow(rows[0]);
-      }
-    }
-
-    return null;
+    return rows[0] ? this.mapRow(rows[0]) : null;
   }
 
   static async findActiveByCodigo(codigoItem, db = pool) {
     await this.ensureSchema(db);
     const codigoNormalizado = String(codigoItem || '').trim().toUpperCase();
-    const tentativas = [codigoNormalizado];
-    if (codigoNormalizado && !codigoNormalizado.startsWith('SM-')) {
-      tentativas.push(`SM-${codigoNormalizado}`);
-    }
+    const [rows] = await db.query(
+      `
+        SELECT *
+        FROM etiquetas
+        WHERE codigo_item = ?
+          AND ativo = 1
+        LIMIT 1
+      `,
+      [codigoNormalizado]
+    );
 
-    for (const tentativa of tentativas) {
-      const [rows] = await db.query(
-        `
-          SELECT *
-          FROM etiquetas
-          WHERE codigo_item = ?
-            AND ativo = 1
-          LIMIT 1
-        `,
-        [tentativa]
-      );
-
-      if (rows[0]) {
-        return this.mapRow(rows[0]);
-      }
-    }
-
-    return null;
+    return rows[0] ? this.mapRow(rows[0]) : null;
   }
 
   static normalizePayload(data = {}) {

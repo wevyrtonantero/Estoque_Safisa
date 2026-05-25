@@ -154,6 +154,45 @@ const PedidoExpedicaoController = {
     }
   },
 
+  async delete(req, res) {
+    try {
+      const id = normalizeOptionalInteger(req.params.id);
+      if (!Number.isInteger(id)) {
+        return res.status(400).json({ message: 'O pedido informado e invalido.' });
+      }
+
+      const pedido = await PedidoExpedicaoModel.delete(
+        id,
+        req.currentUser?.id || null
+      );
+
+      await recordAuditLog(req, {
+        modulo: 'PEDIDOS_EXPEDICAO',
+        acao: 'DELETE',
+        entidade_tipo: 'PEDIDO_EXPEDICAO',
+        entidade_id: pedido.id,
+        descricao: `Pedido ${pedido.codigo_pedido} excluido.`,
+        depois: pedido
+      });
+
+      return res.status(200).json({
+        message: 'Pedido excluido com sucesso.',
+        pedido_id: pedido.id
+      });
+    } catch (error) {
+      console.error('Erro ao excluir pedido da Expedicao:', error);
+
+      if (error.statusCode) {
+        return res.status(error.statusCode).json({
+          message: error.message,
+          details: error.details || null
+        });
+      }
+
+      return res.status(500).json({ message: 'Erro ao excluir o pedido da Expedicao.' });
+    }
+  },
+
   async listClientes(req, res) {
     try {
       const clientes = await PedidoExpedicaoModel.findResumoClientes({
@@ -271,7 +310,9 @@ const PedidoExpedicaoController = {
         return res.status(400).json({ message: 'O item do pedido informado e invalido.' });
       }
 
-      const job = await PedidoEtiquetaService.buildItemPrintJob(itemId);
+      const job = await PedidoEtiquetaService.buildItemPrintJob(itemId, {
+        binding_ids: Array.isArray(req.body?.binding_ids) ? req.body.binding_ids : []
+      });
       return res.status(200).json(job);
     } catch (error) {
       console.error('Erro ao gerar etiquetas do item do pedido:', error);

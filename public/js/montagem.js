@@ -955,7 +955,7 @@ async function carregarProximoNumeroSerie() {
 }
 
 async function carregarRegistrosNumeroSerie() {
-  const response = await fetch(`${submontagemSeriaisApiBaseUrl}?limit=1000`);
+  const response = await fetch(`${submontagemSeriaisApiBaseUrl}?limit=100`);
   const result = await response.json();
 
   if (!response.ok) {
@@ -1027,7 +1027,7 @@ function renderizarRegistrosNumeroSerie() {
   refs.numeroSerieTbody.innerHTML = registros.map((registro) => `
     <tr>
       <td class="table-code">${escapeHtml(registro.numero_serie)}</td>
-      <td class="table-description">${escapeHtml(montarRotuloCodigoDescricao(registro.modelo_servo_codigo, registro.modelo_servo_descricao))}</td>
+      <td class="table-description">${escapeHtml(registro.modelo_servo_descricao || '-')}</td>
       <td>${formatarDataHora(registro.data_montagem)}</td>
       <td>${escapeHtml(registro.montador_nome || '-')}</td>
       <td>${renderizarPedidoRegistroNumeroSerie(registro)}</td>
@@ -1060,11 +1060,15 @@ function renderizarPedidoRegistroNumeroSerie(registro) {
 }
 
 function formatarCodigoVisual(codigo) {
-  return String(codigo || '').replace(/^SM-/i, '');
+  return String(codigo || '');
 }
 
 function montarRotuloCodigoDescricao(codigo, descricao) {
   return `${formatarCodigoVisual(codigo)} - ${descricao}`;
+}
+
+function montarDescricaoModelo(descricao) {
+  return String(descricao || '').trim();
 }
 
 function filtrarSubmontagensPorTermo(termo) {
@@ -1085,13 +1089,15 @@ function filtrarSubmontagensPorTermo(termo) {
 
 function isModeloElegivelNumeroSerie(item) {
   const codigo = String(item?.codigo || '').toUpperCase();
-  const descricao = String(item?.descricao || '').toUpperCase();
   if (['600', '550', '401RB', '401', '500', '450', '400', '350', '300', '250', '150', '100', '001'].includes(codigo)) {
     return true;
   }
 
-  return ['VF', 'MC', 'AL', 'BR', 'SAF', 'CJ', 'MBF'].some((keyword) => codigo.includes(keyword))
-    && descricao.includes('SERVO');
+  if (!codigo || codigo.includes('/')) {
+    return false;
+  }
+
+  return ['VF', 'MC', 'AL', 'BR', 'SAF', 'CJ', 'MBF'].some((keyword) => codigo.includes(keyword));
 }
 
 function renderizarSugestoesNumeroSerieCadastro(termo) {
@@ -1102,7 +1108,7 @@ function renderizarSugestoesNumeroSerieCadastro(termo) {
     itens,
     (item) => ({
       id: item.id,
-      title: montarRotuloCodigoDescricao(item.codigo, item.descricao),
+      title: montarDescricaoModelo(item.descricao),
       subtitle: item.classificacao === 'ITEM'
         ? `Item seriado | Saldo Montagem: ${formatInteger(obterSaldoMontagem(item.id))}`
         : `Submontagem | Componentes: ${formatInteger(item.total_componentes || 0)}`
@@ -1119,7 +1125,7 @@ function renderizarSugestoesNumeroSerieEdicao(termo) {
     itens,
     (item) => ({
       id: item.id,
-      title: montarRotuloCodigoDescricao(item.codigo, item.descricao),
+      title: montarDescricaoModelo(item.descricao),
       subtitle: item.classificacao === 'ITEM'
         ? `Item seriado | Saldo Montagem: ${formatInteger(obterSaldoMontagem(item.id))}`
         : `Submontagem | Componentes: ${formatInteger(item.total_componentes || 0)}`
@@ -1141,7 +1147,7 @@ function handleSugestaoNumeroSerieCadastroClick(event) {
   }
 
   refs.numeroSerieModeloId.value = String(item.id);
-  refs.numeroSerieModeloBusca.value = montarRotuloCodigoDescricao(item.codigo, item.descricao);
+  refs.numeroSerieModeloBusca.value = montarDescricaoModelo(item.descricao);
   renderizarResumoNumeroSerie(item);
   esconderSugestoesNumeroSerieCadastro();
   atualizarDiagnosticoNumeroSerie();
@@ -1160,7 +1166,7 @@ function handleSugestaoNumeroSerieEdicaoClick(event) {
   }
 
   refs.numeroSerieEditarModeloId.value = String(item.id);
-  refs.numeroSerieEditarModeloBusca.value = montarRotuloCodigoDescricao(item.codigo, item.descricao);
+  refs.numeroSerieEditarModeloBusca.value = montarDescricaoModelo(item.descricao);
   renderizarResumoNumeroSerieEdicao(item);
   esconderSugestoesNumeroSerieEdicao();
 }
@@ -1175,7 +1181,6 @@ function renderizarResumoNumeroSerie(item) {
   refs.numeroSerieResumo.classList.remove('empty');
   refs.numeroSerieResumo.classList.add('selected-tags');
   refs.numeroSerieResumo.innerHTML = `
-    <span class="selected-tag">${escapeHtml(formatarCodigoVisual(item.codigo))}</span>
     <span class="selected-tag">${escapeHtml(item.descricao)}</span>
     <span class="selected-tag">${escapeHtml(`Classificacao: ${item.classificacao}`)}</span>
     <span class="selected-tag">${escapeHtml(item.classificacao === 'ITEM'
@@ -1194,7 +1199,6 @@ function renderizarResumoNumeroSerieEdicao(item) {
   refs.numeroSerieEditarResumo.classList.remove('empty');
   refs.numeroSerieEditarResumo.classList.add('selected-tags');
   refs.numeroSerieEditarResumo.innerHTML = `
-    <span class="selected-tag">${escapeHtml(formatarCodigoVisual(item.codigo))}</span>
     <span class="selected-tag">${escapeHtml(item.descricao)}</span>
     <span class="selected-tag">${escapeHtml(`Classificacao: ${item.classificacao}`)}</span>
   `;
@@ -1496,7 +1500,7 @@ function abrirModalEditarNumeroSerie(registroId) {
   refs.numeroSerieEditarId.value = String(registro.id);
   refs.numeroSerieEditarNumero.value = registro.numero_serie;
   refs.numeroSerieEditarModeloId.value = String(registro.id_modelo_servo);
-  refs.numeroSerieEditarModeloBusca.value = montarRotuloCodigoDescricao(registro.modelo_servo_codigo, registro.modelo_servo_descricao);
+  refs.numeroSerieEditarModeloBusca.value = montarDescricaoModelo(registro.modelo_servo_descricao);
   renderizarResumoNumeroSerieEdicao({
     id: registro.id_modelo_servo,
     codigo: registro.modelo_servo_codigo,

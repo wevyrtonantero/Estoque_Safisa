@@ -15,8 +15,10 @@ let itemDraftSelecionado = null;
 let pedidoSelecionadoId = null;
 let pedidoItemSerialSelecionadoId = null;
 let serialDisponiveisContexto = null;
+let impressaoSeriaisContexto = null;
 let autoRefreshHandle = null;
 let jspmReadyPromise = null;
+let draggedPedidoCard = null;
 let jspmDiagnosticsState = {
   libraryLoaded: false,
   statusCode: null,
@@ -42,6 +44,7 @@ const refs = {
   cardTransportadora: document.getElementById('pedidos-card-transportadora'),
   cardHoje: document.getElementById('pedidos-card-hoje'),
   cardSeriais: document.getElementById('pedidos-card-seriais'),
+  sectorMenu: document.getElementById('pedidos-sector-menu'),
 
   criacaoModal: document.getElementById('pedido-criacao-modal'),
   criacaoMensagem: document.getElementById('pedido-criacao-mensagem'),
@@ -76,6 +79,7 @@ const refs = {
   detalheNf: document.getElementById('pedido-detalhe-nf'),
   detalhePesoTotal: document.getElementById('pedido-detalhe-peso-total'),
   detalheVolumes: document.getElementById('pedido-detalhe-volumes'),
+  detalheExcluir: document.getElementById('pedido-btn-excluir'),
   detalheEditar: document.getElementById('pedido-btn-editar'),
   detalheSalvarDadosFinais: document.getElementById('pedido-btn-salvar-dados-finais'),
   detalheMarcarColetado: document.getElementById('pedido-btn-marcar-coletado'),
@@ -96,6 +100,13 @@ const refs = {
   seriaisResumo: document.getElementById('pedido-seriais-resumo'),
   seriaisVinculados: document.getElementById('pedido-seriais-vinculados'),
   seriaisTbody: document.getElementById('pedido-seriais-tbody'),
+  seriaisAutoSelecionar: document.getElementById('pedido-btn-auto-selecionar-seriais'),
+  impressaoSeriaisModal: document.getElementById('pedido-impressao-seriais-modal'),
+  impressaoSeriaisMensagem: document.getElementById('pedido-impressao-seriais-mensagem'),
+  impressaoSeriaisTitulo: document.getElementById('pedido-impressao-seriais-titulo'),
+  impressaoSeriaisSubtitulo: document.getElementById('pedido-impressao-seriais-subtitulo'),
+  impressaoSeriaisResumo: document.getElementById('pedido-impressao-seriais-resumo'),
+  impressaoSeriaisTbody: document.getElementById('pedido-impressao-seriais-tbody'),
 
   faltasModal: document.getElementById('pedido-faltas-modal'),
   faltasTitulo: document.getElementById('pedido-faltas-titulo'),
@@ -119,7 +130,11 @@ const refs = {
   kitImagemModal: document.getElementById('pedido-kit-imagem-modal'),
   kitImagemTitulo: document.getElementById('pedido-kit-imagem-titulo'),
   kitImagemSubtitulo: document.getElementById('pedido-kit-imagem-subtitulo'),
-  kitImagemPreview: document.getElementById('pedido-kit-imagem-preview')
+  kitImagemPreview: document.getElementById('pedido-kit-imagem-preview'),
+  coletaConfirmModal: document.getElementById('pedido-coleta-confirm-modal'),
+  coletaConfirmMensagem: document.getElementById('pedido-coleta-confirm-mensagem'),
+  coletaConfirmCheckbox: document.getElementById('pedido-coleta-confirm-checkbox'),
+  coletaConfirmar: document.getElementById('pedido-btn-confirmar-coleta')
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -138,18 +153,39 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 function bindEvents() {
-  document.getElementById('pedidos-btn-novo').addEventListener('click', abrirModalCriacao);
+  document.getElementById('pedidos-btn-novo').addEventListener('click', () => {
+    fecharMenuPedidos();
+    abrirModalCriacao();
+  });
   document.getElementById('pedidos-btn-atualizar').addEventListener('click', () => {
+    fecharMenuPedidos();
     carregarTudo().catch((error) => mostrarMensagem(error.message, 'error'));
   });
-  document.getElementById('pedidos-btn-historico').addEventListener('click', abrirModalHistoricoPedidos);
-  document.getElementById('pedidos-btn-relatorio-dia').addEventListener('click', () => abrirModalRelatorio('dia'));
-  document.getElementById('pedidos-btn-relatorio-geral').addEventListener('click', () => abrirModalRelatorio('geral'));
+  document.getElementById('pedidos-btn-historico').addEventListener('click', () => {
+    fecharMenuPedidos();
+    abrirModalHistoricoPedidos();
+  });
+  document.getElementById('pedidos-btn-relatorio-dia').addEventListener('click', () => {
+    fecharMenuPedidos();
+    abrirModalRelatorio('dia');
+  });
+  document.getElementById('pedidos-btn-relatorio-geral').addEventListener('click', () => {
+    fecharMenuPedidos();
+    abrirModalRelatorio('geral');
+  });
 
   refs.filtroBusca.addEventListener('input', renderizarPedidos);
 
   refs.pedidosHojeLista.addEventListener('click', handleListaPedidosActions);
   refs.prioridadeLista.addEventListener('click', handleListaPedidosActions);
+  refs.pedidosHojeLista.addEventListener('dragstart', handlePedidoDragStart);
+  refs.pedidosHojeLista.addEventListener('dragover', handlePedidoDragOver);
+  refs.pedidosHojeLista.addEventListener('drop', handlePedidoDrop);
+  refs.pedidosHojeLista.addEventListener('dragend', handlePedidoDragEnd);
+  refs.prioridadeLista.addEventListener('dragstart', handlePedidoDragStart);
+  refs.prioridadeLista.addEventListener('dragover', handlePedidoDragOver);
+  refs.prioridadeLista.addEventListener('drop', handlePedidoDrop);
+  refs.prioridadeLista.addEventListener('dragend', handlePedidoDragEnd);
   refs.historicoTbody.addEventListener('click', handleHistoricoActions);
   refs.historicoFiltroCliente.addEventListener('input', () => renderizarHistoricoPedidos(obterHistoricoFiltrado()));
   refs.historicoFiltroTransportadora.addEventListener('input', () => renderizarHistoricoPedidos(obterHistoricoFiltrado()));
@@ -171,6 +207,7 @@ function bindEvents() {
   refs.itensTbody.addEventListener('click', handleItensDraftActions);
 
   document.getElementById('btn-fechar-modal-pedido-detalhe').addEventListener('click', fecharModalDetalhe);
+  refs.detalheExcluir.addEventListener('click', excluirPedidoSelecionado);
   refs.detalheEditar.addEventListener('click', abrirEdicaoPedidoSelecionado);
   refs.detalheSalvarDadosFinais.addEventListener('click', salvarDadosFinaisPedido);
   refs.detalheImprimirCaixas.addEventListener('click', imprimirEtiquetasCaixaPedidoSelecionado);
@@ -182,27 +219,45 @@ function bindEvents() {
         console.error('Falha ao atualizar diagnostico do JSPrintManager:', error);
       });
   });
-  document.getElementById('pedido-btn-marcar-coletado').addEventListener('click', marcarPedidoColetado);
+  document.getElementById('pedido-btn-marcar-coletado').addEventListener('click', abrirConfirmacaoColetaPedido);
   refs.detalheItensTbody.addEventListener('click', handleDetalheItemActions);
   refs.detalheItensTbody.addEventListener('change', handleDetalheItemChanges);
 
   document.getElementById('btn-fechar-modal-pedido-seriais').addEventListener('click', fecharModalSeriais);
   document.getElementById('btn-cancelar-modal-pedido-seriais').addEventListener('click', fecharModalSeriais);
   document.getElementById('pedido-btn-vincular-seriais').addEventListener('click', vincularSeriaisSelecionados);
+  refs.seriaisAutoSelecionar?.addEventListener('click', selecionarAutomaticamenteSeriais);
   refs.seriaisTbody.addEventListener('click', handleSeriaisModalClick);
   refs.seriaisTbody.addEventListener('change', handleSeriaisModalChange);
   refs.seriaisVinculados.addEventListener('click', handleSeriaisVinculadosActions);
+  document.getElementById('btn-fechar-modal-pedido-impressao-seriais').addEventListener('click', fecharModalImpressaoSeriais);
+  document.getElementById('btn-cancelar-modal-pedido-impressao-seriais').addEventListener('click', fecharModalImpressaoSeriais);
+  document.getElementById('pedido-btn-confirmar-impressao-seriais').addEventListener('click', confirmarImpressaoSeriaisSelecionados);
+  document.getElementById('pedido-btn-marcar-todos-seriais-impressao').addEventListener('click', () => marcarTodosSeriaisImpressao(true));
+  document.getElementById('pedido-btn-limpar-seriais-impressao').addEventListener('click', () => marcarTodosSeriaisImpressao(false));
+  refs.impressaoSeriaisTbody.addEventListener('click', handleImpressaoSeriaisModalClick);
+  refs.impressaoSeriaisTbody.addEventListener('change', handleImpressaoSeriaisModalChange);
 
   document.getElementById('btn-fechar-modal-pedido-faltas').addEventListener('click', fecharModalFaltas);
   document.getElementById('btn-fechar-modal-pedido-historico').addEventListener('click', fecharModalHistoricoPedidos);
   document.getElementById('btn-fechar-modal-pedido-relatorio').addEventListener('click', fecharModalRelatorio);
   document.getElementById('btn-fechar-modal-pedido-kit-imagem').addEventListener('click', fecharModalKitImagem);
   document.getElementById('btn-fechar-modal-pedido-kit-imagem-rodape').addEventListener('click', fecharModalKitImagem);
+  document.getElementById('btn-fechar-modal-pedido-coleta-confirm').addEventListener('click', fecharConfirmacaoColetaPedido);
+  document.getElementById('pedido-btn-cancelar-coleta-confirm').addEventListener('click', fecharConfirmacaoColetaPedido);
+  refs.coletaConfirmCheckbox?.addEventListener('change', () => {
+    refs.coletaConfirmar.disabled = !refs.coletaConfirmCheckbox.checked;
+  });
+  refs.coletaConfirmar?.addEventListener('click', marcarPedidoColetado);
   refs.relatorioImprimir.addEventListener('click', imprimirRelatorioAtual);
 
   document.addEventListener('click', (event) => {
     if (!event.target.closest('.autocomplete')) {
       esconderSugestoesItemPedido();
+    }
+
+    if (refs.sectorMenu?.open && !event.target.closest('.sector-menu')) {
+      refs.sectorMenu.open = false;
     }
   });
 
@@ -714,6 +769,7 @@ function renderizarCardPedido(pedido, options = {}) {
       class="pedido-prioridade-card ${pedido.pode_atender ? 'is-ready' : 'is-pending'}"
       data-id="${pedido.id}"
       data-lane="${lane}"
+      draggable="true"
     >
       <div class="pedido-prioridade-handle" aria-hidden="true">::</div>
 
@@ -1077,6 +1133,9 @@ async function atualizarProgramacaoHojePedido(pedidoId, programadoHoje) {
   atualizarPedidoCache(atualizado);
   renderizarPedidos();
   atualizarIndicadores();
+  if (refs.sectorMenu) {
+    refs.sectorMenu.open = false;
+  }
   notificarAtualizacaoOperacional(['pedidos-expedicao']);
   mostrarMensagem(
     programadoHoje
@@ -1084,6 +1143,116 @@ async function atualizarProgramacaoHojePedido(pedidoId, programadoHoje) {
       : `Pedido ${pedido.codigo_pedido} removido de Sai hoje.`,
     'success'
   );
+}
+
+function handlePedidoDragStart(event) {
+  const card = event.target.closest('.pedido-prioridade-card[data-id]');
+  if (!card) {
+    return;
+  }
+
+  if (refs.filtroBusca.value.trim()) {
+    event.preventDefault();
+    mostrarMensagem('Limpe a busca antes de reorganizar a prioridade dos pedidos.', 'warning');
+    return;
+  }
+
+  draggedPedidoCard = card;
+  card.classList.add('is-dragging');
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', card.dataset.id || '');
+  }
+}
+
+function handlePedidoDragOver(event) {
+  const container = event.currentTarget;
+  if (!draggedPedidoCard || !container) {
+    return;
+  }
+
+  event.preventDefault();
+  const lane = draggedPedidoCard.dataset.lane || 'base';
+  if ((container.id === 'pedidos-hoje-lista' ? 'hoje' : 'base') !== lane) {
+    return;
+  }
+
+  const cards = [...container.querySelectorAll('.pedido-prioridade-card[data-id]:not(.is-dragging)')];
+  const nextCard = cards.find((card) => {
+    const rect = card.getBoundingClientRect();
+    return event.clientY < rect.top + (rect.height / 2);
+  });
+
+  if (!nextCard) {
+    container.appendChild(draggedPedidoCard);
+    return;
+  }
+
+  container.insertBefore(draggedPedidoCard, nextCard);
+}
+
+async function handlePedidoDrop(event) {
+  const container = event.currentTarget;
+  if (!draggedPedidoCard || !container) {
+    return;
+  }
+
+  event.preventDefault();
+  try {
+    await persistirNovaOrdemPedidos();
+  } catch (error) {
+    mostrarMensagem(error.message || 'Nao foi possivel salvar a nova prioridade.', 'error');
+    await carregarTudo();
+  }
+}
+
+function handlePedidoDragEnd() {
+  limparEstadoDragPedidos();
+}
+
+function fecharMenuPedidos() {
+  if (refs.sectorMenu) {
+    refs.sectorMenu.open = false;
+  }
+}
+
+function limparEstadoDragPedidos() {
+  document.querySelectorAll('.pedido-prioridade-card.is-dragging').forEach((card) => {
+    card.classList.remove('is-dragging');
+  });
+  draggedPedidoCard = null;
+}
+
+async function persistirNovaOrdemPedidos() {
+  if (refs.filtroBusca.value.trim()) {
+    throw new Error('Limpe a busca antes de reorganizar a prioridade dos pedidos.');
+  }
+
+  const idsHoje = [...refs.pedidosHojeLista.querySelectorAll('.pedido-prioridade-card[data-id]')]
+    .map((card) => Number(card.dataset.id))
+    .filter((value) => Number.isInteger(value));
+  const idsBase = [...refs.prioridadeLista.querySelectorAll('.pedido-prioridade-card[data-id]')]
+    .map((card) => Number(card.dataset.id))
+    .filter((value) => Number.isInteger(value));
+  const orderIds = [...idsHoje, ...idsBase];
+
+  if (!orderIds.length) {
+    limparEstadoDragPedidos();
+    return;
+  }
+
+  const atualizados = await fetchJson(`${pedidosApiBaseUrl}/prioridades`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ order_ids: orderIds })
+  });
+
+  pedidosCache = Array.isArray(atualizados) ? atualizados : pedidosCache;
+  renderizarPedidos();
+  atualizarIndicadores();
+  limparEstadoDragPedidos();
+  notificarAtualizacaoOperacional(['pedidos-expedicao']);
+  mostrarMensagem('Prioridade dos pedidos atualizada com sucesso.', 'success');
 }
 
 function abrirModalCriacao() {
@@ -1117,7 +1286,7 @@ function abrirEdicaoPedidoSelecionado() {
   refs.criacaoForm.reset();
   refs.pedidoId.value = String(pedido.id);
   refs.criacaoTitulo.textContent = 'Editar pedido';
-  refs.criacaoSubtitulo.textContent = 'Atualize os dados do pedido. Se a montagem ja começou, a estrutura dos itens fica preservada.';
+  refs.criacaoSubtitulo.textContent = 'Atualize os dados do pedido. Itens removidos devolvem vinculos ao estoque e itens novos entram no fluxo normal.';
   refs.criacaoSubmit.textContent = 'Salvar pedido';
   refs.pedidoCodigo.value = pedido.codigo_pedido || '';
   refs.cliente.value = pedido.cliente_nome || '';
@@ -1368,6 +1537,7 @@ async function abrirDetalhePedido(pedidoId) {
   refs.detalheSalvarDadosFinais.disabled = pedido.status === 'PEDIDO COLETADO';
   refs.detalheMarcarColetado.disabled = pedido.status === 'PEDIDO COLETADO';
   refs.detalheEditar.disabled = pedido.status === 'PEDIDO COLETADO';
+  refs.detalheExcluir.disabled = pedido.status === 'PEDIDO COLETADO';
 
   refs.detalheResumo.innerHTML = `
     <span class="selected-tag">${escapeHtml(pedido.status)}</span>
@@ -1401,16 +1571,16 @@ function renderizarItensPedidoDetalhe(pedido) {
     }
 
     return `
-      <button
+      <a
         class="pedido-kit-link"
-        type="button"
-        data-action="abrir-kit-imagem"
-        data-codigo="${escapeHtml(item.codigo)}"
-        data-imagem-url="${escapeHtml(kitImageUrl)}"
+        href="${escapeHtml(kitImageUrl)}"
+        target="_blank"
+        rel="noopener noreferrer"
         style="padding:0;border:0;background:none;color:#14528b;font:inherit;font-weight:800;text-decoration:underline;cursor:pointer;"
+        title="Abrir imagem do kit em nova aba"
       >
         ${escapeHtml(item.codigo)}
-      </button>
+      </a>
     `;
   };
 
@@ -1474,7 +1644,16 @@ function renderizarItensPedidoDetalhe(pedido) {
         <td>${formatDecimal(item.massa_total_kg || 0)} kg</td>
         <td>
           <div class="pedido-prioridade-actions">
-            <button class="icon-btn pedido-print-btn" type="button" title="Imprimir item" aria-label="Imprimir item" data-action="imprimir-item" data-item-id="${item.id}">&#128424;</button>
+            <button class="icon-btn pedido-print-btn" type="button" title="Imprimir item" aria-label="Imprimir item" data-action="imprimir-item" data-item-id="${item.id}">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M7 8V4h10v4"></path>
+                <rect x="6" y="14" width="12" height="6" rx="1"></rect>
+                <path d="M6 10H5a2 2 0 0 0-2 2v4h3"></path>
+                <path d="M18 16h3v-4a2 2 0 0 0-2-2h-1"></path>
+                <path d="M8 12h8"></path>
+                <circle cx="17.5" cy="11.5" r=".5" fill="currentColor" stroke="none"></circle>
+              </svg>
+            </button>
             ${botoes.join('')}
           </div>
         </td>
@@ -1484,12 +1663,6 @@ function renderizarItensPedidoDetalhe(pedido) {
 }
 
 async function handleDetalheItemActions(event) {
-  const kitButton = event.target.closest('[data-action="abrir-kit-imagem"][data-codigo][data-imagem-url]');
-  if (kitButton) {
-    abrirModalKitImagem(kitButton.dataset.codigo, kitButton.dataset.imagemUrl);
-    return;
-  }
-
   const serialButton = event.target.closest('[data-action="abrir-seriais"][data-item-id]');
   if (serialButton) {
     await abrirModalSeriaisPedido(Number(serialButton.dataset.itemId));
@@ -1498,7 +1671,7 @@ async function handleDetalheItemActions(event) {
 
   const printButton = event.target.closest('[data-action="imprimir-item"][data-item-id]');
   if (printButton) {
-    await imprimirEtiquetasItem(Number(printButton.dataset.itemId), printButton);
+    await abrirFluxoImpressaoItem(Number(printButton.dataset.itemId), printButton);
     return;
   }
 
@@ -1545,13 +1718,16 @@ async function abrirModalSeriaisPedido(itemId) {
   refs.seriaisMensagem.className = 'message hidden';
   refs.seriaisMensagem.textContent = '';
   refs.seriaisTitulo.textContent = `${result.item.codigo} - vincular servo`;
-  refs.seriaisSubtitulo.textContent = `Modelo serial: ${result.item.modelo_serial_codigo} | Necessario: ${formatInteger(result.item.quantidade_seriais_necessarios || result.item.quantidade)} | Vinculados: ${formatInteger(result.vinculados.length)}`;
+  refs.seriaisSubtitulo.textContent = `Modelo serial: ${formatarCodigoVisual(result.item.modelo_serial_codigo)} | Necessario: ${formatInteger(result.item.quantidade_seriais_necessarios || result.item.quantidade)} | Vinculados: ${formatInteger(result.vinculados.length)}`;
   refs.seriaisResumo.innerHTML = `
     <span class="selected-tag">Pedido: ${escapeHtml((obterPedidoSelecionado() || {}).codigo_pedido || '-')}</span>
     <span class="selected-tag">Item: ${escapeHtml(result.item.codigo)}</span>
-    <span class="selected-tag">Serial: ${escapeHtml(result.item.modelo_serial_codigo || '-')}</span>
+    <span class="selected-tag">Serial: ${escapeHtml(formatarCodigoVisual(result.item.modelo_serial_codigo || '-'))}</span>
     <span class="selected-tag">Disponiveis: ${formatInteger(result.disponiveis.length)}</span>
   `;
+  if (refs.seriaisAutoSelecionar) {
+    refs.seriaisAutoSelecionar.disabled = !result.disponiveis.length;
+  }
 
   refs.seriaisVinculados.classList.remove('empty');
   refs.seriaisVinculados.innerHTML = result.vinculados.length
@@ -1618,6 +1794,56 @@ function handleSeriaisModalChange(event) {
 
 function atualizarEstadoLinhaSerial(row, checked) {
   row.classList.toggle('is-selected', Boolean(checked));
+}
+
+function selecionarAutomaticamenteSeriais() {
+  if (!serialDisponiveisContexto?.item) {
+    return;
+  }
+
+  const quantidadeNecessaria = Number(serialDisponiveisContexto.item.quantidade_seriais_necessarios || serialDisponiveisContexto.item.quantidade || 0);
+  const quantidadeJaVinculada = Array.isArray(serialDisponiveisContexto.vinculados) ? serialDisponiveisContexto.vinculados.length : 0;
+  const quantidadeFaltante = Math.max(0, quantidadeNecessaria - quantidadeJaVinculada);
+
+  if (!quantidadeFaltante) {
+    refs.seriaisMensagem.textContent = 'Este item ja tem todos os numeros de serie necessarios vinculados.';
+    refs.seriaisMensagem.className = 'message info';
+    refs.seriaisMensagem.classList.remove('hidden');
+    return;
+  }
+
+  const checkboxes = [...refs.seriaisTbody.querySelectorAll('.pedido-serial-checkbox')];
+  checkboxes.forEach((checkbox) => {
+    checkbox.checked = false;
+    const row = checkbox.closest('tr[data-serial-row]');
+    if (row) {
+      atualizarEstadoLinhaSerial(row, false);
+    }
+  });
+
+  const selecionados = checkboxes.slice(0, quantidadeFaltante);
+  selecionados.forEach((checkbox) => {
+    checkbox.checked = true;
+    const row = checkbox.closest('tr[data-serial-row]');
+    if (row) {
+      atualizarEstadoLinhaSerial(row, true);
+    }
+  });
+
+  if (!selecionados.length) {
+    refs.seriaisMensagem.textContent = 'Nao ha numeros de serie disponiveis para selecionar automaticamente.';
+    refs.seriaisMensagem.className = 'message error';
+    refs.seriaisMensagem.classList.remove('hidden');
+    return;
+  }
+
+  const mensagem = selecionados.length < quantidadeFaltante
+    ? `Foram selecionados ${formatInteger(selecionados.length)} numero(s) de serie automaticamente, mas ainda faltam ${formatInteger(quantidadeFaltante - selecionados.length)}.`
+    : `Selecionados automaticamente ${formatInteger(selecionados.length)} numero(s) de serie.`;
+
+  refs.seriaisMensagem.textContent = mensagem;
+  refs.seriaisMensagem.className = selecionados.length < quantidadeFaltante ? 'message warning' : 'message success';
+  refs.seriaisMensagem.classList.remove('hidden');
 }
 
 async function handleSeriaisVinculadosActions(event) {
@@ -1741,9 +1967,28 @@ async function salvarDadosFinaisPedido() {
   }
 }
 
+function abrirConfirmacaoColetaPedido() {
+  refs.coletaConfirmMensagem.className = 'message hidden';
+  refs.coletaConfirmMensagem.textContent = '';
+  refs.coletaConfirmCheckbox.checked = false;
+  refs.coletaConfirmar.disabled = true;
+  openModal(refs.coletaConfirmModal);
+}
+
+function fecharConfirmacaoColetaPedido() {
+  closeModal(refs.coletaConfirmModal);
+}
+
 async function marcarPedidoColetado() {
   const pedido = obterPedidoSelecionado();
   if (!pedido) {
+    return;
+  }
+
+  if (!refs.coletaConfirmCheckbox.checked) {
+    refs.coletaConfirmMensagem.textContent = 'Confirme a leitura antes de finalizar a coleta.';
+    refs.coletaConfirmMensagem.className = 'message error';
+    refs.coletaConfirmMensagem.classList.remove('hidden');
     return;
   }
 
@@ -1767,13 +2012,43 @@ async function marcarPedidoColetado() {
     atualizarIndicadores();
     notificarAtualizacaoOperacional(['pedidos-expedicao', 'submontagem-seriais', 'estoque']);
     mostrarMensagem('Pedido coletado com sucesso.', 'success');
+    fecharConfirmacaoColetaPedido();
     await abrirDetalhePedido(atualizado.id);
   } catch (error) {
-    mostrarMensagemDetalhe(error.message, 'error');
+    refs.coletaConfirmMensagem.textContent = error.message || 'Nao foi possivel finalizar a coleta do pedido.';
+    refs.coletaConfirmMensagem.className = 'message error';
+    refs.coletaConfirmMensagem.classList.remove('hidden');
   }
 }
 
-async function imprimirEtiquetasItem(itemId, triggerButton = null) {
+async function excluirPedidoSelecionado() {
+  const pedido = obterPedidoSelecionado();
+  if (!pedido) {
+    return;
+  }
+
+  const confirmado = window.confirm(`Excluir o pedido ${pedido.codigo_pedido}? Tudo que estiver vinculado volta para o estoque.`);
+  if (!confirmado) {
+    return;
+  }
+
+  try {
+    await fetchJson(`${pedidosApiBaseUrl}/${pedido.id}`, {
+      method: 'DELETE'
+    });
+
+    pedidosCache = pedidosCache.filter((entry) => Number(entry.id) !== Number(pedido.id));
+    fecharModalDetalhe();
+    renderizarPedidos();
+    atualizarIndicadores();
+    notificarAtualizacaoOperacional(['pedidos-expedicao', 'submontagem-seriais', 'estoque']);
+    mostrarMensagem('Pedido excluido com sucesso.', 'success');
+  } catch (error) {
+    mostrarMensagemDetalhe(error.message || 'Nao foi possivel excluir o pedido.', 'error');
+  }
+}
+
+async function imprimirEtiquetasItem(itemId, triggerButton = null, options = {}) {
   const button = triggerButton || refs.detalheItensTbody.querySelector(`[data-action="imprimir-item"][data-item-id="${itemId}"]`);
   if (button) {
     button.classList.add('is-printing');
@@ -1783,7 +2058,10 @@ async function imprimirEtiquetasItem(itemId, triggerButton = null) {
   try {
     const job = await fetchJson(`${pedidosApiBaseUrl}/itens/${itemId}/etiquetas-impressao`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        binding_ids: Array.isArray(options.bindingIds) ? options.bindingIds : undefined
+      })
     });
 
     const zplAgrupado = agruparZplLabels(job.labels || []);
@@ -1801,13 +2079,143 @@ async function imprimirEtiquetasItem(itemId, triggerButton = null) {
       `${formatInteger(job.quantidade_etiquetas || 0)} etiqueta(s) do item ${job.codigo_item} enviada(s) para ${impressoraNome.toLowerCase()}.`,
       'success'
     );
+    if (refs.impressaoSeriaisModal && !refs.impressaoSeriaisModal.classList.contains('hidden')) {
+      refs.impressaoSeriaisMensagem.className = 'message hidden';
+      refs.impressaoSeriaisMensagem.textContent = '';
+    }
   } catch (error) {
-    mostrarMensagemDetalhe(error.message || 'Nao foi possivel imprimir a etiqueta do item.', 'error');
+    const mensagem = error.message || 'Nao foi possivel imprimir a etiqueta do item.';
+    mostrarMensagemDetalhe(mensagem, 'error');
+    if (refs.impressaoSeriaisModal && !refs.impressaoSeriaisModal.classList.contains('hidden')) {
+      refs.impressaoSeriaisMensagem.textContent = mensagem;
+      refs.impressaoSeriaisMensagem.className = 'message error';
+      refs.impressaoSeriaisMensagem.classList.remove('hidden');
+    }
   } finally {
     if (button) {
       button.classList.remove('is-printing');
       button.removeAttribute('aria-busy');
     }
+  }
+}
+
+async function abrirFluxoImpressaoItem(itemId, triggerButton = null) {
+  const pedido = obterPedidoSelecionado();
+  const item = (pedido?.itens || []).find((entry) => Number(entry.id) === Number(itemId));
+  if (!item) {
+    mostrarMensagemDetalhe('Nao foi possivel localizar o item selecionado para impressao.', 'error');
+    return;
+  }
+
+  if (!item.exige_numero_serie) {
+    await imprimirEtiquetasItem(itemId, triggerButton);
+    return;
+  }
+
+  abrirModalImpressaoSeriais(item);
+}
+
+function abrirModalImpressaoSeriais(item) {
+  const vinculos = Array.isArray(item?.seriais_vinculados) ? item.seriais_vinculados : [];
+  if (!vinculos.length) {
+    mostrarMensagemDetalhe('Vincule ao menos um numero de serie antes de imprimir a etiqueta deste item.', 'error');
+    return;
+  }
+
+  impressaoSeriaisContexto = {
+    itemId: Number(item.id),
+    itemCodigo: item.codigo,
+    itemDescricao: item.descricao,
+    vinculos
+  };
+
+  refs.impressaoSeriaisMensagem.className = 'message hidden';
+  refs.impressaoSeriaisMensagem.textContent = '';
+  refs.impressaoSeriaisTitulo.textContent = `${item.codigo} - escolher seriais para imprimir`;
+  refs.impressaoSeriaisSubtitulo.textContent = 'Todos os numeros ja vem selecionados. Desmarque apenas o que nao quiser imprimir agora.';
+  refs.impressaoSeriaisResumo.innerHTML = `
+    <span class="selected-tag">Item: ${escapeHtml(item.codigo)}</span>
+    <span class="selected-tag">Descricao: ${escapeHtml(item.descricao || '-')}</span>
+    <span class="selected-tag">Vinculados: ${formatInteger(vinculos.length)}</span>
+  `;
+
+  refs.impressaoSeriaisTbody.innerHTML = vinculos.map((serial) => `
+    <tr class="pedido-serial-row is-selected" data-print-serial-row="${serial.id}">
+      <td><input type="checkbox" class="pedido-print-serial-checkbox" value="${serial.id}" checked></td>
+      <td class="table-code">${escapeHtml(serial.numero_serie)}</td>
+      <td>${escapeHtml(`${serial.modelo_servo_codigo || ''} - ${serial.modelo_servo_descricao || ''}`.replace(/^ - /, ''))}</td>
+      <td>${formatDate(serial.data_montagem)}</td>
+    </tr>
+  `).join('');
+
+  openModal(refs.impressaoSeriaisModal);
+}
+
+function fecharModalImpressaoSeriais() {
+  impressaoSeriaisContexto = null;
+  refs.impressaoSeriaisMensagem.className = 'message hidden';
+  refs.impressaoSeriaisMensagem.textContent = '';
+  closeModal(refs.impressaoSeriaisModal);
+}
+
+function handleImpressaoSeriaisModalClick(event) {
+  const row = event.target.closest('tr[data-print-serial-row]');
+  if (!row || event.target.closest('input, button, a, label')) {
+    return;
+  }
+
+  const checkbox = row.querySelector('.pedido-print-serial-checkbox');
+  if (!checkbox) {
+    return;
+  }
+
+  checkbox.checked = !checkbox.checked;
+  atualizarEstadoLinhaSerial(row, checkbox.checked);
+}
+
+function handleImpressaoSeriaisModalChange(event) {
+  const checkbox = event.target.closest('.pedido-print-serial-checkbox');
+  if (!checkbox) {
+    return;
+  }
+
+  const row = checkbox.closest('tr[data-print-serial-row]');
+  if (row) {
+    atualizarEstadoLinhaSerial(row, checkbox.checked);
+  }
+}
+
+function marcarTodosSeriaisImpressao(marcar) {
+  [...refs.impressaoSeriaisTbody.querySelectorAll('.pedido-print-serial-checkbox')].forEach((checkbox) => {
+    checkbox.checked = Boolean(marcar);
+    const row = checkbox.closest('tr[data-print-serial-row]');
+    if (row) {
+      atualizarEstadoLinhaSerial(row, checkbox.checked);
+    }
+  });
+}
+
+async function confirmarImpressaoSeriaisSelecionados() {
+  if (!impressaoSeriaisContexto?.itemId) {
+    return;
+  }
+
+  const selecionados = [...refs.impressaoSeriaisTbody.querySelectorAll('.pedido-print-serial-checkbox:checked')]
+    .map((input) => Number(input.value))
+    .filter((value) => Number.isInteger(value));
+
+  if (!selecionados.length) {
+    refs.impressaoSeriaisMensagem.textContent = 'Selecione ao menos um numero de serie para imprimir.';
+    refs.impressaoSeriaisMensagem.className = 'message error';
+    refs.impressaoSeriaisMensagem.classList.remove('hidden');
+    return;
+  }
+
+  const triggerButton = refs.detalheItensTbody.querySelector(`[data-action="imprimir-item"][data-item-id="${impressaoSeriaisContexto.itemId}"]`);
+  await imprimirEtiquetasItem(impressaoSeriaisContexto.itemId, triggerButton, { bindingIds: selecionados });
+
+  if (!refs.impressaoSeriaisMensagem.classList.contains('error')) {
+    fecharModalImpressaoSeriais();
   }
 }
 
@@ -1931,10 +2339,12 @@ function closeModal(modal) {
     refs.criacaoModal,
     refs.detalheModal,
     refs.seriaisModal,
+    refs.impressaoSeriaisModal,
     refs.faltasModal,
     refs.historicoModal,
     refs.relatorioModal,
-    refs.kitImagemModal
+    refs.kitImagemModal,
+    refs.coletaConfirmModal
   ].some((item) => !item.classList.contains('hidden'));
 
   document.body.classList.toggle('has-modal', algumModalAberto);
@@ -1944,10 +2354,12 @@ function handleModalBackdrop(event) {
   if (event.target.dataset.closeModal === 'pedido-criacao') fecharModalCriacao();
   if (event.target.dataset.closeModal === 'pedido-detalhe') fecharModalDetalhe();
   if (event.target.dataset.closeModal === 'pedido-seriais') fecharModalSeriais();
+  if (event.target.dataset.closeModal === 'pedido-impressao-seriais') fecharModalImpressaoSeriais();
   if (event.target.dataset.closeModal === 'pedido-faltas') fecharModalFaltas();
   if (event.target.dataset.closeModal === 'pedido-historico') fecharModalHistoricoPedidos();
   if (event.target.dataset.closeModal === 'pedido-relatorio') fecharModalRelatorio();
   if (event.target.dataset.closeModal === 'pedido-kit-imagem') fecharModalKitImagem();
+  if (event.target.dataset.closeModal === 'pedido-coleta-confirm') fecharConfirmacaoColetaPedido();
 }
 
 function handleKeyboardShortcuts(event) {
@@ -1959,6 +2371,11 @@ function handleKeyboardShortcuts(event) {
 
   if (!refs.seriaisModal.classList.contains('hidden')) {
     fecharModalSeriais();
+    return;
+  }
+
+  if (!refs.impressaoSeriaisModal.classList.contains('hidden')) {
+    fecharModalImpressaoSeriais();
     return;
   }
 
@@ -1979,6 +2396,11 @@ function handleKeyboardShortcuts(event) {
 
   if (!refs.kitImagemModal.classList.contains('hidden')) {
     fecharModalKitImagem();
+    return;
+  }
+
+  if (!refs.coletaConfirmModal.classList.contains('hidden')) {
+    fecharConfirmacaoColetaPedido();
     return;
   }
 
@@ -2048,15 +2470,21 @@ function normalizeDateInput(value) {
   return `${year}-${month}-${day}`;
 }
 
+function formatarCodigoVisual(codigo) {
+  return String(codigo || '');
+}
+
 function isNumeroSerieModel(item) {
   const codigo = String(item?.codigo || '').toUpperCase();
-  const descricao = String(item?.descricao || '').toUpperCase();
   if (['600', '550', '401RB', '401', '500', '450', '400', '350', '300', '250', '150', '100', '001'].includes(codigo)) {
     return true;
   }
 
-  return ['VF', 'MC', 'AL', 'BR', 'SAF', 'CJ', 'MBF'].some((keyword) => codigo.includes(keyword))
-    && descricao.includes('SERVO');
+  if (!codigo || codigo.includes('/')) {
+    return false;
+  }
+
+  return ['VF', 'MC', 'AL', 'BR', 'SAF', 'CJ', 'MBF'].some((keyword) => codigo.includes(keyword));
 }
 
 function obterKitImageUrl(codigo) {

@@ -52,7 +52,7 @@
 
     <section class="sector-shell">
       <aside class="sector-menu">
-        <details class="sector-menu-card">
+        <details id="pedidos-sector-menu" class="sector-menu-card">
           <summary class="sector-menu-summary">
             <div class="sector-menu-heading">
               <span class="section-pill">Pedidos</span>
@@ -129,7 +129,7 @@
   <div id="pedido-criacao-modal" class="modal hidden" aria-hidden="true">
     <div class="modal-backdrop" data-close-modal="pedido-criacao"></div>
 
-    <div class="modal-dialog modal-wide">
+    <div class="modal-dialog modal-wide pedido-kit-imagem-dialog">
       <div class="modal-header">
         <div>
           <span class="section-pill">Expedicao</span>
@@ -260,8 +260,26 @@
         </div>
 
         <div class="topbar-actions">
-          <button id="pedido-btn-editar" class="btn btn-secondary btn-small" type="button">Editar pedido</button>
-          <button id="pedido-btn-marcar-coletado" class="btn btn-success btn-small" type="button">Pedido coletado</button>
+          <button id="pedido-btn-excluir" class="icon-btn icon-btn-danger small" type="button" aria-label="Excluir pedido" title="Excluir pedido">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M4 7h16"></path>
+              <path d="M9 7V5h6v2"></path>
+              <path d="M8 7l1 12h6l1-12"></path>
+              <path d="M10 11v5"></path>
+              <path d="M14 11v5"></path>
+            </svg>
+          </button>
+          <button id="pedido-btn-editar" class="icon-btn icon-btn-primary small" type="button" aria-label="Editar pedido" title="Editar pedido">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M4 20l4.5-1 9-9-3.5-3.5-9 9L4 20z"></path>
+              <path d="M13.5 6.5l3.5 3.5"></path>
+            </svg>
+          </button>
+          <button id="pedido-btn-marcar-coletado" class="icon-btn icon-btn-success small" type="button" aria-label="Pedido coletado" title="Pedido coletado">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M5 12l4 4 10-10"></path>
+            </svg>
+          </button>
           <button id="btn-fechar-modal-pedido-detalhe" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
         </div>
       </div>
@@ -317,6 +335,34 @@
     </div>
   </div>
 
+  <div id="pedido-coleta-confirm-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="pedido-coleta-confirm"></div>
+
+    <div class="modal-dialog modal-small">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Confirmacao</span>
+          <h2>Pedido coletado</h2>
+          <p>Confirme se a transportadora realmente ja coletou este pedido.</p>
+        </div>
+
+        <button id="btn-fechar-modal-pedido-coleta-confirm" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="pedido-coleta-confirm-mensagem" class="message hidden"></div>
+
+      <label class="pedido-confirm-check">
+        <input id="pedido-coleta-confirm-checkbox" type="checkbox">
+        <span>Li a observacao do pedido e confirmo que a transportadora ja coletou.</span>
+      </label>
+
+      <div class="modal-actions">
+        <button id="pedido-btn-cancelar-coleta-confirm" class="btn btn-neutral" type="button">Cancelar</button>
+        <button id="pedido-btn-confirmar-coleta" class="btn btn-success" type="button" disabled>Confirmar coleta</button>
+      </div>
+    </div>
+  </div>
+
   <div id="pedido-seriais-modal" class="modal hidden" aria-hidden="true">
     <div class="modal-backdrop" data-close-modal="pedido-seriais"></div>
 
@@ -335,6 +381,10 @@
 
       <div class="selected-tags" id="pedido-seriais-resumo"></div>
       <div id="pedido-seriais-vinculados" class="selected-tags empty">Nenhum servo vinculado ainda.</div>
+
+      <div class="modal-actions">
+        <button id="pedido-btn-auto-selecionar-seriais" class="btn btn-neutral btn-small" type="button">Selecionar automatico</button>
+      </div>
 
       <div class="table-wrapper">
         <table>
@@ -393,6 +443,53 @@
             </tr>
           </tbody>
         </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="pedido-impressao-seriais-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="pedido-impressao-seriais"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Impressao</span>
+          <h2 id="pedido-impressao-seriais-titulo">Escolha os numeros de serie</h2>
+          <p id="pedido-impressao-seriais-subtitulo">Todos os numeros ja vem selecionados para facilitar a reimpressao parcial.</p>
+        </div>
+
+        <button id="btn-fechar-modal-pedido-impressao-seriais" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="pedido-impressao-seriais-mensagem" class="message hidden"></div>
+      <div id="pedido-impressao-seriais-resumo" class="selected-tags"></div>
+
+      <div class="modal-actions">
+        <button id="pedido-btn-marcar-todos-seriais-impressao" class="btn btn-neutral btn-small" type="button">Selecionar todos</button>
+        <button id="pedido-btn-limpar-seriais-impressao" class="btn btn-neutral btn-small" type="button">Limpar selecao</button>
+      </div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Selecionar</th>
+              <th>Numero de serie</th>
+              <th>Modelo</th>
+              <th>Montagem</th>
+            </tr>
+          </thead>
+          <tbody id="pedido-impressao-seriais-tbody">
+            <tr>
+              <td colspan="4" class="empty-state">Nenhum numero de serie carregado.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="modal-actions">
+        <button id="btn-cancelar-modal-pedido-impressao-seriais" class="btn btn-neutral" type="button">Cancelar</button>
+        <button id="pedido-btn-confirmar-impressao-seriais" class="btn btn-primary" type="button">Imprimir selecionados</button>
       </div>
     </div>
   </div>
@@ -571,12 +668,12 @@
         <button id="btn-fechar-modal-pedido-kit-imagem" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
       </div>
 
-      <div style="display:flex;justify-content:center;align-items:center;min-height:420px;padding:8px;">
+      <div class="pedido-kit-imagem-stage">
         <img
           id="pedido-kit-imagem-preview"
           src=""
           alt="Imagem do kit"
-          style="max-width:100%;max-height:70vh;object-fit:contain;border-radius:12px;border:1px solid rgba(120,150,190,0.25);background:#fff;"
+          class="pedido-kit-imagem-preview"
         >
       </div>
 

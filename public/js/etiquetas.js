@@ -94,20 +94,7 @@ const SEM_KIT_PRESETS = Object.freeze({
   MBF032INV: { titulo: 'MBF-032 - INVERTIDO', codigo_barras: '789976744900', linha1: '', linha2: 'SEM KIT DE INSTALACAO', linha3: '' },
   MBF040INV015: { titulo: 'MBF-040 - INVERTIDO', codigo_barras: '789976744896', linha1: '', linha2: 'SEM KIT DE INSTALACAO', linha3: '' },
   MBF040INV025: { titulo: 'MBF-040 - INVERTIDO', codigo_barras: '789976744896', linha1: '', linha2: 'SEM KIT DE INSTALACAO', linha3: '' },
-  MC040RB: { titulo: 'MC-040 - REBAIXADO', codigo_barras: '789976744902', linha1: '', linha2: 'SEM KIT DE INSTALACAO', linha3: '' },
-  'SM-AL10': { alias: 'AL10' },
-  'SM-AL10INV': { alias: 'AL10INV' },
-  'SM-BR040': { alias: 'BR040' },
-  'SM-BR040INV': { alias: 'BR040INV' },
-  'SM-CJ015': { alias: 'CJ015' },
-  'SM-MBF015INV': { alias: 'MBF015INV' },
-  'SM-MBF025': { alias: 'MBF025' },
-  'SM-MBF032': { alias: 'MBF032' },
-  'SM-MBF032INV': { alias: 'MBF032INV' },
-  'SM-MBF040': { alias: 'MBF040' },
-  'SM-MBF040INV025': { alias: 'MBF040INV025' },
-  'SM-MC040': { alias: 'MC040' },
-  'SM-VF040': { alias: 'VF040' }
+  MC040RB: { titulo: 'MC-040 - REBAIXADO', codigo_barras: '789976744902', linha1: '', linha2: 'SEM KIT DE INSTALACAO', linha3: '' }
 });
 
 const PREVIEW_BOUNDS = Object.freeze({ width: 800, height: 800 });
@@ -159,7 +146,7 @@ let printDiagnosticsState = {
 };
 
 function formatDisplayCodigo(codigo) {
-  return String(codigo || '').replace(/^SM-/i, '');
+  return String(codigo || '');
 }
 
 function formatCategoriaLabel(categoria) {
@@ -1088,10 +1075,10 @@ function deriveSemKitTitle(codigoItem, currentTitle = '') {
       .replace(/^SERVO EMBREAGEM\s+/, '')
       .replace(/\s+COM KIT COMPLETO$/, '')
       .replace(/\s+COM KIT$/, '')
-      .trim() || normalizedCode.replace(/^SM-/, '');
+      .trim() || normalizedCode;
   }
 
-  return normalizedCode.replace(/^SM-/, '');
+  return normalizedCode;
 }
 
 function handleAplicarPresetComKit() {
