@@ -231,6 +231,9 @@ function bindEvents() {
   document.getElementById('montagem-btn-efetuar').addEventListener('click', abrirModalEfetuarMontagem);
   document.getElementById('montagem-btn-numeros-serie').addEventListener('click', abrirModalNumerosSerie);
   document.getElementById('montagem-btn-simular').addEventListener('click', abrirModalSimulacao);
+  document.getElementById('montagem-btn-gerenciamento-servos').addEventListener('click', () => {
+    window.location.href = '/pagina-gerenciamento-servos';
+  });
   document.getElementById('montagem-btn-pedidos-menu').addEventListener('click', abrirModalPedidos);
   document.getElementById('montagem-btn-recebidos-menu').addEventListener('click', abrirModalPedidosRecebidos);
   document.getElementById('montagem-btn-producao').addEventListener('click', abrirModalProducao);

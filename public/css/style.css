@@ -75,6 +75,490 @@ textarea {
   display: none !important;
 }
 
+.servo-sheet-page-body {
+  background:
+    radial-gradient(circle at top left, rgba(53, 129, 227, 0.08), transparent 24%),
+    linear-gradient(180deg, #edf4fc 0%, #f7fbff 38%, #eef5fc 100%);
+}
+
+.servo-sheet-page {
+  width: min(100%, 100vw);
+  max-width: none;
+  padding: 8px 10px 12px;
+}
+
+.servo-sheet-shell {
+  width: 100%;
+  max-width: none;
+  padding: 10px 10px 8px;
+  border-radius: 20px;
+}
+
+.servo-sheet-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.servo-sheet-toolbar-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.servo-sheet-page-title {
+  margin: 0;
+  color: #163a67;
+  font-size: clamp(1.55rem, 1.8vw, 1.95rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.servo-sheet-page-subtitle,
+.servo-sheet-panel-subtext {
+  margin: 0;
+  color: #5f789a;
+  font-size: 0.96rem;
+}
+
+.servo-sheet-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.servo-sheet-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: #eef4fb;
+  color: #163a67;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease, border-color 0.16s ease;
+}
+
+.servo-sheet-action-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(17, 62, 117, 0.12);
+}
+
+.servo-sheet-action-btn.is-neutral {
+  border-color: #d9e5f2;
+  background: #f8fbff;
+}
+
+.servo-sheet-action-btn.is-blue {
+  background: #1f5d9f;
+  color: #fff;
+  box-shadow: 0 10px 20px rgba(31, 93, 159, 0.22);
+}
+
+.servo-sheet-action-btn.is-orange {
+  background: #ff9d2f;
+  color: #fff;
+  box-shadow: 0 10px 20px rgba(255, 157, 47, 0.24);
+}
+
+.servo-sheet-action-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+  transform: none;
+  box-shadow: none;
+}
+
+.servo-sheet-action-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+}
+
+.servo-sheet-action-icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.servo-sheet-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 6px;
+}
+
+.servo-sheet-scope-switch {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: #eef4fb;
+  border: 1px solid #dbe6f2;
+  box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.8);
+}
+
+.servo-sheet-scope-switch .segmented-btn {
+  min-width: 110px;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #5f789a;
+  font-size: 0.86rem;
+  font-weight: 800;
+  transition: background-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.servo-sheet-scope-switch .segmented-btn.is-active {
+  background: #103d75;
+  color: #fff;
+  box-shadow: 0 0 0 1px rgba(16, 61, 117, 0.18), 0 0 16px rgba(16, 61, 117, 0.28);
+}
+
+.servo-sheet-scope-switch .segmented-btn:not(.is-active):hover {
+  color: #163a67;
+}
+
+.servo-sheet-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin: 10px 0 14px;
+  color: #647a98;
+  font-size: 0.8rem;
+}
+
+.servo-sheet-legend strong {
+  color: #163a67;
+}
+
+.servo-sheet-wrapper {
+  overflow-x: auto;
+  overflow-y: visible;
+  border: 1px solid #d7e3f3;
+  border-radius: 16px;
+  background: #fbfdff;
+}
+
+.servo-sheet-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  color: #163a67;
+}
+
+.servo-sheet-table th,
+.servo-sheet-table td {
+  border-right: 1px solid #e8eff8;
+  border-bottom: 1px solid #d8e3f1;
+  padding: 0;
+}
+
+.servo-sheet-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: #edf5ff;
+}
+
+.servo-sheet-model-col,
+.servo-sheet-model-cell {
+  width: 158px;
+  min-width: 158px;
+  max-width: 158px;
+}
+
+.sticky-col {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: #f7fbff;
+}
+
+.servo-sheet-total-col,
+  .servo-sheet-total-cell {
+    width: 42px;
+    min-width: 42px;
+    text-align: center;
+    font-weight: 800;
+    color: #06aa84;
+  }
+
+.servo-sheet-total-col {
+  background: #f4f9ff;
+}
+
+.servo-sheet-head-accent {
+  color: #00b489 !important;
+}
+
+.servo-sheet-head-warn {
+  color: #ffa22e !important;
+}
+
+.servo-sheet-model-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+  justify-content: center;
+  min-height: 72px;
+  padding: 8px 8px;
+  color: #6f84a3;
+}
+
+.servo-sheet-model-head strong {
+  color: #6f84a3;
+  font-size: 0.86rem;
+}
+
+.servo-sheet-total-col.servo-sheet-head-accent {
+  font-size: 0.52rem;
+  letter-spacing: 0.05em;
+}
+
+.servo-sheet-vertical-col {
+  width: 28px;
+  min-width: 28px;
+  max-width: 28px;
+  text-align: center;
+  vertical-align: bottom;
+}
+
+.servo-sheet-vertical-col > span,
+.servo-sheet-vertical-col {
+  color: #6f84a3;
+  font-size: 0.53rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.servo-sheet-vertical-col > span {
+  display: inline-flex;
+  align-items: flex-end;
+  justify-content: center;
+  min-height: 116px;
+  padding: 4px 0;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  text-transform: uppercase;
+}
+
+.servo-sheet-divider-left {
+  border-left: 1px solid #bfd2ea !important;
+}
+
+.servo-sheet-row:hover td,
+.servo-sheet-row:hover th {
+  background: #eef6ff;
+}
+
+.servo-sheet-model-cell {
+  padding: 6px 6px 6px 10px !important;
+}
+
+.servo-sheet-model-title {
+  color: #173966;
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 4px;
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  line-height: 1.2;
+}
+
+.servo-sheet-body-marker {
+  color: #ff9d2f;
+  font-size: 0.95em;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.servo-sheet-cell,
+  .servo-sheet-total-cell {
+    padding: 6px 6px !important;
+    text-align: center;
+    font-size: 0.69rem;
+    font-weight: 800;
+  }
+
+.servo-sheet-total-cell {
+  font-size: 0.76rem;
+  background: #fbfdff;
+}
+
+.servo-sheet-total-row th,
+.servo-sheet-total-row td {
+  background: #edf5ff;
+  font-weight: 800;
+}
+
+.servo-sheet-total-inline {
+  color: #173966;
+}
+
+.servo-sheet-total-muted {
+  color: #8ea0bb;
+}
+
+.servo-sheet-cell.is-zero {
+  color: #8ea0bb;
+}
+
+.servo-sheet-cell.is-valued {
+  color: #173966;
+}
+
+.servo-sheet-cell.is-dash {
+  color: #8ea0bb;
+}
+
+.servo-sheet-signed-cell.is-negative {
+  color: #e94d64;
+}
+
+.servo-sheet-signed-cell.is-positive {
+  color: #ffa22e;
+}
+
+.servo-sheet-signed-cell.is-dash {
+  color: #8ea0bb;
+}
+
+@media (max-width: 1100px) {
+  .servo-sheet-page {
+    padding: 14px 12px 18px;
+  }
+
+  .servo-sheet-toolbar,
+  .servo-sheet-panel-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .servo-sheet-model-col,
+  .servo-sheet-model-cell {
+    width: 138px;
+    min-width: 138px;
+    max-width: 138px;
+  }
+
+  .servo-sheet-model-title {
+    font-size: 0.66rem;
+  }
+}
+
+@media print {
+  @page {
+    size: landscape;
+    margin: 8mm;
+  }
+
+  body,
+  .servo-sheet-page-body {
+    background: #fff !important;
+  }
+
+  .servo-sheet-page {
+    padding: 0 !important;
+  }
+
+  .servo-sheet-shell {
+    padding: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+  }
+
+  .servo-sheet-toolbar,
+  .servo-sheet-scope-switch,
+  .message {
+    display: none !important;
+  }
+
+  .servo-sheet-wrapper {
+    overflow: visible !important;
+    border: 1px solid #d8e1ee !important;
+    border-radius: 0 !important;
+    background: #fff !important;
+  }
+
+  .servo-sheet-table {
+    width: 100% !important;
+    min-width: 100% !important;
+    color: #102b4d !important;
+  }
+
+  .servo-sheet-table thead th {
+    position: static !important;
+  }
+
+  .sticky-col {
+    position: static !important;
+    background: #fff !important;
+  }
+
+  .servo-sheet-table th,
+  .servo-sheet-table td {
+    border-color: #dbe4ef !important;
+  }
+
+  .servo-sheet-model-head {
+    min-height: 70px;
+    padding: 8px 10px;
+  }
+
+  .servo-sheet-model-head strong {
+    font-size: 0.95rem;
+  }
+
+  .servo-sheet-vertical-col {
+    width: 22px;
+    min-width: 22px;
+    max-width: 22px;
+  }
+
+  .servo-sheet-vertical-col > span {
+    min-height: 88px;
+    font-size: 0.48rem;
+  }
+
+  .servo-sheet-model-cell {
+    padding: 5px 6px 5px 8px !important;
+  }
+
+  .servo-sheet-model-title {
+    font-size: 0.56rem;
+  }
+
+  .servo-sheet-cell,
+  .servo-sheet-total-cell {
+    padding: 4px 4px !important;
+    font-size: 0.58rem;
+  }
+
+  .servo-sheet-total-row th,
+  .servo-sheet-total-row td {
+    background: #f1f6fd !important;
+  }
+}
+
 /* Menu recolhivel da area administrativa. */
 .drawer-scrim {
   position: fixed;

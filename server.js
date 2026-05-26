@@ -26,6 +26,7 @@ const etiquetaRoutes = require('./src/routes/etiquetaRoutes');
 const auditLogRoutes = require('./src/routes/auditLogRoutes');
 const authRoutes = require('./src/routes/authRoutes');
 const composicaoVendaRoutes = require('./src/routes/composicaoVendaRoutes');
+const gerenciamentoServosRoutes = require('./src/routes/gerenciamentoServosRoutes');
 const submontagemSerialRoutes = require('./src/routes/submontagemSerialRoutes');
 const pedidoExpedicaoRoutes = require('./src/routes/pedidoExpedicaoRoutes');
 const AuthController = require('./src/controllers/AuthController');
@@ -170,6 +171,10 @@ app.get('/pagina-montagem', requirePageRoles(OPERATION_READ_ROLES), (req, res) =
   sendView(res, 'montagem.html');
 });
 
+app.get('/pagina-gerenciamento-servos', requirePageRoles(OPERATION_READ_ROLES), (req, res) => {
+  sendView(res, 'gerenciamento-servos.html');
+});
+
 app.get('/pagina-expedicao', requirePageRoles(OPERATION_READ_ROLES), (req, res) => {
   sendView(res, 'expedicao.html');
 });
@@ -257,6 +262,7 @@ app.use('/api', usuarioRoutes);
 app.use('/api', etiquetaRoutes);
 app.use('/api', auditLogRoutes);
 app.use('/api', composicaoVendaRoutes);
+app.use('/api', gerenciamentoServosRoutes);
 app.use('/api', submontagemSerialRoutes);
 app.use('/api', pedidoExpedicaoRoutes);
 // Resposta padrao para qualquer rota nao mapeada.

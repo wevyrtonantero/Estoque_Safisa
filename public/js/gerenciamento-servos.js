@@ -1,0 +1,233 @@
+const apiBaseUrl = '/api/gerenciamento-servos/matriz';
+
+let escopoAtual = 'global';
+let matrizAtual = null;
+
+const refs = {
+  mensagem: document.getElementById('ger-servos-mensagem'),
+  titulo: document.getElementById('ger-servos-titulo'),
+  subtitulo: document.getElementById('ger-servos-subtitulo'),
+  resumo: document.getElementById('ger-servos-resumo'),
+  thead: document.getElementById('ger-servos-thead'),
+  tbody: document.getElementById('ger-servos-tbody'),
+  btnDia: document.getElementById('ger-servos-btn-dia'),
+  btnGlobal: document.getElementById('ger-servos-btn-global'),
+  btnAtualizar: document.getElementById('ger-servos-btn-atualizar'),
+  btnImprimir: document.getElementById('ger-servos-btn-imprimir')
+};
+
+document.addEventListener('DOMContentLoaded', async () => {
+  bindEvents();
+
+  try {
+    await carregarMatriz();
+  } catch (error) {
+    mostrarMensagem(error.message || 'Nao foi possivel carregar a planilha.', 'error');
+  }
+});
+
+function bindEvents() {
+  refs.btnDia.addEventListener('click', () => alternarEscopo('dia'));
+  refs.btnGlobal.addEventListener('click', () => alternarEscopo('global'));
+  refs.btnAtualizar.addEventListener('click', () => carregarMatriz());
+  refs.btnImprimir.addEventListener('click', () => window.print());
+}
+
+async function alternarEscopo(escopo) {
+  if (escopoAtual === escopo) {
+    return;
+  }
+
+  escopoAtual = escopo;
+  atualizarBotoesEscopo();
+  await carregarMatriz();
+}
+
+function atualizarBotoesEscopo() {
+  refs.btnDia.classList.toggle('is-active', escopoAtual === 'dia');
+  refs.btnGlobal.classList.toggle('is-active', escopoAtual === 'global');
+}
+
+function mostrarMensagem(texto, tipo = 'info') {
+  refs.mensagem.textContent = texto;
+  refs.mensagem.className = `message ${tipo}`;
+}
+
+function esconderMensagem() {
+  refs.mensagem.textContent = '';
+  refs.mensagem.className = 'message hidden';
+}
+
+async function carregarMatriz() {
+  esconderMensagem();
+  refs.btnAtualizar.disabled = true;
+
+  try {
+    const response = await fetch(`${apiBaseUrl}?escopo=${encodeURIComponent(escopoAtual)}`, {
+      credentials: 'same-origin'
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.message || 'Nao foi possivel carregar a planilha.');
+    }
+
+    matrizAtual = data;
+    renderizarCabecalho();
+    renderizarResumo();
+    renderizarTabela();
+  } finally {
+    refs.btnAtualizar.disabled = false;
+  }
+}
+
+function renderizarCabecalho() {
+  const data = matrizAtual?.data_referencia || '-';
+  refs.titulo.textContent = `Consulta de servos - ${escopoAtual === 'dia' ? 'Pedidos do dia' : 'Visao global'}`;
+  if (refs.subtitulo) {
+    refs.subtitulo.textContent = `Referencia ${data}.`;
+  }
+}
+
+function renderizarResumo() {
+  if (!refs.resumo) {
+    return;
+  }
+
+  const resumo = matrizAtual?.resumo;
+  if (!resumo) {
+    refs.resumo.innerHTML = '';
+    return;
+  }
+
+  const chips = [
+    ['Escopo', resumo.escopo === 'dia' ? 'Dia' : 'Global'],
+    ['Pedidos', resumo.pedidos],
+    ['Modelos', resumo.modelos],
+    ['Demanda', formatNumber(resumo.demanda_total)],
+    ['Estoque', formatNumber(resumo.estoque_total)],
+    ['Corpos', formatNumber(resumo.corpos_total)],
+    ['Zinco', formatNumber(resumo.zinco_total)],
+    ['Usinagem', formatNumber(resumo.usinagem_total)],
+    ['INF-Producao', formatSignedNumber(resumo.inf_producao_total)]
+  ];
+
+  refs.resumo.innerHTML = chips.map(([label, value]) => `
+    <span class="summary-chip">
+      <small>${label}</small>
+      <strong>${value}</strong>
+    </span>
+  `).join('');
+}
+
+function renderizarTabela() {
+  const pedidos = matrizAtual?.pedidos || [];
+  const rows = matrizAtual?.rows || [];
+
+  refs.thead.innerHTML = `
+    <tr>
+      <th class="sticky-col servo-sheet-model-col">
+        <div class="servo-sheet-model-head">
+          <span>MODELO</span>
+          <strong>${matrizAtual?.data_referencia || '-'}</strong>
+        </div>
+      </th>
+      <th class="servo-sheet-total-col servo-sheet-head-accent">TOTAL</th>
+      ${pedidos.map((pedido) => `
+        <th class="servo-sheet-vertical-col" title="${escapeHtml(`${pedido.cliente_nome} | ${pedido.codigo_pedido}`)}">
+          <span>${escapeHtml(pedido.cliente_nome)}</span>
+        </th>
+      `).join('')}
+      <th class="servo-sheet-vertical-col servo-sheet-divider-left">ESTOQUE</th>
+      <th class="servo-sheet-vertical-col">CORPOS</th>
+      <th class="servo-sheet-vertical-col">ZINCO</th>
+      <th class="servo-sheet-vertical-col">USINAGEM</th>
+      <th class="servo-sheet-vertical-col">MAT-PRIMA</th>
+    </tr>
+  `;
+
+  if (!rows.length) {
+    refs.tbody.innerHTML = `<tr><td colspan="${2 + pedidos.length + 5}" class="empty-state">Nenhum modelo encontrado para este escopo.</td></tr>`;
+    return;
+  }
+
+  const totalPedidos = Object.fromEntries(pedidos.map((pedido) => [String(pedido.id), 0]));
+  rows.forEach((row) => {
+    pedidos.forEach((pedido) => {
+      totalPedidos[String(pedido.id)] += Number(row.pedidos[String(pedido.id)] || 0);
+    });
+  });
+
+  refs.tbody.innerHTML = `
+    ${rows.map((row) => {
+      const corpoMarker = row.corpo_compartilhado
+        ? `<span class="servo-sheet-body-marker" title="Corpo compartilhado com outro modelo">*</span>`
+        : '';
+
+      return `
+        <tr class="servo-sheet-row">
+          <th class="sticky-col servo-sheet-model-cell">
+            <div class="servo-sheet-model-title">${escapeHtml(row.label)}${corpoMarker}</div>
+          </th>
+          <td class="servo-sheet-total-cell">${formatNumber(row.total)}</td>
+          ${pedidos.map((pedido) => renderMetricCell(row.pedidos[String(pedido.id)] || 0)).join('')}
+          ${renderMetricCell(row.estoque, 'servo-sheet-divider-left')}
+          ${renderMetricCell(row.corpos)}
+          ${renderMetricCell(row.zinco)}
+          ${renderMetricCell(row.usinagem)}
+          ${renderMateriaPrimaCell(row.materia_prima)}
+        </tr>
+      `;
+    }).join('')}
+    <tr class="servo-sheet-total-row">
+      <th class="sticky-col servo-sheet-model-cell">TOTAL GERAL</th>
+      <td class="servo-sheet-total-cell">${formatNumber(rows.reduce((sum, row) => sum + Number(row.total || 0), 0))}</td>
+      ${pedidos.map((pedido) => `<td class="servo-sheet-cell servo-sheet-total-inline">${formatNumber(totalPedidos[String(pedido.id)] || 0)}</td>`).join('')}
+      <td class="servo-sheet-cell servo-sheet-divider-left servo-sheet-total-muted">-</td>
+      <td class="servo-sheet-cell servo-sheet-total-muted">-</td>
+      <td class="servo-sheet-cell servo-sheet-total-muted">-</td>
+      <td class="servo-sheet-cell servo-sheet-total-muted">-</td>
+      <td class="servo-sheet-cell servo-sheet-total-muted">-</td>
+    </tr>
+  `;
+}
+
+function renderMetricCell(value, extraClass = '') {
+  const number = Number(value || 0);
+  const isZero = number === 0;
+  return `<td class="servo-sheet-cell ${extraClass} ${isZero ? 'is-zero' : 'is-valued'}">${isZero ? '0' : formatNumber(number)}</td>`;
+}
+
+function renderMateriaPrimaCell(materiaPrima) {
+  const quantidade = Number(materiaPrima?.quantidade || 0);
+  if (!quantidade) {
+    return `<td class="servo-sheet-cell is-dash" title="${escapeHtml(materiaPrima?.codigo || '-') }">-</td>`;
+  }
+
+  return `
+    <td class="servo-sheet-cell is-valued" title="${escapeHtml(`${materiaPrima.codigo || '-'} ${materiaPrima.unidade || ''}`.trim())}">
+      ${formatNumber(quantidade)}
+    </td>
+  `;
+}
+
+function formatNumber(value) {
+  const number = Number(value || 0);
+  if (Number.isInteger(number)) {
+    return String(number);
+  }
+
+  return number.toLocaleString('pt-BR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2
+  });
+}
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
