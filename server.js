@@ -134,6 +134,10 @@ app.get('/pagina-etiquetas', requirePageRoles(ADMIN_READ_ROLES), (req, res) => {
   sendView(res, 'etiquetas.html');
 });
 
+app.get('/pagina-composicoes-venda', requirePageRoles(ADMIN_READ_ROLES), (req, res) => {
+  sendView(res, 'composicoes-venda.html');
+});
+
 app.get('/pagina-pecas', requirePageRoles(ADMIN_READ_ROLES), (req, res) => {
   sendView(res, 'pecas.html');
 });

@@ -207,6 +207,64 @@ const PedidoExpedicaoController = {
     }
   },
 
+  async getResumoKits(req, res) {
+    try {
+      const resumo = await PedidoExpedicaoModel.getResumoKits(
+        req.query.escopo ? String(req.query.escopo).trim().toLowerCase() : 'dia'
+      );
+
+      return res.status(200).json(resumo);
+    } catch (error) {
+      console.error('Erro ao carregar resumo operacional de kits:', error);
+
+      if (error.statusCode) {
+        return res.status(error.statusCode).json({
+          message: error.message,
+          details: error.details || null
+        });
+      }
+
+      return res.status(500).json({ message: 'Erro ao carregar o resumo operacional de kits.' });
+    }
+  },
+
+  async registrarMontagemKit(req, res) {
+    try {
+      const idPeca = normalizeOptionalInteger(req.params.idPeca);
+      if (!Number.isInteger(idPeca)) {
+        return res.status(400).json({ message: 'O kit informado e invalido.' });
+      }
+
+      const registro = await PedidoExpedicaoModel.registrarMontagemKit(
+        idPeca,
+        req.body?.quantidade,
+        req.currentUser?.id || null
+      );
+
+      await recordAuditLog(req, {
+        modulo: 'PEDIDOS_EXPEDICAO',
+        acao: 'KIT_MONTADO',
+        entidade_tipo: 'ESTOQUE',
+        entidade_id: registro.id_peca,
+        descricao: `Entrada manual do kit ${registro.codigo} no estoque da Expedicao.`,
+        depois: registro
+      });
+
+      return res.status(200).json(registro);
+    } catch (error) {
+      console.error('Erro ao registrar montagem de kit na Expedicao:', error);
+
+      if (error.statusCode) {
+        return res.status(error.statusCode).json({
+          message: error.message,
+          details: error.details || null
+        });
+      }
+
+      return res.status(500).json({ message: 'Erro ao registrar a montagem do kit.' });
+    }
+  },
+
   async reorder(req, res) {
     try {
       const orderIds = Array.isArray(req.body?.order_ids) ? req.body.order_ids : [];

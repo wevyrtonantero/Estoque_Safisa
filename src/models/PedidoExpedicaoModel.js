@@ -1101,6 +1101,233 @@ class PedidoExpedicaoModel {
     return map;
   }
 
+  static async getResumoKits(escopo = 'dia', db = pool) {
+    await this.ensureSchema(db);
+
+    const pedidos = await this.findAll({ ativos: true }, db);
+    const pedidosFiltrados = String(escopo || 'dia').toLowerCase() === 'geral'
+      ? pedidos.filter((pedido) => pedido.status !== STATUS.PEDIDO_COLETADO)
+      : pedidos.filter((pedido) => pedido.status !== STATUS.PEDIDO_COLETADO && normalizeDateOnly(pedido.data_programacao_saida) === getTodayDateOnly());
+
+    const kitsMap = new Map();
+
+    pedidosFiltrados.forEach((pedido) => {
+      (pedido.itens || []).forEach((item) => {
+        (item.componentes_avulsos || []).forEach((componente) => {
+          const codigoComponente = String(componente.codigo || '').trim().toUpperCase();
+          if (!codigoComponente.startsWith('KT-')) {
+            return;
+          }
+
+          const quantidadeNecessaria = Number(
+            (Number(item.quantidade || 0) * Number(componente.quantidade_por_item_venda || 0)).toFixed(2)
+          );
+
+          if (quantidadeNecessaria <= 0) {
+            return;
+          }
+
+          const key = Number(componente.id_peca);
+          const atual = kitsMap.get(key) || {
+            id_peca: key,
+            codigo: componente.codigo,
+            descricao: componente.descricao,
+            quantidade_requerida: 0,
+            clientes: new Set()
+          };
+
+          atual.quantidade_requerida = Number((atual.quantidade_requerida + quantidadeNecessaria).toFixed(2));
+          atual.clientes.add(pedido.cliente_nome || pedido.codigo_pedido || '-');
+          kitsMap.set(key, atual);
+        });
+      });
+    });
+
+    const idsKits = [...kitsMap.keys()];
+    const estoqueExpedicao = await this.buildStockMap(EstoqueModel.EXPEDICAO_NOME, idsKits, db);
+
+    const kits = [...kitsMap.values()]
+      .map((item) => {
+        const quantidadeEmEstoque = Number(estoqueExpedicao.get(Number(item.id_peca)) || 0);
+        const quantidadePendente = Math.max(0, Number((item.quantidade_requerida - quantidadeEmEstoque).toFixed(2)));
+
+        return {
+          id_peca: item.id_peca,
+          codigo: item.codigo,
+          descricao: item.descricao,
+          quantidade_requerida: item.quantidade_requerida,
+          quantidade_em_estoque: quantidadeEmEstoque,
+          quantidade_pendente: quantidadePendente,
+          clientes: [...item.clientes].sort((a, b) => String(a).localeCompare(String(b), 'pt-BR'))
+        };
+      })
+      .sort((a, b) => String(a.codigo).localeCompare(String(b.codigo), 'pt-BR'));
+
+    return {
+      escopo: String(escopo || 'dia').toLowerCase() === 'geral' ? 'geral' : 'dia',
+      total_kits: kits.length,
+      total_requerido: Number(kits.reduce((total, item) => total + Number(item.quantidade_requerida || 0), 0).toFixed(2)),
+      total_estoque: Number(kits.reduce((total, item) => total + Number(item.quantidade_em_estoque || 0), 0).toFixed(2)),
+      total_pendente: Number(kits.reduce((total, item) => total + Number(item.quantidade_pendente || 0), 0).toFixed(2)),
+      kits
+    };
+  }
+
+  static async registrarMontagemKit(idPeca, quantidade, usuarioId = null, db = pool) {
+    await this.ensureSchema(db);
+
+    const kitId = normalizeOptionalInteger(idPeca);
+    const quantidadeMontada = Number(quantidade);
+
+    if (!Number.isInteger(kitId)) {
+      throw this.createBusinessError('O kit informado e invalido.');
+    }
+
+    if (!Number.isFinite(quantidadeMontada) || quantidadeMontada <= 0) {
+      throw this.createBusinessError('Informe uma quantidade valida para o kit montado.');
+    }
+
+    const connection = await db.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      const peca = await this.findPecaById(kitId, connection);
+      if (!peca) {
+        throw this.createBusinessError('Kit nao encontrado.');
+      }
+
+      if (!String(peca.codigo || '').trim().toUpperCase().startsWith('KT-')) {
+        throw this.createBusinessError('Apenas itens de kit podem ser registrados nesta tela.');
+      }
+
+      const estoqueExpedicao = await EstoqueModel.findStockByName(EstoqueModel.EXPEDICAO_NOME, connection);
+      if (!estoqueExpedicao || Number(estoqueExpedicao.ativo) !== 1) {
+        throw this.createBusinessError('O estoque da Expedicao nao esta disponivel.');
+      }
+
+      const estruturaMap = await this.buildStructureMap([kitId], connection);
+      const componentesKit = estruturaMap.get(kitId) || [];
+
+      if (!componentesKit.length) {
+        throw this.createBusinessError(`O kit ${peca.codigo} nao possui componentes cadastrados na estrutura.`);
+      }
+
+      const faltantes = [];
+      const componentesPlanejados = [];
+
+      for (const componente of componentesKit) {
+        const quantidadeConsumida = Number(
+          (Number(componente.quantidade || 0) * quantidadeMontada).toFixed(2)
+        );
+        const saldoComponente = await EstoqueModel.findSaldoForUpdate(
+          connection,
+          estoqueExpedicao.id,
+          componente.id_peca
+        );
+        const quantidadeDisponivel = saldoComponente ? Number(saldoComponente.quantidade) : 0;
+
+        if (quantidadeConsumida > quantidadeDisponivel) {
+          faltantes.push({
+            id_peca: componente.id_peca,
+            codigo: componente.codigo,
+            descricao: componente.descricao,
+            quantidade_necessaria: quantidadeConsumida,
+            quantidade_disponivel: quantidadeDisponivel,
+            quantidade_faltante: Number((quantidadeConsumida - quantidadeDisponivel).toFixed(2))
+          });
+          continue;
+        }
+
+        componentesPlanejados.push({
+          ...componente,
+          saldoAtual: saldoComponente,
+          quantidade_disponivel: quantidadeDisponivel,
+          quantidade_consumida: quantidadeConsumida
+        });
+      }
+
+      if (faltantes.length > 0) {
+        throw this.createBusinessError(
+          `Nao ha componentes suficientes na Expedicao para montar o kit ${peca.codigo}.`,
+          {
+            tipo: 'FALTA_COMPONENTE_KIT',
+            kit: {
+              id: peca.id,
+              codigo: peca.codigo,
+              descricao: peca.descricao
+            },
+            faltantes
+          }
+        );
+      }
+
+      const componentesConsumidos = [];
+
+      for (const componente of componentesPlanejados) {
+        const novoSaldoComponente = Number(
+          (componente.quantidade_disponivel - componente.quantidade_consumida).toFixed(2)
+        );
+
+        await EstoqueModel.persistSaldo(
+          connection,
+          estoqueExpedicao.id,
+          componente.id_peca,
+          novoSaldoComponente,
+          componente.saldoAtual
+        );
+
+        await EstoqueModel.createMovimentacao(connection, {
+          id_peca: componente.id_peca,
+          id_estoque_origem: estoqueExpedicao.id,
+          id_estoque_destino: null,
+          tipo_movimentacao: 'SAIDA',
+          quantidade: componente.quantidade_consumida,
+          observacao: `Consumo de componente ${componente.codigo} para montagem do kit ${peca.codigo} na Expedicao.`.slice(0, 255)
+        });
+
+        componentesConsumidos.push({
+          id_peca: componente.id_peca,
+          codigo: componente.codigo,
+          descricao: componente.descricao,
+          quantidade_consumida: componente.quantidade_consumida,
+          saldo_restante: novoSaldoComponente
+        });
+      }
+
+      const saldoAtual = await EstoqueModel.findSaldoForUpdate(connection, estoqueExpedicao.id, kitId);
+      const quantidadeAtual = saldoAtual ? Number(saldoAtual.quantidade) : 0;
+      const novoSaldo = Number((quantidadeAtual + quantidadeMontada).toFixed(2));
+
+      await EstoqueModel.persistSaldo(connection, estoqueExpedicao.id, kitId, novoSaldo, saldoAtual);
+      await EstoqueModel.createMovimentacao(connection, {
+        id_peca: kitId,
+        id_estoque_origem: null,
+        id_estoque_destino: estoqueExpedicao.id,
+        tipo_movimentacao: 'TRANSFERENCIA',
+        quantidade: quantidadeMontada,
+        observacao: `Entrada do kit ${peca.codigo} montado a partir do consumo de componentes na Expedicao.`
+      });
+
+      await connection.commit();
+
+      return {
+        id_peca: kitId,
+        codigo: peca.codigo,
+        descricao: peca.descricao,
+        quantidade_registrada: quantidadeMontada,
+        novo_saldo: novoSaldo,
+        usuario_id: usuarioId || null,
+        componentes_consumidos: componentesConsumidos
+      };
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }
+
   static calcularStatus(order, itens) {
     if (order.data_coleta) {
       return STATUS.PEDIDO_COLETADO;

@@ -8,6 +8,8 @@ const router = express.Router();
 
 router.get('/pedidos-expedicao', requireApiRoles(OPERATION_READ_ROLES), PedidoExpedicaoController.list);
 router.get('/pedidos-expedicao/clientes', requireApiRoles(OPERATION_READ_ROLES), PedidoExpedicaoController.listClientes);
+router.get('/pedidos-expedicao/kits-resumo', requireApiRoles(OPERATION_READ_ROLES), PedidoExpedicaoController.getResumoKits);
+router.post('/pedidos-expedicao/kits/:idPeca/montar', requireApiRoles(OPERATION_WRITE_ROLES), PedidoExpedicaoController.registrarMontagemKit);
 router.patch('/pedidos-expedicao/prioridades', requireApiRoles(OPERATION_WRITE_ROLES), PedidoExpedicaoController.reorder);
 router.post('/pedidos-expedicao', requireApiRoles(OPERATION_WRITE_ROLES), PedidoExpedicaoController.create);
 router.patch('/pedidos-expedicao/:id', requireApiRoles(OPERATION_WRITE_ROLES), PedidoExpedicaoController.update);

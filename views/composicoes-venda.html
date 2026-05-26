@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="/img/icon-safisa.ico" type="image/x-icon">
+  <title>SAFISA | Composicao de Venda</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <main class="workspace">
+    <header class="topbar">
+      <div class="topbar-copy">
+        <p class="page-kicker">ADM SAFISA</p>
+        <h1 class="page-title">Composicao de Venda</h1>
+        <p class="page-subtitle">Cadastre e ajuste quais itens atendem cada codigo de venda sem mexer no codigo fonte.</p>
+      </div>
+
+      <div class="topbar-actions">
+        <button id="composicao-btn-nova" class="btn btn-primary" type="button">Nova linha</button>
+        <button id="composicao-btn-atualizar" class="btn btn-neutral" type="button">Atualizar</button>
+        <a class="btn btn-secondary" href="/pagina-adm">Voltar</a>
+      </div>
+    </header>
+
+    <div id="composicao-page-message" class="message hidden"></div>
+
+    <section class="content-card">
+      <div class="card-top">
+        <div>
+          <span class="section-pill">Vendas</span>
+          <h2>Linhas cadastradas</h2>
+          <p id="composicao-total-registros">0 linha(s) encontrada(s)</p>
+        </div>
+      </div>
+
+      <form id="composicao-filtro-form" class="toolbar-form stock-toolbar composicao-toolbar">
+        <div class="field composicao-search-field">
+          <label for="composicao-filtro-busca">Buscar por codigo ou descricao</label>
+          <input id="composicao-filtro-busca" type="text" placeholder="Ex.: 1B, MBF015, kit, servo...">
+        </div>
+
+        <div class="toolbar-actions">
+          <button class="btn btn-neutral" type="submit">Aplicar</button>
+          <button id="composicao-btn-limpar-filtro" class="btn btn-neutral" type="button">Limpar</button>
+        </div>
+      </form>
+
+      <div class="subtle-divider"></div>
+
+      <div class="table-wrapper" data-print-table data-print-title="Composicao de Venda">
+        <table>
+          <thead>
+            <tr>
+              <th>Codigo venda</th>
+              <th>Descricao venda</th>
+              <th>Atende</th>
+              <th>Descricao atende</th>
+              <th>Qtd.</th>
+              <th>Ordem</th>
+              <th>Acoes</th>
+            </tr>
+          </thead>
+          <tbody id="composicao-lista-tbody">
+            <tr>
+              <td colspan="7" class="empty-state">Carregando composicoes...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div id="composicao-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="composicao"></div>
+
+    <div class="modal-dialog modal-small">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Cadastro</span>
+          <h2 id="composicao-form-title">Nova linha de composicao</h2>
+          <p id="composicao-form-subtitle">Escolha o item de venda, o item que atende e defina quantidade e ordem.</p>
+        </div>
+
+        <button id="composicao-btn-fechar-modal" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="composicao-form-message" class="message hidden"></div>
+
+      <form id="composicao-form" class="form-grid">
+        <input id="composicao-id" type="hidden">
+        <input id="composicao-item-venda-id" type="hidden">
+        <input id="composicao-item-atende-id" type="hidden">
+
+        <div class="field span-12">
+          <label for="composicao-item-venda-busca">Item de venda</label>
+          <div class="autocomplete">
+            <input id="composicao-item-venda-busca" type="text" placeholder="Digite codigo ou descricao">
+            <div id="composicao-item-venda-sugestoes" class="autocomplete-panel hidden"></div>
+          </div>
+        </div>
+
+        <div class="field span-12">
+          <label for="composicao-item-atende-busca">Item que atende</label>
+          <div class="autocomplete">
+            <input id="composicao-item-atende-busca" type="text" placeholder="Digite codigo ou descricao">
+            <div id="composicao-item-atende-sugestoes" class="autocomplete-panel hidden"></div>
+          </div>
+        </div>
+
+        <div class="field span-6">
+          <label for="composicao-quantidade">Quantidade</label>
+          <input id="composicao-quantidade" type="number" min="0.01" step="0.01" value="1">
+        </div>
+
+        <div class="field span-6">
+          <label for="composicao-ordem">Ordem</label>
+          <input id="composicao-ordem" type="number" min="0" step="1" value="0">
+        </div>
+
+        <div class="field span-12">
+          <label>Resumo</label>
+          <div id="composicao-resumo" class="selected-tags empty">Selecione os dois lados da composicao para salvar.</div>
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button id="composicao-btn-salvar" class="btn btn-primary" type="submit">Salvar linha</button>
+          <button id="composicao-btn-cancelar-edicao" class="btn btn-neutral hidden" type="button">Cancelar edicao</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/js/composicoes-venda.js"></script>
+  <script src="/js/session-indicator.js"></script>
+</body>
+</html>

@@ -311,6 +311,23 @@ textarea {
   background: rgba(46, 116, 181, 0.08);
 }
 
+.composicao-toolbar {
+  grid-template-columns: minmax(280px, 1fr) auto;
+  align-items: end;
+}
+
+.composicao-toolbar .toolbar-actions {
+  justify-content: flex-end;
+}
+
+.composicao-search-field {
+  min-width: 0;
+}
+
+.composicao-modal .selected-tags {
+  min-height: 62px;
+}
+
 .etiqueta-auto-note {
   margin: 0;
 }
@@ -672,6 +689,27 @@ textarea {
 .pedido-detalhe-print-actions {
   justify-content: flex-end;
   padding-top: 12px;
+}
+
+.pedido-kits-switch {
+  justify-content: flex-start;
+  margin-top: 12px;
+}
+
+.pedido-kit-quantidade-input {
+  width: 92px;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid rgba(160, 182, 206, 0.78);
+  border-radius: 10px;
+  background: #ffffff;
+  color: var(--primary-900);
+  font: inherit;
+}
+
+.pedido-kit-quantidade-input:disabled {
+  color: var(--text-soft);
+  background: rgba(242, 246, 251, 0.92);
 }
 
 .pedido-print-diagnostic {

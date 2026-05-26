@@ -74,6 +74,7 @@
               <button id="pedidos-btn-historico" class="btn btn-neutral" type="button"><span class="btn-label">Historico de Pedidos</span></button>
               <button id="pedidos-btn-relatorio-dia" class="btn btn-secondary" type="button"><span class="btn-label">Relatorio do Dia</span></button>
               <button id="pedidos-btn-relatorio-geral" class="btn btn-secondary" type="button"><span class="btn-label">Relatorio Geral</span></button>
+              <button id="pedidos-btn-kits" class="btn btn-secondary" type="button"><span class="btn-label">Gerenciamento de Kits</span></button>
             </div>
           </div>
         </details>
@@ -524,6 +525,11 @@
           <input id="pedido-historico-filtro-pedido" type="text" placeholder="Ex.: PED-000003">
         </div>
 
+        <div class="field">
+          <label for="pedido-historico-filtro-data">Data da coleta</label>
+          <input id="pedido-historico-filtro-data" type="date">
+        </div>
+
         <button id="pedido-historico-filtro-limpar" class="btn btn-neutral" type="button">Limpar</button>
       </form>
 
@@ -650,6 +656,53 @@
             </tbody>
           </table>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="pedido-kits-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="pedido-kits"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Kits</span>
+          <h2>Gerenciamento de Kits</h2>
+          <p>Monte os kits pendentes e de entrada deles na Expedicao para zerar a fila operacional.</p>
+        </div>
+
+        <button id="btn-fechar-modal-pedido-kits" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="pedido-kits-mensagem" class="message hidden"></div>
+
+      <div class="selected-tags" id="pedido-kits-resumo"></div>
+
+      <div class="modal-actions pedido-kits-switch">
+        <button id="pedido-btn-kits-dia" class="btn btn-secondary btn-small" type="button">Kits do dia</button>
+        <button id="pedido-btn-kits-geral" class="btn btn-neutral btn-small" type="button">Kits total</button>
+      </div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Codigo</th>
+              <th>Descricao</th>
+              <th>Clientes</th>
+              <th>Necessario</th>
+              <th>Estoque Exp.</th>
+              <th>Faltam</th>
+              <th>Montou agora</th>
+              <th>Acoes</th>
+            </tr>
+          </thead>
+          <tbody id="pedido-kits-tbody">
+            <tr>
+              <td colspan="8" class="empty-state">Carregando kits...</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   </div>

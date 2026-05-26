@@ -16,6 +16,10 @@ let pedidoSelecionadoId = null;
 let pedidoItemSerialSelecionadoId = null;
 let serialDisponiveisContexto = null;
 let impressaoSeriaisContexto = null;
+let kitsResumoContexto = {
+  escopo: 'dia',
+  data: null
+};
 let autoRefreshHandle = null;
 let jspmReadyPromise = null;
 let draggedPedidoCard = null;
@@ -117,6 +121,7 @@ const refs = {
   historicoFiltroCliente: document.getElementById('pedido-historico-filtro-cliente'),
   historicoFiltroTransportadora: document.getElementById('pedido-historico-filtro-transportadora'),
   historicoFiltroPedido: document.getElementById('pedido-historico-filtro-pedido'),
+  historicoFiltroData: document.getElementById('pedido-historico-filtro-data'),
 
   relatorioModal: document.getElementById('pedido-relatorio-modal'),
   relatorioTitulo: document.getElementById('pedido-relatorio-titulo'),
@@ -126,6 +131,12 @@ const refs = {
   relatorioMontagemTbody: document.getElementById('pedido-relatorio-montagem-tbody'),
   relatorioKitsTbody: document.getElementById('pedido-relatorio-kits-tbody'),
   relatorioItensTbody: document.getElementById('pedido-relatorio-itens-tbody'),
+  kitsModal: document.getElementById('pedido-kits-modal'),
+  kitsMensagem: document.getElementById('pedido-kits-mensagem'),
+  kitsResumo: document.getElementById('pedido-kits-resumo'),
+  kitsTbody: document.getElementById('pedido-kits-tbody'),
+  kitsBtnDia: document.getElementById('pedido-btn-kits-dia'),
+  kitsBtnGeral: document.getElementById('pedido-btn-kits-geral'),
 
   kitImagemModal: document.getElementById('pedido-kit-imagem-modal'),
   kitImagemTitulo: document.getElementById('pedido-kit-imagem-titulo'),
@@ -173,6 +184,12 @@ function bindEvents() {
     fecharMenuPedidos();
     abrirModalRelatorio('geral');
   });
+  document.getElementById('pedidos-btn-kits').addEventListener('click', () => {
+    fecharMenuPedidos();
+    abrirModalKits('dia').catch((error) => {
+      mostrarMensagem(error.message || 'Nao foi possivel abrir o gerenciamento de kits.', 'error');
+    });
+  });
 
   refs.filtroBusca.addEventListener('input', renderizarPedidos);
 
@@ -190,6 +207,7 @@ function bindEvents() {
   refs.historicoFiltroCliente.addEventListener('input', () => renderizarHistoricoPedidos(obterHistoricoFiltrado()));
   refs.historicoFiltroTransportadora.addEventListener('input', () => renderizarHistoricoPedidos(obterHistoricoFiltrado()));
   refs.historicoFiltroPedido.addEventListener('input', () => renderizarHistoricoPedidos(obterHistoricoFiltrado()));
+  refs.historicoFiltroData.addEventListener('input', () => renderizarHistoricoPedidos(obterHistoricoFiltrado()));
   document.getElementById('pedido-historico-filtro-limpar').addEventListener('click', limparFiltrosHistorico);
 
   document.getElementById('btn-fechar-modal-pedido-criacao').addEventListener('click', fecharModalCriacao);
@@ -241,6 +259,18 @@ function bindEvents() {
   document.getElementById('btn-fechar-modal-pedido-faltas').addEventListener('click', fecharModalFaltas);
   document.getElementById('btn-fechar-modal-pedido-historico').addEventListener('click', fecharModalHistoricoPedidos);
   document.getElementById('btn-fechar-modal-pedido-relatorio').addEventListener('click', fecharModalRelatorio);
+  document.getElementById('btn-fechar-modal-pedido-kits').addEventListener('click', fecharModalKits);
+  refs.kitsBtnDia.addEventListener('click', () => carregarResumoKits('dia').catch((error) => {
+    refs.kitsMensagem.textContent = error.message || 'Nao foi possivel carregar os kits do dia.';
+    refs.kitsMensagem.className = 'message error';
+    refs.kitsMensagem.classList.remove('hidden');
+  }));
+  refs.kitsBtnGeral.addEventListener('click', () => carregarResumoKits('geral').catch((error) => {
+    refs.kitsMensagem.textContent = error.message || 'Nao foi possivel carregar os kits globais.';
+    refs.kitsMensagem.className = 'message error';
+    refs.kitsMensagem.classList.remove('hidden');
+  }));
+  refs.kitsTbody.addEventListener('click', handleKitsActions);
   document.getElementById('btn-fechar-modal-pedido-kit-imagem').addEventListener('click', fecharModalKitImagem);
   document.getElementById('btn-fechar-modal-pedido-kit-imagem-rodape').addEventListener('click', fecharModalKitImagem);
   document.getElementById('btn-fechar-modal-pedido-coleta-confirm').addEventListener('click', fecharConfirmacaoColetaPedido);
@@ -874,6 +904,7 @@ function limparFiltrosHistorico() {
   refs.historicoFiltroCliente.value = '';
   refs.historicoFiltroTransportadora.value = '';
   refs.historicoFiltroPedido.value = '';
+  refs.historicoFiltroData.value = '';
   renderizarHistoricoPedidos(obterHistoricoFiltrado());
 }
 
@@ -881,6 +912,7 @@ function obterHistoricoFiltrado() {
   const filtroCliente = normalizarBusca(refs.historicoFiltroCliente?.value?.trim());
   const filtroTransportadora = normalizarBusca(refs.historicoFiltroTransportadora?.value?.trim());
   const filtroPedido = normalizarBusca(refs.historicoFiltroPedido?.value?.trim());
+  const filtroData = String(refs.historicoFiltroData?.value || '').trim();
 
   return pedidosCache
     .filter((pedido) => pedido.status === 'PEDIDO COLETADO')
@@ -895,6 +927,13 @@ function obterHistoricoFiltrado() {
 
       if (filtroPedido && !normalizarBusca(pedido.codigo_pedido).includes(filtroPedido)) {
         return false;
+      }
+
+       if (filtroData) {
+        const dataHistorico = normalizeDateInput(pedido.data_coleta || pedido.data_pedido);
+        if (dataHistorico !== filtroData) {
+          return false;
+        }
       }
 
       return true;
@@ -968,6 +1007,154 @@ function abrirModalRelatorio(tipo) {
 
 function fecharModalRelatorio() {
   closeModal(refs.relatorioModal);
+}
+
+async function abrirModalKits(escopo = 'dia') {
+  openModal(refs.kitsModal);
+  await carregarResumoKits(escopo);
+}
+
+function fecharModalKits() {
+  refs.kitsMensagem.className = 'message hidden';
+  refs.kitsMensagem.textContent = '';
+  closeModal(refs.kitsModal);
+}
+
+async function carregarResumoKits(escopo = 'dia') {
+  const normalizedScope = escopo === 'geral' ? 'geral' : 'dia';
+  kitsResumoContexto.escopo = normalizedScope;
+  refs.kitsMensagem.className = 'message hidden';
+  refs.kitsMensagem.textContent = '';
+  refs.kitsTbody.innerHTML = '<tr><td colspan="8" class="empty-state">Carregando kits...</td></tr>';
+
+  try {
+    const resumo = await fetchJson(`${pedidosApiBaseUrl}/kits-resumo?escopo=${normalizedScope}`);
+    kitsResumoContexto.data = resumo;
+    renderizarResumoKits();
+  } catch (error) {
+    refs.kitsTbody.innerHTML = `<tr><td colspan="8" class="empty-state">${escapeHtml(error.message || 'Nao foi possivel carregar os kits.')}</td></tr>`;
+    throw error;
+  }
+}
+
+function renderizarResumoKits() {
+  const resumo = kitsResumoContexto.data || {
+    escopo: kitsResumoContexto.escopo,
+    total_kits: 0,
+    total_requerido: 0,
+    total_estoque: 0,
+    total_pendente: 0,
+    kits: []
+  };
+  const escopo = resumo.escopo === 'geral' ? 'geral' : 'dia';
+  const kits = Array.isArray(resumo.kits) ? resumo.kits : [];
+
+  refs.kitsBtnDia.classList.toggle('btn-secondary', escopo === 'dia');
+  refs.kitsBtnDia.classList.toggle('btn-neutral', escopo !== 'dia');
+  refs.kitsBtnGeral.classList.toggle('btn-secondary', escopo === 'geral');
+  refs.kitsBtnGeral.classList.toggle('btn-neutral', escopo !== 'geral');
+
+  refs.kitsResumo.innerHTML = `
+    <span class="selected-tag">Escopo: ${escapeHtml(escopo === 'dia' ? 'Dia' : 'Global')}</span>
+    <span class="selected-tag">Modelos: ${formatInteger(resumo.total_kits || 0)}</span>
+    <span class="selected-tag">Necessario: ${formatDecimal(resumo.total_requerido || 0)}</span>
+    <span class="selected-tag">Em estoque: ${formatDecimal(resumo.total_estoque || 0)}</span>
+    <span class="selected-tag">Faltam: ${formatDecimal(resumo.total_pendente || 0)}</span>
+  `;
+
+  if (!kits.length) {
+    refs.kitsTbody.innerHTML = '<tr><td colspan="8" class="empty-state">Nenhum kit pendente para este escopo.</td></tr>';
+    return;
+  }
+
+  refs.kitsTbody.innerHTML = kits.map((kit) => {
+    const valorPadrao = Number(kit.quantidade_pendente || 0) > 0
+      ? formatDecimalInput(kit.quantidade_pendente || 0, 2)
+      : '';
+
+    return `
+      <tr>
+        <td class="table-code">${escapeHtml(kit.codigo)}</td>
+        <td>${escapeHtml(kit.descricao)}</td>
+        <td>${escapeHtml((kit.clientes || []).join(', '))}</td>
+        <td>${formatDecimal(kit.quantidade_requerida || 0)}</td>
+        <td>${formatDecimal(kit.quantidade_em_estoque || 0)}</td>
+        <td><strong>${formatDecimal(kit.quantidade_pendente || 0)}</strong></td>
+        <td>
+          <input
+            class="pedido-kit-quantidade-input"
+            type="number"
+            min="0"
+            step="1"
+            value="${escapeHtml(valorPadrao)}"
+            data-kit-quantidade="${kit.id_peca}"
+            ${Number(kit.quantidade_pendente || 0) <= 0 ? 'disabled' : ''}
+          >
+        </td>
+        <td>
+          <button
+            class="btn btn-secondary btn-small"
+            type="button"
+            data-action="montar-kit"
+            data-id-peca="${kit.id_peca}"
+            ${Number(kit.quantidade_pendente || 0) <= 0 ? 'disabled' : ''}
+          >Registrar</button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+async function handleKitsActions(event) {
+  const button = event.target.closest('button[data-action="montar-kit"][data-id-peca]');
+  if (!button) {
+    return;
+  }
+
+  const idPeca = Number.parseInt(button.dataset.idPeca, 10);
+  if (!Number.isInteger(idPeca)) {
+    return;
+  }
+
+  const input = refs.kitsTbody.querySelector(`input[data-kit-quantidade="${idPeca}"]`);
+  const quantidade = Number(String(input?.value || '').replace(',', '.'));
+
+  if (!Number.isFinite(quantidade) || quantidade <= 0) {
+    refs.kitsMensagem.textContent = 'Informe uma quantidade valida para registrar o kit montado.';
+    refs.kitsMensagem.className = 'message error';
+    refs.kitsMensagem.classList.remove('hidden');
+    return;
+  }
+
+  const kit = (kitsResumoContexto.data?.kits || []).find((item) => Number(item.id_peca) === idPeca);
+  const codigoKit = kit?.codigo || 'kit';
+
+  button.disabled = true;
+  button.textContent = 'Registrando...';
+
+  try {
+    await fetchJson(`${pedidosApiBaseUrl}/kits/${idPeca}/montar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ quantidade })
+    });
+
+    refs.kitsMensagem.textContent = `${codigoKit} registrado com sucesso na Expedicao.`;
+    refs.kitsMensagem.className = 'message success';
+    refs.kitsMensagem.classList.remove('hidden');
+
+    await Promise.all([
+      carregarResumoKits(kitsResumoContexto.escopo),
+      carregarTudo()
+    ]);
+  } catch (error) {
+    refs.kitsMensagem.textContent = error.message || 'Nao foi possivel registrar a montagem do kit.';
+    refs.kitsMensagem.className = 'message error';
+    refs.kitsMensagem.classList.remove('hidden');
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Registrar';
+  }
 }
 
 function construirRelatorioOperacional(pedidos) {
@@ -2343,6 +2530,7 @@ function closeModal(modal) {
     refs.faltasModal,
     refs.historicoModal,
     refs.relatorioModal,
+    refs.kitsModal,
     refs.kitImagemModal,
     refs.coletaConfirmModal
   ].some((item) => !item.classList.contains('hidden'));
@@ -2358,6 +2546,7 @@ function handleModalBackdrop(event) {
   if (event.target.dataset.closeModal === 'pedido-faltas') fecharModalFaltas();
   if (event.target.dataset.closeModal === 'pedido-historico') fecharModalHistoricoPedidos();
   if (event.target.dataset.closeModal === 'pedido-relatorio') fecharModalRelatorio();
+  if (event.target.dataset.closeModal === 'pedido-kits') fecharModalKits();
   if (event.target.dataset.closeModal === 'pedido-kit-imagem') fecharModalKitImagem();
   if (event.target.dataset.closeModal === 'pedido-coleta-confirm') fecharConfirmacaoColetaPedido();
 }
@@ -2381,6 +2570,11 @@ function handleKeyboardShortcuts(event) {
 
   if (!refs.faltasModal.classList.contains('hidden')) {
     fecharModalFaltas();
+    return;
+  }
+
+  if (!refs.kitsModal.classList.contains('hidden')) {
+    fecharModalKits();
     return;
   }
 
