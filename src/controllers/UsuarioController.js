@@ -1,5 +1,6 @@
 const UsuarioModel = require('../models/UsuarioModel');
 const { ALL_ROLES, normalizeRole, ROLES } = require('../security/roles');
+const { normalizeSetor, isValidSetor } = require('../security/setores');
 const { hashPassword } = require('../security/passwordUtils');
 const { recordAuditLog } = require('../audit/auditLogger');
 
@@ -21,6 +22,8 @@ function buildPayload(body, { requirePassword }) {
     nome: String(body.nome || '').trim(),
     login: String(body.login || '').trim(),
     role: normalizeRole(body.role),
+    setor: body.setor ? normalizeSetor(body.setor) : null,
+    setorInformado: String(body.setor || '').trim(),
     ativo: normalizeBoolean(body.ativo, true),
     senha: String(body.senha || '').trim(),
     requirePassword
@@ -40,6 +43,10 @@ function validatePayload(payload) {
 
   if (!payload.role || !ALL_ROLES.includes(payload.role)) {
     errors.push(`O perfil deve ser um destes: ${ALL_ROLES.join(', ')}.`);
+  }
+
+  if (payload.setorInformado && !isValidSetor(payload.setorInformado)) {
+    errors.push('O setor informado e invalido.');
   }
 
   if (payload.requirePassword && payload.senha.length < 6) {
@@ -93,6 +100,7 @@ class UsuarioController {
         nome: req.query.nome ? String(req.query.nome).trim() : '',
         login: req.query.login ? String(req.query.login).trim() : '',
         role: req.query.role ? String(req.query.role).trim() : '',
+        setor: req.query.setor ? String(req.query.setor).trim() : '',
         ativo: req.query.ativo === '' || req.query.ativo === undefined
           ? undefined
           : normalizeBoolean(req.query.ativo, true)
@@ -134,6 +142,7 @@ class UsuarioController {
         login: payload.login,
         senhaHash: hashPassword(payload.senha),
         role: payload.role,
+        setor: payload.setor,
         ativo: payload.ativo
       });
 
@@ -179,6 +188,7 @@ class UsuarioController {
         login: payload.login,
         senhaHash: payload.senha ? hashPassword(payload.senha) : undefined,
         role: payload.role,
+        setor: payload.setor,
         ativo: payload.ativo
       });
 

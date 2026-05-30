@@ -1,5 +1,6 @@
 const { pool } = require('../../database/connection');
 const { ALL_ROLES, isValidRole, normalizeRole, ROLES } = require('../security/roles');
+const { normalizeSetor, isValidSetor } = require('../security/setores');
 
 class UsuarioModel {
   static normalizeLogin(login) {
@@ -16,6 +17,7 @@ class UsuarioModel {
       nome: row.nome,
       login: row.login,
       role: normalizeRole(row.role),
+      setor: normalizeSetor(row.setor) || null,
       ativo: Boolean(row.ativo),
       ultimo_login_em: row.ultimo_login_em || null,
       created_at: row.created_at || null,
@@ -39,6 +41,46 @@ class UsuarioModel {
         UNIQUE KEY uniq_usuarios_login (login)
       )
     `);
+
+    await this.ensureSetorColumn(db);
+  }
+
+  static async ensureSetorColumn(db = pool) {
+    const [columns] = await db.query(
+      `
+        SELECT COLUMN_NAME
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'usuarios'
+          AND COLUMN_NAME = 'setor'
+        LIMIT 1
+      `
+    );
+
+    if (!columns.length) {
+      await db.query(`
+        ALTER TABLE usuarios
+        ADD COLUMN setor VARCHAR(40) NULL AFTER role
+      `);
+    }
+
+    const [indexes] = await db.query(
+      `
+        SELECT INDEX_NAME
+        FROM information_schema.STATISTICS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'usuarios'
+          AND INDEX_NAME = 'idx_usuarios_setor'
+        LIMIT 1
+      `
+    );
+
+    if (!indexes.length) {
+      await db.query(`
+        ALTER TABLE usuarios
+        ADD INDEX idx_usuarios_setor (setor)
+      `);
+    }
   }
 
   static async hasActiveUsers(db = pool) {
@@ -62,6 +104,7 @@ class UsuarioModel {
           login,
           senha_hash,
           role,
+          setor,
           ativo,
           ultimo_login_em,
           created_at,
@@ -94,6 +137,7 @@ class UsuarioModel {
           login,
           senha_hash,
           role,
+          setor,
           ativo,
           ultimo_login_em,
           created_at,
@@ -147,6 +191,14 @@ class UsuarioModel {
       }
     }
 
+    if (filters.setor) {
+      const normalizedSetor = normalizeSetor(filters.setor);
+      if (normalizedSetor) {
+        conditions.push('setor = ?');
+        params.push(normalizedSetor);
+      }
+    }
+
     if (filters.ativo === true || filters.ativo === false) {
       conditions.push('ativo = ?');
       params.push(filters.ativo ? 1 : 0);
@@ -160,6 +212,7 @@ class UsuarioModel {
           nome,
           login,
           role,
+          setor,
           ativo,
           ultimo_login_em,
           created_at,
@@ -189,12 +242,44 @@ class UsuarioModel {
     return Number(rows[0]?.total || 0);
   }
 
-  static async create({ nome, login, senhaHash, role, ativo = true }, db = pool) {
+  static async findActiveBySetor(setor, db = pool) {
+    await this.ensureSchema(db);
+
+    const normalizedSetor = normalizeSetor(setor);
+    if (!normalizedSetor) {
+      return [];
+    }
+
+    const [rows] = await db.query(
+      `
+        SELECT
+          id,
+          nome,
+          login,
+          role,
+          setor,
+          ativo,
+          ultimo_login_em,
+          created_at,
+          updated_at
+        FROM usuarios
+        WHERE ativo = 1
+          AND setor = ?
+        ORDER BY nome ASC, login ASC
+      `,
+      [normalizedSetor]
+    );
+
+    return rows.map((row) => this.sanitize(row));
+  }
+
+  static async create({ nome, login, senhaHash, role, setor = null, ativo = true }, db = pool) {
     await this.ensureSchema(db);
 
     const safeName = String(nome || '').trim();
     const normalizedLogin = this.normalizeLogin(login);
     const normalizedRole = normalizeRole(role);
+    const normalizedSetor = setor ? normalizeSetor(setor) : null;
 
     if (!safeName) {
       throw new Error('O nome do usuario e obrigatorio.');
@@ -212,6 +297,10 @@ class UsuarioModel {
       throw new Error(`Perfil invalido. Use um destes: ${ALL_ROLES.join(', ')}.`);
     }
 
+    if (setor && !isValidSetor(setor)) {
+      throw new Error('Setor invalido para o usuario.');
+    }
+
     const existingUser = await this.findByLogin(normalizedLogin, db);
     if (existingUser) {
       const error = new Error('Ja existe um usuario com este login.');
@@ -226,16 +315,17 @@ class UsuarioModel {
           login,
           senha_hash,
           role,
+          setor,
           ativo
-        ) VALUES (?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?)
       `,
-      [safeName, normalizedLogin, senhaHash, normalizedRole, ativo ? 1 : 0]
+      [safeName, normalizedLogin, senhaHash, normalizedRole, normalizedSetor, ativo ? 1 : 0]
     );
 
     return this.findById(result.insertId, db);
   }
 
-  static async update(id, { nome, login, senhaHash, role, ativo }, db = pool) {
+  static async update(id, { nome, login, senhaHash, role, setor = null, ativo }, db = pool) {
     await this.ensureSchema(db);
     const existingUser = await this.findById(id, db);
 
@@ -246,6 +336,7 @@ class UsuarioModel {
     const safeName = String(nome || '').trim();
     const normalizedLogin = this.normalizeLogin(login);
     const normalizedRole = normalizeRole(role);
+    const normalizedSetor = setor ? normalizeSetor(setor) : null;
 
     if (!safeName) {
       throw new Error('O nome do usuario e obrigatorio.');
@@ -259,6 +350,10 @@ class UsuarioModel {
       throw new Error(`Perfil invalido. Use um destes: ${ALL_ROLES.join(', ')}.`);
     }
 
+    if (setor && !isValidSetor(setor)) {
+      throw new Error('Setor invalido para o usuario.');
+    }
+
     const loginOwner = await this.findByLogin(normalizedLogin, db);
     if (loginOwner && loginOwner.id !== Number(id)) {
       const error = new Error('Ja existe um usuario com este login.');
@@ -269,7 +364,7 @@ class UsuarioModel {
     await db.query(
       `
         UPDATE usuarios
-        SET nome = ?, login = ?, senha_hash = ?, role = ?, ativo = ?
+        SET nome = ?, login = ?, senha_hash = ?, role = ?, setor = ?, ativo = ?
         WHERE id = ?
       `,
       [
@@ -277,6 +372,7 @@ class UsuarioModel {
         normalizedLogin,
         senhaHash || existingUser.senha_hash,
         normalizedRole,
+        normalizedSetor,
         ativo ? 1 : 0,
         id
       ]
@@ -298,11 +394,12 @@ class UsuarioModel {
     return result.affectedRows > 0;
   }
 
-  static async upsertUser({ nome, login, senhaHash, role, ativo = true }, db = pool) {
+  static async upsertUser({ nome, login, senhaHash, role, setor = null, ativo = true }, db = pool) {
     await this.ensureSchema(db);
 
     const normalizedLogin = this.normalizeLogin(login);
     const normalizedRole = normalizeRole(role);
+    const normalizedSetor = setor ? normalizeSetor(setor) : null;
     const safeName = String(nome || '').trim();
 
     if (!safeName) {
@@ -321,6 +418,10 @@ class UsuarioModel {
       throw new Error(`Perfil invalido. Use um destes: ${ALL_ROLES.join(', ')}.`);
     }
 
+    if (setor && !isValidSetor(setor)) {
+      throw new Error('Setor invalido para o usuario.');
+    }
+
     const [existingRows] = await db.query(
       `
         SELECT id
@@ -335,10 +436,10 @@ class UsuarioModel {
       await db.query(
         `
           UPDATE usuarios
-          SET nome = ?, senha_hash = ?, role = ?, ativo = ?
+          SET nome = ?, senha_hash = ?, role = ?, setor = ?, ativo = ?
           WHERE id = ?
         `,
-        [safeName, senhaHash, normalizedRole, ativo ? 1 : 0, existingRows[0].id]
+        [safeName, senhaHash, normalizedRole, normalizedSetor, ativo ? 1 : 0, existingRows[0].id]
       );
 
       return Number(existingRows[0].id);
@@ -351,10 +452,11 @@ class UsuarioModel {
           login,
           senha_hash,
           role,
+          setor,
           ativo
-        ) VALUES (?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?)
       `,
-      [safeName, normalizedLogin, senhaHash, normalizedRole, ativo ? 1 : 0]
+      [safeName, normalizedLogin, senhaHash, normalizedRole, normalizedSetor, ativo ? 1 : 0]
     );
 
     return Number(result.insertId);

@@ -1,5 +1,7 @@
 ﻿const { pool } = require('../../database/connection');
 const EstoqueModel = require('./EstoqueModel');
+const UsuarioModel = require('./UsuarioModel');
+const NotificacaoModel = require('./NotificacaoModel');
 
 class SolicitacaoEstoqueModel {
   static STATUSS_ABERTOS = ['PENDENTE', 'FALTANDO_PECA', 'MONTANDO', 'EM_SEPARACAO', 'ATENDIDA_PARCIAL'];
@@ -18,6 +20,78 @@ class SolicitacaoEstoqueModel {
     const error = new Error(message);
     error.statusCode = 400;
     return error;
+  }
+
+  static normalizeUserId(value) {
+    if (value === undefined || value === null || value === '') {
+      return null;
+    }
+
+    const parsed = Number.parseInt(value, 10);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : Number.NaN;
+  }
+
+  static async ensureSchema(db = pool) {
+    await UsuarioModel.ensureSchema(db);
+    await this.ensureSolicitanteColumn(db);
+  }
+
+  static async ensureSolicitanteColumn(db = pool) {
+    const [columns] = await db.query(
+      `
+        SELECT COLUMN_NAME
+        FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'solicitacoes_estoque'
+          AND COLUMN_NAME = 'solicitante_id'
+        LIMIT 1
+      `
+    );
+
+    if (!columns.length) {
+      await db.query(`
+        ALTER TABLE solicitacoes_estoque
+        ADD COLUMN solicitante_id INT NULL AFTER origem_atendimento
+      `);
+    }
+
+    const [indexes] = await db.query(
+      `
+        SELECT INDEX_NAME
+        FROM information_schema.STATISTICS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'solicitacoes_estoque'
+          AND INDEX_NAME = 'idx_solicitacao_solicitante'
+        LIMIT 1
+      `
+    );
+
+    if (!indexes.length) {
+      await db.query(`
+        ALTER TABLE solicitacoes_estoque
+        ADD INDEX idx_solicitacao_solicitante (solicitante_id)
+      `);
+    }
+
+    const [constraints] = await db.query(
+      `
+        SELECT CONSTRAINT_NAME
+        FROM information_schema.TABLE_CONSTRAINTS
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'solicitacoes_estoque'
+          AND CONSTRAINT_NAME = 'fk_solicitacao_solicitante'
+        LIMIT 1
+      `
+    );
+
+    if (!constraints.length) {
+      await db.query(`
+        ALTER TABLE solicitacoes_estoque
+        ADD CONSTRAINT fk_solicitacao_solicitante
+          FOREIGN KEY (solicitante_id) REFERENCES usuarios(id)
+          ON DELETE SET NULL
+      `);
+    }
   }
 
   static normalizeArea(area) {
@@ -41,6 +115,220 @@ class SolicitacaoEstoqueModel {
   static normalizeStatus(value) {
     const normalized = String(value || '').trim().toUpperCase();
     return ['PENDENTE', 'FALTANDO_PECA', 'MONTANDO', 'EM_SEPARACAO'].includes(normalized) ? normalized : '';
+  }
+
+  static formatStatus(status) {
+    const labels = {
+      PENDENTE: 'Pendente',
+      FALTANDO_PECA: 'Faltando peca',
+      MONTANDO: 'Montando',
+      EM_SEPARACAO: 'Pronto',
+      ATENDIDA_PARCIAL: 'Atendida parcial',
+      ATENDIDA: 'Pronta',
+      CANCELADA: 'Cancelada'
+    };
+
+    return labels[String(status || '').toUpperCase()] || status || '-';
+  }
+
+  static buildSolicitacaoLink(setor) {
+    const links = {
+      ALMOXARIFADO: '/pagina-almoxarifado',
+      MONTAGEM: '/pagina-montagem',
+      EXPEDICAO: '/pagina-expedicao',
+      PRODUCAO: '/pagina-producao',
+      ADMINISTRATIVO: '/pagina-acesso'
+    };
+
+    return links[String(setor || '').toUpperCase()] || '/pagina-acesso';
+  }
+
+  static buildItemLabel(solicitacao) {
+    const codigo = solicitacao?.codigo || `#${solicitacao?.id || '-'}`;
+    const descricao = solicitacao?.descricao ? ` - ${solicitacao.descricao}` : '';
+    return `${codigo}${descricao}`;
+  }
+
+  static async notifyNovaSolicitacao(solicitacao) {
+    if (!solicitacao?.id || !solicitacao.origem_atendimento) {
+      return;
+    }
+
+    const solicitante = solicitacao.solicitante_nome || solicitacao.solicitante_login || 'Usuario';
+    const setorDestino = String(solicitacao.origem_atendimento).toUpperCase();
+    const quantidade = Number(solicitacao.quantidade_solicitada || 0);
+
+    await NotificacaoModel.createForSetor(setorDestino, {
+      tipo: 'SOLICITACAO_ESTOQUE',
+      titulo: 'Nova solicitacao de peca',
+      mensagem: `${solicitante} solicitou ${quantidade} de ${this.buildItemLabel(solicitacao)} para ${solicitacao.destino_nome || 'o setor solicitante'}.`,
+      link: this.buildSolicitacaoLink(setorDestino),
+      payload: {
+        solicitacao_id: Number(solicitacao.id),
+        status: solicitacao.status,
+        origem_atendimento: solicitacao.origem_atendimento,
+        area_origem: solicitacao.area_origem
+      }
+    }, {
+      excludeUserIds: solicitacao.solicitante_id ? [solicitacao.solicitante_id] : []
+    });
+  }
+
+  static async notifyResumoSolicitacoes(solicitacaoIds, solicitanteId) {
+    await this.ensureSchema(pool);
+
+    const ids = [...new Set(
+      (Array.isArray(solicitacaoIds) ? solicitacaoIds : [solicitacaoIds])
+        .map((id) => Number.parseInt(id, 10))
+        .filter((id) => Number.isInteger(id) && id > 0)
+    )];
+    const normalizedSolicitanteId = this.normalizeUserId(solicitanteId);
+
+    if (!ids.length || !Number.isInteger(normalizedSolicitanteId)) {
+      return { grupos: 0, notificacoes: 0 };
+    }
+
+    const placeholders = ids.map(() => '?').join(', ');
+    const [rows] = await pool.query(
+      `
+        SELECT
+          s.id,
+          s.area_origem,
+          s.origem_atendimento,
+          s.solicitante_id,
+          s.status,
+          s.quantidade_solicitada,
+          p.codigo,
+          p.descricao,
+          us.nome AS solicitante_nome,
+          us.login AS solicitante_login,
+          CASE
+            WHEN s.area_origem = 'EXPEDICAO' THEN 'Expedicao'
+            ELSE 'Montagem'
+          END AS destino_nome
+        FROM solicitacoes_estoque s
+        INNER JOIN pecas p ON p.id = s.id_peca
+        LEFT JOIN usuarios us ON us.id = s.solicitante_id
+        WHERE s.id IN (${placeholders})
+          AND s.solicitante_id = ?
+        ORDER BY s.origem_atendimento ASC, s.id ASC
+      `,
+      [...ids, normalizedSolicitanteId]
+    );
+
+    const groups = rows.reduce((accumulator, row) => {
+      const key = String(row.origem_atendimento || '').toUpperCase();
+      if (!key) {
+        return accumulator;
+      }
+
+      if (!accumulator.has(key)) {
+        accumulator.set(key, []);
+      }
+
+      accumulator.get(key).push(row);
+      return accumulator;
+    }, new Map());
+
+    let notificationCount = 0;
+
+    for (const [setorDestino, items] of groups.entries()) {
+      const first = items[0];
+      const solicitante = first.solicitante_nome || first.solicitante_login || 'Usuario';
+      const destinoNome = first.destino_nome || 'o setor solicitante';
+      const totalItems = items.length;
+
+      const created = await NotificacaoModel.createForSetor(setorDestino, {
+        tipo: 'SOLICITACAO_ESTOQUE',
+        titulo: 'Nova solicitacao de pecas',
+        mensagem: `${solicitante} solicitou ${totalItems} item(ns) para ${destinoNome}.`,
+        link: this.buildSolicitacaoLink(setorDestino),
+        payload: {
+          solicitacao_ids: items.map((item) => Number(item.id)),
+          total_itens: totalItems,
+          origem_atendimento: setorDestino,
+          area_origem: first.area_origem
+        }
+      }, {
+        excludeUserIds: [normalizedSolicitanteId]
+      });
+
+      notificationCount += created.length;
+    }
+
+    return {
+      grupos: groups.size,
+      notificacoes: notificationCount
+    };
+  }
+
+  static async notifyStatusSolicitacao(solicitacao, previousStatus) {
+    if (!solicitacao?.id || !solicitacao.solicitante_id) {
+      return;
+    }
+
+    const currentStatus = String(solicitacao.status || '').toUpperCase();
+    if (currentStatus === 'CANCELADA') {
+      return;
+    }
+
+    if (previousStatus && String(previousStatus).toUpperCase() === currentStatus) {
+      return;
+    }
+
+    const isReady = ['EM_SEPARACAO', 'ATENDIDA', 'ATENDIDA_PARCIAL'].includes(currentStatus);
+    const title = isReady ? 'Sua solicitacao esta pronta' : 'Status da solicitacao atualizado';
+    const readyText = currentStatus === 'ATENDIDA_PARCIAL'
+      ? 'esta parcialmente pronta para retirada.'
+      : 'esta pronta para retirada.';
+    const message = isReady
+      ? `Solicitacao #${solicitacao.id} de ${this.buildItemLabel(solicitacao)} ${readyText}`
+      : `Solicitacao #${solicitacao.id} de ${this.buildItemLabel(solicitacao)} mudou para ${this.formatStatus(currentStatus)}.`;
+
+    await NotificacaoModel.createForUser(solicitacao.solicitante_id, {
+      tipo: 'SOLICITACAO_STATUS',
+      titulo: title,
+      mensagem: message,
+      link: this.buildSolicitacaoLink(solicitacao.area_origem),
+      payload: {
+        solicitacao_id: Number(solicitacao.id),
+        status: currentStatus,
+        status_anterior: previousStatus || null,
+        area_origem: solicitacao.area_origem,
+        origem_atendimento: solicitacao.origem_atendimento
+      }
+    });
+  }
+
+  static async notifyCancelamentoSolicitacao(solicitacao) {
+    if (!solicitacao?.id || !solicitacao.origem_atendimento) {
+      return;
+    }
+
+    const setorDestino = String(solicitacao.origem_atendimento).toUpperCase();
+
+    await NotificacaoModel.createForSetor(setorDestino, {
+      tipo: 'SOLICITACAO_CANCELADA',
+      titulo: 'Solicitacao cancelada',
+      mensagem: `Solicitacao #${solicitacao.id} de ${this.buildItemLabel(solicitacao)} foi cancelada.`,
+      link: this.buildSolicitacaoLink(setorDestino),
+      payload: {
+        solicitacao_id: Number(solicitacao.id),
+        status: 'CANCELADA',
+        origem_atendimento: solicitacao.origem_atendimento,
+        area_origem: solicitacao.area_origem
+      }
+    }, {
+      excludeUserIds: solicitacao.solicitante_id ? [solicitacao.solicitante_id] : []
+    });
+  }
+
+  static async runNotificationSafely(callback) {
+    try {
+      await callback();
+    } catch (error) {
+      console.error('Falha ao criar notificacao de solicitacao:', error.message);
+    }
   }
 
   static async findDestinationStock(connection, area) {
@@ -81,12 +369,15 @@ class SolicitacaoEstoqueModel {
   }
 
   static async findById(id, connection = pool) {
+    await this.ensureSchema(connection);
+
     const [rows] = await connection.query(
       `
         SELECT
           s.id,
           s.area_origem,
           s.origem_atendimento,
+          s.solicitante_id,
           s.id_peca,
           s.quantidade_solicitada,
           s.quantidade_atendida,
@@ -103,6 +394,8 @@ class SolicitacaoEstoqueModel {
           p.tipo,
           p.estoque_minimo AS quantidade_pacote,
           COALESCE(m.nome, '-') AS maquina_nome,
+          us.nome AS solicitante_nome,
+          us.login AS solicitante_login,
           COALESCE(sa.quantidade, 0) AS saldo_almoxarifado,
           CASE
             WHEN s.area_origem = 'EXPEDICAO' THEN 'Expedição'
@@ -115,6 +408,7 @@ class SolicitacaoEstoqueModel {
         FROM solicitacoes_estoque s
         INNER JOIN pecas p ON p.id = s.id_peca
         LEFT JOIN maquinas m ON m.id = p.id_maquina
+        LEFT JOIN usuarios us ON us.id = s.solicitante_id
         LEFT JOIN estoque_saldos sa ON sa.id_peca = s.id_peca
           AND sa.id_estoque = (
             SELECT id FROM estoques WHERE nome = 'Almoxarifado' LIMIT 1
@@ -128,6 +422,8 @@ class SolicitacaoEstoqueModel {
   }
 
   static async findAll(filters = {}) {
+    await this.ensureSchema(pool);
+
     const conditions = ['1 = 1'];
     const values = [];
 
@@ -168,6 +464,7 @@ class SolicitacaoEstoqueModel {
           s.id,
           s.area_origem,
           s.origem_atendimento,
+          s.solicitante_id,
           s.id_peca,
           s.quantidade_solicitada,
           s.quantidade_atendida,
@@ -184,6 +481,8 @@ class SolicitacaoEstoqueModel {
           p.tipo,
           p.estoque_minimo AS quantidade_pacote,
           COALESCE(m.nome, '-') AS maquina_nome,
+          us.nome AS solicitante_nome,
+          us.login AS solicitante_login,
           COALESCE(sa.quantidade, 0) AS saldo_almoxarifado,
           CASE
             WHEN s.area_origem = 'EXPEDICAO' THEN 'Expedição'
@@ -196,6 +495,7 @@ class SolicitacaoEstoqueModel {
         FROM solicitacoes_estoque s
         INNER JOIN pecas p ON p.id = s.id_peca
         LEFT JOIN maquinas m ON m.id = p.id_maquina
+        LEFT JOIN usuarios us ON us.id = s.solicitante_id
         LEFT JOIN estoque_saldos sa ON sa.id_peca = s.id_peca
           AND sa.id_estoque = (
             SELECT id FROM estoques WHERE nome = 'Almoxarifado' LIMIT 1
@@ -220,6 +520,8 @@ class SolicitacaoEstoqueModel {
   }
 
   static async create(data) {
+    await this.ensureSchema(pool);
+
     const connection = await pool.getConnection();
 
     try {
@@ -233,6 +535,11 @@ class SolicitacaoEstoqueModel {
       const origemAtendimento = this.normalizeOrigin(data.origem_atendimento || 'ALMOXARIFADO');
       if (!origemAtendimento) {
         throw this.createBusinessError('A origem de atendimento da solicitacao deve ser valida.');
+      }
+
+      const solicitanteId = this.normalizeUserId(data.solicitante_id);
+      if (Number.isNaN(solicitanteId)) {
+        throw this.createBusinessError('O usuario solicitante da peca e invalido.');
       }
 
       if (area === 'MONTAGEM' && origemAtendimento !== 'ALMOXARIFADO') {
@@ -271,14 +578,16 @@ class SolicitacaoEstoqueModel {
           INSERT INTO solicitacoes_estoque (
             area_origem,
             origem_atendimento,
+            solicitante_id,
             id_peca,
             quantidade_solicitada,
             observacao
-          ) VALUES (?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?)
         `,
         [
           area,
           origemAtendimento,
+          solicitanteId,
           data.id_peca,
           data.quantidade_solicitada,
           data.observacao || null
@@ -286,7 +595,12 @@ class SolicitacaoEstoqueModel {
       );
 
       await connection.commit();
-      return this.findById(result.insertId);
+
+      const created = await this.findById(result.insertId);
+      if (data.notificar !== false) {
+        await this.runNotificationSafely(() => this.notifyNovaSolicitacao(created));
+      }
+      return created;
     } catch (error) {
       await connection.rollback();
       throw error;
@@ -296,6 +610,8 @@ class SolicitacaoEstoqueModel {
   }
 
   static async startSeparation(id) {
+    await this.ensureSchema(pool);
+
     const connection = await pool.getConnection();
 
     try {
@@ -322,7 +638,10 @@ class SolicitacaoEstoqueModel {
       );
 
       await connection.commit();
-      return this.findById(id);
+
+      const updated = await this.findById(id);
+      await this.runNotificationSafely(() => this.notifyStatusSolicitacao(updated, request.status));
+      return updated;
     } catch (error) {
       await connection.rollback();
       throw error;
@@ -332,6 +651,8 @@ class SolicitacaoEstoqueModel {
   }
 
   static async fulfill(id, data) {
+    await this.ensureSchema(pool);
+
     const connection = await pool.getConnection();
 
     try {
@@ -343,6 +664,7 @@ class SolicitacaoEstoqueModel {
             id,
             area_origem,
             origem_atendimento,
+            solicitante_id,
             id_peca,
             quantidade_solicitada,
             quantidade_atendida,
@@ -435,7 +757,10 @@ class SolicitacaoEstoqueModel {
       );
 
       await connection.commit();
-      return this.findById(id);
+
+      const updated = await this.findById(id);
+      await this.runNotificationSafely(() => this.notifyStatusSolicitacao(updated, request.status));
+      return updated;
     } catch (error) {
       await connection.rollback();
       throw error;
@@ -445,6 +770,8 @@ class SolicitacaoEstoqueModel {
   }
 
   static async cancel(id, data = {}) {
+    await this.ensureSchema(pool);
+
     const connection = await pool.getConnection();
 
     try {
@@ -471,7 +798,10 @@ class SolicitacaoEstoqueModel {
       );
 
       await connection.commit();
-      return this.findById(id);
+
+      const updated = await this.findById(id);
+      await this.runNotificationSafely(() => this.notifyCancelamentoSolicitacao(updated));
+      return updated;
     } catch (error) {
       await connection.rollback();
       throw error;
@@ -481,6 +811,8 @@ class SolicitacaoEstoqueModel {
   }
 
   static async updateStatus(id, data = {}) {
+    await this.ensureSchema(pool);
+
     const connection = await pool.getConnection();
 
     try {
@@ -523,7 +855,10 @@ class SolicitacaoEstoqueModel {
       );
 
       await connection.commit();
-      return this.findById(id);
+
+      const updated = await this.findById(id);
+      await this.runNotificationSafely(() => this.notifyStatusSolicitacao(updated, request.status));
+      return updated;
     } catch (error) {
       await connection.rollback();
       throw error;

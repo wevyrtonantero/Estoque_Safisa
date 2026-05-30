@@ -89,6 +89,8 @@ const SolicitacaoEstoqueController = {
       payload.origem_atendimento = req.body.origem_atendimento
         ? String(req.body.origem_atendimento).trim().toUpperCase()
         : 'ALMOXARIFADO';
+      payload.solicitante_id = req.currentUser?.id || null;
+      payload.notificar = req.body?.notificar !== false;
 
       if (!payload.area_origem) {
         return res.status(400).json({ message: 'A area de origem deve ser informada.' });
@@ -106,6 +108,20 @@ const SolicitacaoEstoqueController = {
       return res.status(201).json(result);
     } catch (error) {
       const response = extractErrorResponse(error, 'Erro ao criar solicitacao de estoque.');
+      return res.status(response.status).json(response.body);
+    }
+  },
+
+  async notifyResumo(req, res) {
+    try {
+      const result = await SolicitacaoEstoqueModel.notifyResumoSolicitacoes(
+        req.body?.solicitacao_ids,
+        req.currentUser?.id
+      );
+
+      return res.status(200).json(result);
+    } catch (error) {
+      const response = extractErrorResponse(error, 'Erro ao notificar resumo das solicitacoes.');
       return res.status(response.status).json(response.body);
     }
   },

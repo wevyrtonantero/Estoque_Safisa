@@ -28,6 +28,7 @@ let producaoEmAndamentoCache = [];
 let autoRefreshHandle = null;
 let efetuarFaltantesCache = [];
 let solicitacaoLista = [];
+let solicitacaoEnvioEmAndamento = false;
 
 const refs = {
   mensagem: document.getElementById('expedicao-mensagem'),
@@ -1001,6 +1002,23 @@ function fecharModalSolicitacao() {
   closeModal(refs.solicitacaoModal);
 }
 
+function atualizarEstadoBotaoSolicitacao(carregando, textoCarregando = 'Enviando...') {
+  if (!refs.solicitacaoEnviar.dataset.defaultLabel) {
+    refs.solicitacaoEnviar.dataset.defaultLabel = refs.solicitacaoEnviar.textContent.trim();
+  }
+
+  refs.solicitacaoEnviar.disabled = carregando;
+  refs.solicitacaoEnviar.textContent = carregando
+    ? textoCarregando
+    : refs.solicitacaoEnviar.dataset.defaultLabel;
+}
+
+function atualizarPedidosExpedicaoEmSegundoPlano() {
+  carregarPedidosExpedicao().catch((error) => {
+    console.error('Falha ao atualizar pedidos da Expedicao apos enviar solicitacoes:', error);
+  });
+}
+
 async function carregarEstruturaSubmontagem(submontagemId) {
   if (estruturasSubmontagemCache.has(submontagemId)) {
     return estruturasSubmontagemCache.get(submontagemId);
@@ -1531,16 +1549,25 @@ function handleSolicitacaoListaActions(event) {
 }
 
 async function enviarSolicitacoesDaLista() {
+  if (solicitacaoEnvioEmAndamento) {
+    return;
+  }
+
   try {
     if (!solicitacaoLista.length) {
       throw new Error('Adicione pelo menos um item na lista de solicitacao.');
     }
 
+    solicitacaoEnvioEmAndamento = true;
+    atualizarEstadoBotaoSolicitacao(true, 'Enviando...');
+    refs.solicitacaoMensagem.textContent = `Enviando ${solicitacaoLista.length} solicitacao(oes)...`;
+    refs.solicitacaoMensagem.className = 'message success';
+    refs.solicitacaoMensagem.classList.remove('hidden');
+
     const criadas = [];
     const falhas = [];
     const pendentes = [];
-
-    for (const item of solicitacaoLista) {
+    const resultados = await Promise.all(solicitacaoLista.map(async (item) => {
       const response = await fetch(solicitacoesApiBaseUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1549,23 +1576,42 @@ async function enviarSolicitacoesDaLista() {
           origem_atendimento: item.origem,
           id_peca: item.id_peca,
           quantidade_solicitada: item.quantidade,
-          observacao: item.observacao || null
+          observacao: item.observacao || null,
+          notificar: false
         })
       });
       const result = await response.json();
 
-      if (!response.ok) {
-        falhas.push(`${item.codigo}: ${result.message || 'nao foi possivel criar a solicitacao.'}`);
+      return {
+        item,
+        ok: response.ok,
+        id: result.id,
+        message: result.message || 'nao foi possivel criar a solicitacao.'
+      };
+    }));
+
+    const solicitacaoIdsCriadas = [];
+
+    resultados.forEach(({ item, ok, id, message }) => {
+      if (!ok) {
+        falhas.push(`${item.codigo}: ${message}`);
         pendentes.push(item);
-        continue;
+        return;
       }
 
+      if (id) {
+        solicitacaoIdsCriadas.push(id);
+      }
       criadas.push(`${item.codigo} (${formatInteger(item.quantidade)})`);
-    }
+    });
 
     solicitacaoLista = pendentes;
     renderizarListaSolicitacao();
-    await carregarPedidosExpedicao();
+
+    if (criadas.length) {
+      atualizarPedidosExpedicaoEmSegundoPlano();
+      await notificarResumoSolicitacoes(solicitacaoIdsCriadas);
+    }
 
     if (!criadas.length) {
       throw new Error(falhas.join(' | ') || 'Nenhuma solicitacao foi criada.');
@@ -1584,7 +1630,23 @@ async function enviarSolicitacoesDaLista() {
     refs.solicitacaoMensagem.textContent = error.message;
     refs.solicitacaoMensagem.className = 'message error';
     refs.solicitacaoMensagem.classList.remove('hidden');
+  } finally {
+    solicitacaoEnvioEmAndamento = false;
+    atualizarEstadoBotaoSolicitacao(false);
   }
+}
+
+async function notificarResumoSolicitacoes(solicitacaoIds) {
+  const ids = Array.isArray(solicitacaoIds) ? solicitacaoIds.filter(Boolean) : [];
+  if (!ids.length) {
+    return;
+  }
+
+  await fetch(`${solicitacoesApiBaseUrl}/notificar-resumo`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ solicitacao_ids: ids })
+  }).catch(() => {});
 }
 
 function abrirModalDesmembrar() {

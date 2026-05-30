@@ -29,6 +29,8 @@ const composicaoVendaRoutes = require('./src/routes/composicaoVendaRoutes');
 const gerenciamentoServosRoutes = require('./src/routes/gerenciamentoServosRoutes');
 const submontagemSerialRoutes = require('./src/routes/submontagemSerialRoutes');
 const pedidoExpedicaoRoutes = require('./src/routes/pedidoExpedicaoRoutes');
+const chatRoutes = require('./src/routes/chatRoutes');
+const notificacaoRoutes = require('./src/routes/notificacaoRoutes');
 const AuthController = require('./src/controllers/AuthController');
 const UsuarioModel = require('./src/models/UsuarioModel');
 const AuditLogModel = require('./src/models/AuditLogModel');
@@ -37,8 +39,11 @@ const ExpedicaoSaidaModel = require('./src/models/ExpedicaoSaidaModel');
 const ProducaoModel = require('./src/models/ProducaoModel');
 const SubmontagemSerialModel = require('./src/models/SubmontagemSerialModel');
 const PedidoExpedicaoModel = require('./src/models/PedidoExpedicaoModel');
+const SolicitacaoEstoqueModel = require('./src/models/SolicitacaoEstoqueModel');
 const EtiquetaModel = require('./src/models/EtiquetaModel');
 const EtiquetaHistoricoModel = require('./src/models/EtiquetaHistoricoModel');
+const ChatModel = require('./src/models/ChatModel');
+const NotificacaoModel = require('./src/models/NotificacaoModel');
 const { attachAuthContext, requirePageRoles } = require('./src/middleware/authMiddleware');
 const { ALL_ROLES, ADMIN_READ_ROLES, OPERATION_READ_ROLES, SUPERADMIN_ONLY_ROLES, STOCK_READ_ROLES } = require('./src/security/roles');
 const { testConnection } = require('./database/connection');
@@ -265,6 +270,8 @@ app.use('/api', composicaoVendaRoutes);
 app.use('/api', gerenciamentoServosRoutes);
 app.use('/api', submontagemSerialRoutes);
 app.use('/api', pedidoExpedicaoRoutes);
+app.use('/api', chatRoutes);
+app.use('/api', notificacaoRoutes);
 // Resposta padrao para qualquer rota nao mapeada.
 app.use((req, res) => {
   res.status(404).json({ message: 'Rota nao encontrada.' });
@@ -288,8 +295,11 @@ app.listen(PORT, async () => {
     await ProducaoModel.ensureSchema();
     await SubmontagemSerialModel.ensureSchema();
     await PedidoExpedicaoModel.ensureSchema();
+    await SolicitacaoEstoqueModel.ensureSchema();
     await EtiquetaModel.ensureSchema();
     await EtiquetaHistoricoModel.ensureSchema();
+    await ChatModel.ensureSchema();
+    await NotificacaoModel.ensureSchema();
   } catch (error) {
     console.error('Nao foi possivel validar a conexao com o MySQL:', error.message);
   }

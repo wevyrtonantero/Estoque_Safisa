@@ -15,6 +15,7 @@ function buildUserPayload(user) {
     nome: user.nome,
     login: user.login,
     role: user.role,
+    setor: user.setor || null,
     ativo: user.ativo,
     ultimo_login_em: user.ultimo_login_em || null
   };

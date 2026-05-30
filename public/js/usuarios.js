@@ -68,11 +68,13 @@ async function carregarUsuarios() {
   const nome = document.getElementById('filtro-usuario-nome').value.trim();
   const login = document.getElementById('filtro-usuario-login').value.trim();
   const role = document.getElementById('filtro-usuario-role').value;
+  const setor = document.getElementById('filtro-usuario-setor').value;
   const ativo = document.getElementById('filtro-usuario-ativo').value;
 
   if (nome) params.append('nome', nome);
   if (login) params.append('login', login);
   if (role) params.append('role', role);
+  if (setor) params.append('setor', setor);
   if (ativo) params.append('ativo', ativo);
 
   try {
@@ -192,6 +194,7 @@ function montarPayloadUsuario() {
     nome: document.getElementById('usuario-nome').value.trim(),
     login: document.getElementById('usuario-login').value.trim(),
     role: document.getElementById('usuario-role').value,
+    setor: document.getElementById('usuario-setor').value,
     ativo: document.getElementById('usuario-ativo').value === 'true',
     senha: document.getElementById('usuario-senha').value
   };
@@ -211,6 +214,7 @@ async function carregarUsuarioParaEdicao(id) {
     document.getElementById('usuario-nome').value = usuario.nome;
     document.getElementById('usuario-login').value = usuario.login;
     document.getElementById('usuario-role').value = usuario.role;
+    document.getElementById('usuario-setor').value = usuario.setor || '';
     document.getElementById('usuario-ativo').value = usuario.ativo ? 'true' : 'false';
     document.getElementById('usuario-senha').value = '';
     document.getElementById('usuario-senha').required = false;
@@ -253,6 +257,7 @@ function resetUsuarioForm() {
   editingUsuarioId = null;
   document.getElementById('usuario-id').value = '';
   document.getElementById('usuario-role').value = 'OPERACAO';
+  document.getElementById('usuario-setor').value = '';
   document.getElementById('usuario-ativo').value = 'true';
   document.getElementById('usuario-senha').required = true;
   atualizarUsuarioButton.disabled = true;
@@ -307,7 +312,7 @@ function renderizarTabelaUsuarios(usuarios) {
   totalUsuarios.textContent = `${usuarios.length} registro(s) encontrado(s)`;
 
   if (usuarios.length === 0) {
-    usuariosTbody.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhum usuario encontrado para os filtros informados.</td></tr>';
+    usuariosTbody.innerHTML = '<tr><td colspan="7" class="empty-state">Nenhum usuario encontrado para os filtros informados.</td></tr>';
     return;
   }
 
@@ -321,6 +326,7 @@ function renderizarTabelaUsuarios(usuarios) {
         <td class="table-description">${escapeHtml(usuario.nome)}${isCurrentUser ? ' <span class="mini-chip">Voce</span>' : ''}</td>
         <td>${escapeHtml(usuario.login)}</td>
         <td>${escapeHtml(formatRoleLabel(usuario.role))}</td>
+        <td>${escapeHtml(formatSetorLabel(usuario.setor))}</td>
         <td><span class="status-chip ${statusClass}">${statusLabel}</span></td>
         <td>${escapeHtml(formatDateTime(usuario.ultimo_login_em))}</td>
         <td class="table-actions-cell">
@@ -382,6 +388,18 @@ function formatRoleLabel(role) {
   };
 
   return labels[role] || role || '-';
+}
+
+function formatSetorLabel(setor) {
+  const labels = {
+    ALMOXARIFADO: 'Almoxarifado',
+    MONTAGEM: 'Montagem',
+    EXPEDICAO: 'Expedicao',
+    PRODUCAO: 'Producao',
+    ADMINISTRATIVO: 'Administrativo'
+  };
+
+  return labels[setor] || '-';
 }
 
 function formatDateTime(value) {

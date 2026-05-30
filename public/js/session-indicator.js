@@ -18,10 +18,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     const indicator = buildSessionIndicator(result.user);
     const host = resolveIndicatorHost();
     if (!host || host.querySelector('.session-indicator')) {
+      ensureNotificationWidgetLoaded(result.user);
+      ensureChatWidgetLoaded(result.user);
       return;
     }
 
     host.appendChild(indicator);
+    ensureNotificationWidgetLoaded(result.user);
+    ensureChatWidgetLoaded(result.user);
   } catch (error) {
     // Indicador auxiliar: nao deve quebrar a pagina.
   }
@@ -63,14 +67,9 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function resolveIndicatorHost() {
-  const topbarActions = document.querySelector('.topbar-actions');
+  const topbarActions = resolveTopbarActionsHost();
   if (topbarActions) {
     return topbarActions;
-  }
-
-  const topbar = document.querySelector('.topbar');
-  if (topbar) {
-    return topbar;
   }
 
   const portalShell = document.querySelector('.portal-shell');
@@ -79,6 +78,23 @@ function resolveIndicatorHost() {
   }
 
   return null;
+}
+
+function resolveTopbarActionsHost() {
+  const topbar = document.querySelector('.workspace > .topbar');
+  if (!topbar) {
+    return null;
+  }
+
+  const existingActions = Array.from(topbar.children).find((child) => child.classList?.contains('topbar-actions'));
+  if (existingActions) {
+    return existingActions;
+  }
+
+  const actions = document.createElement('div');
+  actions.className = 'topbar-actions topbar-actions-session';
+  topbar.appendChild(actions);
+  return actions;
 }
 
 function buildSessionIndicator(user) {
@@ -109,6 +125,68 @@ function buildSessionIndicator(user) {
   wrapper.append(dot, copy);
 
   return wrapper;
+}
+
+function ensureChatWidgetLoaded(user) {
+  if (!user?.id) {
+    return;
+  }
+
+  window.SafisaCurrentUser = user;
+
+  if (window.SafisaChatWidget?.init) {
+    window.SafisaChatWidget.init(user);
+    return;
+  }
+
+  if (window.__safisaChatWidgetLoading) {
+    return;
+  }
+
+  window.__safisaChatWidgetLoading = true;
+
+  const script = document.createElement('script');
+  script.src = '/js/chat-widget.js';
+  script.async = true;
+  script.onload = () => {
+    window.__safisaChatWidgetLoading = false;
+    window.SafisaChatWidget?.init?.(user);
+  };
+  script.onerror = () => {
+    window.__safisaChatWidgetLoading = false;
+  };
+  document.body.appendChild(script);
+}
+
+function ensureNotificationWidgetLoaded(user) {
+  if (!user?.id) {
+    return;
+  }
+
+  window.SafisaCurrentUser = user;
+
+  if (window.SafisaNotificationWidget?.init) {
+    window.SafisaNotificationWidget.init(user);
+    return;
+  }
+
+  if (window.__safisaNotificationWidgetLoading) {
+    return;
+  }
+
+  window.__safisaNotificationWidgetLoading = true;
+
+  const script = document.createElement('script');
+  script.src = '/js/notification-widget.js';
+  script.async = true;
+  script.onload = () => {
+    window.__safisaNotificationWidgetLoading = false;
+    window.SafisaNotificationWidget?.init?.(user);
+  };
+  script.onerror = () => {
+    window.__safisaNotificationWidgetLoading = false;
+  };
+  document.body.appendChild(script);
 }
 
 function formatRole(role) {

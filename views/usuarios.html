@@ -118,6 +118,18 @@
         </div>
 
         <div class="field">
+          <label for="filtro-usuario-setor">Setor</label>
+          <select id="filtro-usuario-setor">
+            <option value="">Todos</option>
+            <option value="ALMOXARIFADO">Almoxarifado</option>
+            <option value="MONTAGEM">Montagem</option>
+            <option value="EXPEDICAO">Expedicao</option>
+            <option value="PRODUCAO">Producao</option>
+            <option value="ADMINISTRATIVO">Administrativo</option>
+          </select>
+        </div>
+
+        <div class="field">
           <label for="filtro-usuario-ativo">Status</label>
           <select id="filtro-usuario-ativo">
             <option value="">Todos</option>
@@ -139,6 +151,7 @@
               <th>Nome</th>
               <th>Login</th>
               <th>Perfil</th>
+              <th>Setor</th>
               <th>Status</th>
               <th>Ultimo acesso</th>
               <th>Acoes</th>
@@ -146,7 +159,7 @@
           </thead>
           <tbody id="usuarios-tbody">
             <tr>
-              <td colspan="6" class="empty-state">Carregando usuarios cadastrados...</td>
+              <td colspan="7" class="empty-state">Carregando usuarios cadastrados...</td>
             </tr>
           </tbody>
         </table>
@@ -190,6 +203,18 @@
             <option value="ADM">ADM</option>
             <option value="GESTOR">Gestor</option>
             <option value="SUPERADMIN">Superadmin</option>
+          </select>
+        </div>
+
+        <div class="field span-4">
+          <label for="usuario-setor">Setor</label>
+          <select id="usuario-setor">
+            <option value="">Sem setor</option>
+            <option value="ALMOXARIFADO">Almoxarifado</option>
+            <option value="MONTAGEM">Montagem</option>
+            <option value="EXPEDICAO">Expedicao</option>
+            <option value="PRODUCAO">Producao</option>
+            <option value="ADMINISTRATIVO">Administrativo</option>
           </select>
         </div>
 
