@@ -1,8 +1,16 @@
 const terceirizacaoApiBaseUrl = '/api/terceirizacao';
 const estoquesApiBaseUrl = '/api/estoques';
+const fornecedoresApiBaseUrl = '/api/fornecedores';
+
+const SPECIAL_PROVIDER_KEYS = Object.freeze({
+  MULTIELOS: 'MULTIELOS',
+  TEMPERA: 'TEMPERA',
+  GENERICO: 'EXTERNO'
+});
 
 let remessasCache = [];
 let stocksCache = [];
+let providersCache = [];
 let remessaSelecionada = null;
 let itemRetornoSelecionado = null;
 let filtroDebounceTimer = null;
@@ -40,12 +48,26 @@ const refs = {
   finalizacaoMensagem: document.getElementById('remessa-finalizacao-mensagem'),
   finalizacaoItemId: document.getElementById('remessa-finalizacao-item-id'),
   finalizacaoResumo: document.getElementById('remessa-finalizacao-resumo'),
-  finalizacaoJustificativa: document.getElementById('remessa-finalizacao-justificativa')
+  finalizacaoJustificativa: document.getElementById('remessa-finalizacao-justificativa'),
+  transferenciaModal: document.getElementById('remessa-transferencia-modal'),
+  transferenciaMensagem: document.getElementById('remessa-transferencia-mensagem'),
+  transferenciaItemId: document.getElementById('remessa-transferencia-item-id'),
+  transferenciaResumo: document.getElementById('remessa-transferencia-resumo'),
+  transferenciaQuantidade: document.getElementById('remessa-transferencia-quantidade'),
+  transferenciaFornecedor: document.getElementById('remessa-transferencia-fornecedor'),
+  transferenciaFornecedoresLista: document.getElementById('remessa-transferencia-fornecedores-lista'),
+  transferenciaTipoTratamento: document.getElementById('remessa-transferencia-tipo-tratamento'),
+  transferenciaServicosWrap: document.getElementById('remessa-transferencia-servicos-wrap'),
+  transferenciaServicosLista: document.getElementById('remessa-transferencia-servicos-lista'),
+  transferenciaTemperaWrap: document.getElementById('remessa-transferencia-tempera-wrap'),
+  transferenciaDureza: document.getElementById('remessa-transferencia-dureza'),
+  transferenciaProfundidade: document.getElementById('remessa-transferencia-profundidade'),
+  transferenciaObservacao: document.getElementById('remessa-transferencia-observacao')
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
   bindEvents();
-  await Promise.all([carregarRemessas(), carregarEstoques()]);
+  await Promise.all([carregarRemessas(), carregarEstoques(), carregarProviders()]);
 });
 
 function bindEvents() {
@@ -76,10 +98,16 @@ function bindEvents() {
   document.getElementById('btn-fechar-modal-remessa-finalizacao').addEventListener('click', fecharModalFinalizacao);
   document.getElementById('btn-cancelar-modal-remessa-finalizacao').addEventListener('click', fecharModalFinalizacao);
   document.getElementById('remessa-finalizacao-form').addEventListener('submit', handleFinalizarPendencia);
+  refs.transferenciaFornecedor.addEventListener('input', handleTransferenciaProviderChange);
+  refs.transferenciaFornecedor.addEventListener('change', handleTransferenciaProviderChange);
+  document.getElementById('btn-fechar-modal-remessa-transferencia').addEventListener('click', fecharModalTransferencia);
+  document.getElementById('btn-cancelar-modal-remessa-transferencia').addEventListener('click', fecharModalTransferencia);
+  document.getElementById('remessa-transferencia-form').addEventListener('submit', handleTransferirPendencia);
   refs.detalheModal.addEventListener('click', handleBackdrop);
   refs.nfModal.addEventListener('click', handleBackdrop);
   refs.retornoModal.addEventListener('click', handleBackdrop);
   refs.finalizacaoModal.addEventListener('click', handleBackdrop);
+  refs.transferenciaModal.addEventListener('click', handleBackdrop);
   document.addEventListener('click', handleGlobalClick);
   document.addEventListener('keydown', handleKeyboardShortcuts);
 }
@@ -131,11 +159,63 @@ async function carregarEstoques() {
   `;
 }
 
+async function carregarProviders() {
+  const [specialResponse, suppliersResponse] = await Promise.all([
+    fetch(`${terceirizacaoApiBaseUrl}/opcoes`),
+    fetch(fornecedoresApiBaseUrl)
+  ]);
+  const [specialResult, suppliersResult] = await Promise.all([
+    specialResponse.json(),
+    suppliersResponse.json()
+  ]);
+
+  if (!specialResponse.ok) {
+    throw new Error(specialResult.message || 'Nao foi possivel carregar as empresas de tratamento.');
+  }
+
+  if (!suppliersResponse.ok) {
+    throw new Error(suppliersResult.message || 'Nao foi possivel carregar os fornecedores.');
+  }
+
+  const specialProviders = Array.isArray(specialResult)
+    ? specialResult.map((provider) => ({
+      ...provider,
+      key: String(provider.key || '').trim().toUpperCase(),
+      especial: true
+    }))
+    : [];
+
+  const specialIds = new Set(specialProviders.map((provider) => Number(provider.id)));
+  const genericProviders = Array.isArray(suppliersResult)
+    ? suppliersResult
+      .filter((supplier) => Number.isInteger(Number(supplier.id)) && !specialIds.has(Number(supplier.id)))
+      .map((supplier) => ({
+        id: Number(supplier.id),
+        key: SPECIAL_PROVIDER_KEYS.GENERICO,
+        nome: supplier.nome,
+        cidade: supplier.cidade || '',
+        endereco: supplier.endereco || '',
+        cep: supplier.cep || '',
+        observacao: supplier.observacao || '',
+        servicos: [],
+        dureza_padrao: '',
+        profundidade_padrao: '',
+        especial: false
+      }))
+      .sort((left, right) => String(left.nome || '').localeCompare(String(right.nome || ''), 'pt-BR'))
+    : [];
+
+  providersCache = [...specialProviders, ...genericProviders];
+  refs.transferenciaFornecedoresLista.innerHTML = providersCache
+    .map((provider) => `<option value="${escapeHtml(provider.nome)}"></option>`)
+    .join('');
+}
+
 function renderizarRemessas() {
   refs.total.textContent = `${remessasCache.length} registro(s) encontrado(s)`;
 
   if (remessasCache.length === 0) {
-    refs.tabela.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhuma remessa encontrada.</td></tr>';
+    refs.tabela.innerHTML = '<tr><td colspan="7" class="empty-state">Nenhuma remessa encontrada.</td></tr>';
     return;
   }
 
@@ -146,6 +226,7 @@ function renderizarRemessas() {
       <td>${renderNfCell(remessa)}</td>
       <td>${formatarData(remessa.data_envio)}</td>
       <td class="table-quantity">${formatInteger(remessa.total_itens)}</td>
+      <td>${renderRemessaCodigos(remessa)}</td>
       <td class="table-actions-cell">
         <details class="row-menu">
           <summary class="row-menu-trigger" aria-label="Abrir acoes">...</summary>
@@ -166,6 +247,19 @@ function renderNfCell(remessa) {
   }
 
   return escapeHtml(remessa.numero_nf);
+}
+
+function renderRemessaCodigos(remessa) {
+  const codigos = String(remessa?.pecas_codigos || '')
+    .split('|')
+    .map((codigo) => codigo.trim())
+    .filter(Boolean);
+
+  if (!codigos.length) {
+    return '<span class="remessa-codigos-text">-</span>';
+  }
+
+  return `<span class="remessa-codigos-text">${escapeHtml(codigos.join('|'))}</span>`;
 }
 
 function isRemessaForaDaFabrica(remessa) {
@@ -246,6 +340,7 @@ async function abrirModalDetalhe(id) {
             <div class="row-menu-panel">
               ${Number(item.quantidade_pendente || 0) > 0 && !item.encerrado_manualmente
                 ? `<button type="button" class="row-menu-item" data-action="retorno" data-item-id="${item.id}">Registrar retorno</button>
+                   <button type="button" class="row-menu-item" data-action="transferir" data-item-id="${item.id}">Transferir terceiro</button>
                    <button type="button" class="row-menu-item" data-action="finalizar-pendencia" data-item-id="${item.id}">Finalizar pendencia</button>`
                 : '<span class="row-menu-item is-muted">Sem acoes pendentes</span>'}
             </div>
@@ -376,6 +471,11 @@ function handleItemActions(event) {
     return;
   }
 
+  if (button.dataset.action === 'transferir') {
+    abrirModalTransferencia(item);
+    return;
+  }
+
   if (button.dataset.action === 'finalizar-pendencia') {
     abrirModalFinalizacao(item);
   }
@@ -415,6 +515,79 @@ function fecharModalFinalizacao() {
   refs.finalizacaoMensagem.className = 'message hidden';
   refs.finalizacaoMensagem.textContent = '';
   closeModal(refs.finalizacaoModal);
+}
+
+function abrirModalTransferencia(item) {
+  itemRetornoSelecionado = item;
+  refs.transferenciaMensagem.className = 'message hidden';
+  refs.transferenciaMensagem.textContent = '';
+  refs.transferenciaItemId.value = String(item.id);
+  refs.transferenciaQuantidade.value = '1';
+  const pendente = getQuantidadePendente(item);
+  refs.transferenciaQuantidade.max = String(pendente);
+  refs.transferenciaResumo.classList.remove('empty');
+  refs.transferenciaResumo.classList.add('selected-tags');
+  refs.transferenciaResumo.innerHTML = `
+    <span class="selected-tag">${escapeHtml(`${item.codigo} - ${item.descricao}`)}</span>
+    <span class="selected-tag">${escapeHtml(`Pendente: ${formatInteger(pendente)}`)}</span>
+    <span class="selected-tag">${escapeHtml(`Atual: ${remessaSelecionada?.nome_empresa || '-'}`)}</span>
+  `;
+  refs.transferenciaTipoTratamento.value = String(item.tipo_tratamento || SPECIAL_PROVIDER_KEYS.GENERICO).trim().toUpperCase();
+  refs.transferenciaObservacao.value = '';
+  refs.transferenciaFornecedor.value = '';
+  refs.transferenciaDureza.value = item.dureza_hrc || '';
+  refs.transferenciaProfundidade.value = item.profundidade || '';
+  refs.transferenciaServicosWrap.classList.add('hidden');
+  refs.transferenciaTemperaWrap.classList.add('hidden');
+  refs.transferenciaServicosLista.innerHTML = '';
+  openModal(refs.transferenciaModal);
+}
+
+function fecharModalTransferencia() {
+  itemRetornoSelecionado = null;
+  document.getElementById('remessa-transferencia-form').reset();
+  refs.transferenciaItemId.value = '';
+  refs.transferenciaTipoTratamento.value = '';
+  refs.transferenciaResumo.classList.add('selected-tags', 'empty');
+  refs.transferenciaResumo.textContent = 'Selecione um item para transferir a pendencia.';
+  refs.transferenciaMensagem.className = 'message hidden';
+  refs.transferenciaMensagem.textContent = '';
+  refs.transferenciaServicosWrap.classList.add('hidden');
+  refs.transferenciaTemperaWrap.classList.add('hidden');
+  refs.transferenciaServicosLista.innerHTML = '';
+  closeModal(refs.transferenciaModal);
+}
+
+function handleTransferenciaProviderChange() {
+  const provider = findProviderByTypedName(refs.transferenciaFornecedor.value);
+
+  refs.transferenciaServicosWrap.classList.add('hidden');
+  refs.transferenciaTemperaWrap.classList.add('hidden');
+  refs.transferenciaServicosLista.innerHTML = '';
+  refs.transferenciaTipoTratamento.value = SPECIAL_PROVIDER_KEYS.GENERICO;
+
+  if (!provider) {
+    return;
+  }
+
+  refs.transferenciaTipoTratamento.value = provider.key;
+
+  if (provider.key === SPECIAL_PROVIDER_KEYS.MULTIELOS) {
+    refs.transferenciaServicosWrap.classList.remove('hidden');
+    refs.transferenciaServicosLista.innerHTML = provider.servicos.map((service, index) => `
+      <label class="selected-tag" for="transfer-service-${index}">
+        <input id="transfer-service-${index}" type="checkbox" value="${escapeHtml(service)}" data-transfer-service-checkbox>
+        <span>${escapeHtml(service)}</span>
+      </label>
+    `).join('');
+    return;
+  }
+
+  if (provider.key === SPECIAL_PROVIDER_KEYS.TEMPERA) {
+    refs.transferenciaTemperaWrap.classList.remove('hidden');
+    refs.transferenciaDureza.value = provider.dureza_padrao || refs.transferenciaDureza.value || '56 a 58 HRC';
+    refs.transferenciaProfundidade.value = provider.profundidade_padrao || refs.transferenciaProfundidade.value || '0,3 a 0,6 mm';
+  }
 }
 
 async function handleRegistrarRetorno(event) {
@@ -476,6 +649,46 @@ async function handleFinalizarPendencia(event) {
     refs.finalizacaoMensagem.textContent = error.message;
     refs.finalizacaoMensagem.className = 'message error';
     refs.finalizacaoMensagem.classList.remove('hidden');
+  }
+}
+
+async function handleTransferirPendencia(event) {
+  event.preventDefault();
+
+  const servicos = Array.from(document.querySelectorAll('[data-transfer-service-checkbox]:checked')).map((input) => input.value);
+  const provider = findProviderByTypedName(refs.transferenciaFornecedor.value);
+
+  try {
+    const response = await fetch(`${terceirizacaoApiBaseUrl}/transferir-pendencia`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id_item: refs.transferenciaItemId.value,
+        id_fornecedor: provider ? provider.id : null,
+        empresa_destino: refs.transferenciaFornecedor.value.trim(),
+        quantidade_transferencia: refs.transferenciaQuantidade.value,
+        tipo_tratamento: refs.transferenciaTipoTratamento.value || SPECIAL_PROVIDER_KEYS.GENERICO,
+        servicos,
+        dureza_hrc: refs.transferenciaDureza.value.trim(),
+        profundidade: refs.transferenciaProfundidade.value.trim(),
+        observacao: refs.transferenciaObservacao.value.trim()
+      })
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.message || 'Nao foi possivel transferir a pendencia.');
+    }
+
+    fecharModalTransferencia();
+    mostrarMensagem(`Pendencia transferida para ${result?.remessa_destino?.nome_empresa || refs.transferenciaFornecedor.value.trim()}.`, 'success');
+    await carregarRemessas();
+    remessaSelecionada = result.remessa_origem;
+    await abrirModalDetalhe(result.remessa_origem.id);
+  } catch (error) {
+    refs.transferenciaMensagem.textContent = error.message;
+    refs.transferenciaMensagem.className = 'message error';
+    refs.transferenciaMensagem.classList.remove('hidden');
   }
 }
 
@@ -578,6 +791,9 @@ function handleBackdrop(event) {
   if (event.target.dataset.closeModal === 'remessa-finalizacao') {
     fecharModalFinalizacao();
   }
+  if (event.target.dataset.closeModal === 'remessa-transferencia') {
+    fecharModalTransferencia();
+  }
 }
 
 function handleGlobalClick(event) {
@@ -615,6 +831,10 @@ function handleKeyboardShortcuts(event) {
     fecharModalFinalizacao();
     return;
   }
+  if (!refs.transferenciaModal.classList.contains('hidden')) {
+    fecharModalTransferencia();
+    return;
+  }
   if (!refs.nfModal.classList.contains('hidden')) {
     fecharModalNf();
     return;
@@ -643,7 +863,7 @@ function openModal(modal) {
 function closeModal(modal) {
   modal.classList.add('hidden');
   modal.setAttribute('aria-hidden', 'true');
-  const hasModal = [refs.detalheModal, refs.nfModal, refs.retornoModal, refs.finalizacaoModal]
+  const hasModal = [refs.detalheModal, refs.nfModal, refs.retornoModal, refs.finalizacaoModal, refs.transferenciaModal]
     .some((entry) => !entry.classList.contains('hidden'));
   document.body.classList.toggle('has-modal', hasModal);
 }
@@ -687,6 +907,25 @@ function buildTreatmentLabel(item) {
   if (item.dureza_hrc) parts.push(item.dureza_hrc);
   if (item.profundidade) parts.push(item.profundidade);
   return parts.join(' | ');
+}
+
+function normalizeProviderName(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase();
+}
+
+function findProviderByTypedName(value) {
+  const typedName = normalizeProviderName(value);
+
+  if (!typedName) {
+    return null;
+  }
+
+  return providersCache.find((provider) => normalizeProviderName(provider.nome) === typedName) || null;
 }
 
 function getQuantidadePendente(item) {

@@ -1450,7 +1450,11 @@ function renderizarDuracaoPrioridade(saldo) {
     return `ate ${dataPrevista}`;
   }
 
-  return `${formatarQuantidade(dias)} dia(s) | ate ${dataPrevista}`;
+  return `${formatRoundedDays(dias)} dia(s) | ate ${dataPrevista}`;
+}
+
+function formatRoundedDays(value) {
+  return String(Math.max(0, Math.round(Number(value) || 0)));
 }
 
 function renderizarEstadoNecessidade(estado) {

@@ -1410,7 +1410,11 @@ function formatarDuracaoPrioridade(item) {
     return dataPrevista;
   }
 
-  return `${formatDecimal(dias)}d | ${dataPrevista}`;
+  return `${formatRoundedDays(dias)}d | ${dataPrevista}`;
+}
+
+function formatRoundedDays(value) {
+  return String(Math.max(0, Math.round(Number(value) || 0)));
 }
 
 function getStockQuantity(item, key) {

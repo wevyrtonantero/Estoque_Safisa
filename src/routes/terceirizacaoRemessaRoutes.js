@@ -18,5 +18,6 @@ router.post('/terceirizacao/encaminhar', requireApiRoles(REMESSA_WRITE_ROLES), T
 router.post('/terceirizacao/remessas/:id/nf', requireApiRoles(ADMIN_WRITE_ROLES), TerceirizacaoRemessaController.updateNf);
 router.post('/terceirizacao/retorno', requireApiRoles(REMESSA_WRITE_ROLES), TerceirizacaoRemessaController.registerReturn);
 router.post('/terceirizacao/finalizar-pendencia', requireApiRoles(REMESSA_WRITE_ROLES), TerceirizacaoRemessaController.finalizePendingItem);
+router.post('/terceirizacao/transferir-pendencia', requireApiRoles(REMESSA_WRITE_ROLES), TerceirizacaoRemessaController.transferPendingItem);
 
 module.exports = router;

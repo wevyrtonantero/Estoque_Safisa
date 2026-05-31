@@ -3668,6 +3668,13 @@ tbody tr:hover {
   line-height: 1.25;
 }
 
+.remessa-codigos-text {
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
 .status-chip {
   display: inline-flex;
   align-items: center;

@@ -873,6 +873,175 @@ class TerceirizacaoRemessaModel {
       connection.release();
     }
   }
+
+  static async transferPendingItem(data) {
+    const connection = await pool.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      const [rows] = await connection.query(
+        `
+          SELECT
+            ri.id,
+            ri.id_remessa,
+            ri.id_peca,
+            ri.tipo_tratamento,
+            ri.servicos,
+            ri.dureza_hrc,
+            ri.profundidade,
+            ri.quantidade_enviada,
+            ri.quantidade_retorno,
+            ri.massa_unitaria_kg,
+            ri.observacao,
+            COALESCE(ri.encerrado_manualmente, 0) AS encerrado_manualmente,
+            ri.status,
+            r.id_fornecedor,
+            r.nome_empresa,
+            p.codigo,
+            p.descricao,
+            p.massa_kg
+          FROM terceirizacao_remessa_itens ri
+          INNER JOIN terceirizacao_remessas r ON r.id = ri.id_remessa
+          INNER JOIN pecas p ON p.id = ri.id_peca
+          WHERE ri.id = ?
+          FOR UPDATE
+        `,
+        [data.id_item]
+      );
+
+      const item = rows[0] || null;
+      if (!item) {
+        throw this.createBusinessError('Item da remessa nao encontrado.');
+      }
+
+      if (Number(item.encerrado_manualmente || 0) === 1) {
+        throw this.createBusinessError('Este item ja foi encerrado manualmente e nao pode ser transferido.');
+      }
+
+      const quantidadeTransferencia = Number(Number(data.quantidade_transferencia).toFixed(2));
+      const pendente = Number((Number(item.quantidade_enviada) - Number(item.quantidade_retorno)).toFixed(2));
+
+      if (quantidadeTransferencia <= 0) {
+        throw this.createBusinessError('Informe uma quantidade de transferencia maior que zero.');
+      }
+
+      if (quantidadeTransferencia > pendente) {
+        throw this.createBusinessError('A quantidade informada e maior que o saldo pendente desta remessa.');
+      }
+
+      const providerDestino = await this.resolveDispatchProvider(connection, data.id_fornecedor, data.empresa_destino);
+      if (!providerDestino) {
+        throw this.createBusinessError('Empresa de destino nao encontrada.');
+      }
+
+      if (Number(providerDestino.id) === Number(item.id_fornecedor)) {
+        throw this.createBusinessError('Selecione um terceiro diferente do atual para transferir a pendencia.');
+      }
+
+      const peca = await this.findPecaById(item.id_peca, connection);
+      if (!peca) {
+        throw this.createBusinessError('Peca nao encontrada para transferencia.');
+      }
+
+      let remessaDestino = await this.findOpenRemessaByProvider(connection, providerDestino.id);
+
+      if (!remessaDestino) {
+        const [resultRemessa] = await connection.query(
+          `
+            INSERT INTO terceirizacao_remessas (
+              id_fornecedor,
+              nome_empresa,
+              status,
+              enviada_sem_nf,
+              observacao
+            ) VALUES (?, ?, 'ENVIADA', 1, ?)
+          `,
+          [
+            providerDestino.id,
+            providerDestino.nome,
+            `Remessa criada por transferencia da pendencia da remessa #${item.id_remessa}.`.slice(0, 255)
+          ]
+        );
+
+        remessaDestino = await this.findById(resultRemessa.insertId, connection);
+      }
+
+      const novoRetornoOrigem = Number((Number(item.quantidade_retorno) + quantidadeTransferencia).toFixed(2));
+      const novoStatusOrigem = novoRetornoOrigem >= Number(item.quantidade_enviada) ? 'RETORNADO' : 'RETORNO_PARCIAL';
+      const pesoTotalDestino = this.buildWeightSnapshot(peca.massa_kg || item.massa_unitaria_kg, quantidadeTransferencia);
+      const observacaoOrigem = [
+        item.observacao,
+        `Transferido ${quantidadeTransferencia} para ${providerDestino.nome}.`
+      ].filter(Boolean).join(' | ').slice(0, 255);
+      const observacaoDestino = [
+        data.observacao,
+        `Transferencia da remessa #${item.id_remessa} (${item.nome_empresa}).`
+      ].filter(Boolean).join(' | ').slice(0, 255);
+
+      await connection.query(
+        `
+          UPDATE terceirizacao_remessa_itens
+          SET
+            quantidade_retorno = ?,
+            status = ?,
+            observacao = ?
+          WHERE id = ?
+        `,
+        [novoRetornoOrigem, novoStatusOrigem, observacaoOrigem || null, item.id]
+      );
+
+      const [itemDestinoResult] = await connection.query(
+        `
+          INSERT INTO terceirizacao_remessa_itens (
+            id_remessa,
+            id_peca,
+            tipo_tratamento,
+            servicos,
+            dureza_hrc,
+            profundidade,
+            quantidade_enviada,
+            quantidade_retorno,
+            massa_unitaria_kg,
+            peso_total_enviado_kg,
+            status,
+            observacao
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, 'ENVIADO', ?)
+        `,
+        [
+          remessaDestino.id,
+          item.id_peca,
+          data.tipo_tratamento || item.tipo_tratamento || 'EXTERNO',
+          data.servicos || item.servicos || null,
+          data.dureza_hrc || item.dureza_hrc || null,
+          data.profundidade || item.profundidade || null,
+          quantidadeTransferencia,
+          peca.massa_kg || item.massa_unitaria_kg || null,
+          pesoTotalDestino,
+          observacaoDestino || null
+        ]
+      );
+
+      await this.updateRemessaStatus(connection, item.id_remessa);
+      await this.updateRemessaStatus(connection, remessaDestino.id);
+
+      await connection.commit();
+
+      const remessaOrigemAtualizada = await this.findById(item.id_remessa);
+      const remessaDestinoAtualizada = await this.findById(remessaDestino.id);
+
+      return {
+        remessa_origem: remessaOrigemAtualizada,
+        remessa_destino: remessaDestinoAtualizada,
+        item_destino: remessaDestinoAtualizada?.itens?.find((entry) => Number(entry.id) === Number(itemDestinoResult.insertId)) || null
+      };
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }
 }
 
 module.exports = TerceirizacaoRemessaModel;

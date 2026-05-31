@@ -88,6 +88,20 @@ function buildFinalizePendingPayload(body) {
   };
 }
 
+function buildTransferPayload(body) {
+  return {
+    id_item: normalizeOptionalInteger(body.id_item ?? body.id),
+    id_fornecedor: normalizeOptionalInteger(body.id_fornecedor),
+    empresa_destino: body.empresa_destino ? String(body.empresa_destino).trim() : '',
+    quantidade_transferencia: normalizeDecimal(body.quantidade_transferencia),
+    tipo_tratamento: body.tipo_tratamento ? String(body.tipo_tratamento).trim().toUpperCase() : '',
+    servicos: normalizeTextArray(body.servicos).join(', '),
+    dureza_hrc: body.dureza_hrc ? String(body.dureza_hrc).trim() : null,
+    profundidade: body.profundidade ? String(body.profundidade).trim() : null,
+    observacao: body.observacao ? String(body.observacao).trim() : null
+  };
+}
+
 function extractErrorResponse(error, fallbackMessage) {
   if (error.statusCode) {
     return { status: error.statusCode, body: { message: error.message } };
@@ -276,6 +290,45 @@ const TerceirizacaoRemessaController = {
       return res.status(200).json(result);
     } catch (error) {
       const response = extractErrorResponse(error, 'Erro ao finalizar a pendencia da remessa.');
+      return res.status(response.status).json(response.body);
+    }
+  },
+
+  async transferPendingItem(req, res) {
+    try {
+      const payload = buildTransferPayload(req.body);
+
+      if (!Number.isInteger(payload.id_item)) {
+        return res.status(400).json({ message: 'O item da remessa deve ser valido.' });
+      }
+
+      if (!Number.isInteger(payload.id_fornecedor) && !payload.empresa_destino) {
+        return res.status(400).json({ message: 'Informe uma empresa de destino valida.' });
+      }
+
+      if (!Number.isFinite(payload.quantidade_transferencia) || payload.quantidade_transferencia <= 0) {
+        return res.status(400).json({ message: 'A quantidade de transferencia deve ser maior que zero.' });
+      }
+
+      if (!payload.tipo_tratamento) {
+        return res.status(400).json({ message: 'Informe o tipo de tratamento para o reencaminhamento.' });
+      }
+
+      const result = await TerceirizacaoRemessaModel.transferPendingItem(payload);
+      await recordAuditLog(req, {
+        modulo: 'TERCEIRIZACAO',
+        acao: 'TRANSFERIR_ENTRE_TERCEIROS',
+        entidade_tipo: 'REMESSA',
+        entidade_id: payload.id_item,
+        descricao: `Item ${payload.id_item} transferido entre terceiros.`,
+        depois: {
+          payload,
+          resultado: result
+        }
+      });
+      return res.status(200).json(result);
+    } catch (error) {
+      const response = extractErrorResponse(error, 'Erro ao transferir a pendencia para outro terceiro.');
       return res.status(response.status).json(response.body);
     }
   }

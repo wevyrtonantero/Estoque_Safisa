@@ -113,12 +113,13 @@
                   <th>NF</th>
                   <th>Data Envio</th>
                   <th>Itens</th>
+                  <th>Cod.</th>
                   <th>Acoes</th>
                 </tr>
               </thead>
               <tbody id="remessas-tbody">
                 <tr>
-                  <td colspan="6" class="empty-state">Carregando remessas...</td>
+                  <td colspan="7" class="empty-state">Carregando remessas...</td>
                 </tr>
               </tbody>
             </table>
@@ -315,6 +316,71 @@
         <div class="span-12 modal-actions">
           <button id="btn-cancelar-modal-remessa-finalizacao" class="btn btn-neutral" type="button">Cancelar</button>
           <button class="btn btn-warning" type="submit">Finalizar pendencia</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="remessa-transferencia-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="remessa-transferencia"></div>
+
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Transferencia</span>
+          <h2>Enviar para Outro Terceiro</h2>
+          <p>Use quando a peca ainda esta fora e precisa seguir direto para outro tratamento externo.</p>
+        </div>
+
+        <button id="btn-fechar-modal-remessa-transferencia" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="remessa-transferencia-mensagem" class="message hidden"></div>
+
+      <form id="remessa-transferencia-form" class="form-grid">
+        <input type="hidden" id="remessa-transferencia-item-id">
+        <input type="hidden" id="remessa-transferencia-tipo-tratamento">
+
+        <div id="remessa-transferencia-resumo" class="span-12 selected-tags empty">Selecione um item para transferir a pendencia.</div>
+
+        <div class="field span-6">
+          <label for="remessa-transferencia-quantidade">Quantidade a transferir</label>
+          <input id="remessa-transferencia-quantidade" type="number" min="0" step="1" value="1" required>
+        </div>
+
+        <div class="field span-6">
+          <label for="remessa-transferencia-fornecedor">Empresa destino</label>
+          <input id="remessa-transferencia-fornecedor" type="text" list="remessa-transferencia-fornecedores-lista" maxlength="150" placeholder="Digite ou selecione" required autocomplete="off">
+          <datalist id="remessa-transferencia-fornecedores-lista"></datalist>
+        </div>
+
+        <div id="remessa-transferencia-servicos-wrap" class="span-12 hidden">
+          <label>Servicos</label>
+          <div id="remessa-transferencia-servicos-lista" class="selected-tags"></div>
+        </div>
+
+        <div id="remessa-transferencia-tempera-wrap" class="span-12 hidden">
+          <div class="form-grid">
+            <div class="field span-6">
+              <label for="remessa-transferencia-dureza">Dureza HRC</label>
+              <input id="remessa-transferencia-dureza" type="text" maxlength="60" placeholder="Ex.: 56 a 58 HRC">
+            </div>
+
+            <div class="field span-6">
+              <label for="remessa-transferencia-profundidade">Profundidade</label>
+              <input id="remessa-transferencia-profundidade" type="text" maxlength="60" placeholder="Ex.: 0,3 a 0,6 mm">
+            </div>
+          </div>
+        </div>
+
+        <div class="field span-12">
+          <label for="remessa-transferencia-observacao">Observacao</label>
+          <input id="remessa-transferencia-observacao" type="text" maxlength="255" placeholder="Opcional">
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button id="btn-cancelar-modal-remessa-transferencia" class="btn btn-neutral" type="button">Cancelar</button>
+          <button class="btn btn-primary" type="submit">Transferir pendencia</button>
         </div>
       </form>
     </div>

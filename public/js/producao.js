@@ -479,7 +479,7 @@ function atualizarCardRuptura(item) {
 
   refs.metricRuptura.textContent = item.codigo;
   if (Number.isFinite(dias)) {
-    refs.metricRupturaInfo.textContent = `${item.descricao} | ${formatDecimal(dias)} dia(s) | ate ${formatarDataCurta(dataPrevista)}`;
+    refs.metricRupturaInfo.textContent = `${item.descricao} | ${formatRoundedDays(dias)} dia(s) | ate ${formatarDataCurta(dataPrevista)}`;
     return;
   }
 
@@ -1627,7 +1627,11 @@ function formatarDuracaoPrioridade(item) {
     return `ate ${dataPrevista}`;
   }
 
-  return `${formatDecimal(dias)} dia(s) | ate ${dataPrevista}`;
+  return `${formatRoundedDays(dias)} dia(s) | ate ${dataPrevista}`;
+}
+
+function formatRoundedDays(value) {
+  return String(Math.max(0, Math.round(Number(value) || 0)));
 }
 
 function renderizarEstadoNecessidade(estado, aplicaPrioridade = true) {

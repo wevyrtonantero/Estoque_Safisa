@@ -1824,7 +1824,7 @@ function renderizarCoberturaConsumo(item) {
     return '-';
   }
 
-  const dias = Math.floor((Number(item.quantidade || 0) / consumoMensal) * 30);
+  const dias = Math.max(0, Math.round((Number(item.quantidade || 0) / consumoMensal) * 30));
   const dataFinal = new Date();
   dataFinal.setDate(dataFinal.getDate() + dias);
 
@@ -1856,7 +1856,11 @@ function formatarDuracaoPrioridade(item) {
     return `ate ${dataPrevista}`;
   }
 
-  return `${formatDecimal(dias)} dia(s) | ate ${dataPrevista}`;
+  return `${formatRoundedDays(dias)} dia(s) | ate ${dataPrevista}`;
+}
+
+function formatRoundedDays(value) {
+  return String(Math.max(0, Math.round(Number(value) || 0)));
 }
 
 function renderizarEstadoNecessidade(estado) {
