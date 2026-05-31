@@ -6,6 +6,7 @@ const submontagensApiBaseUrl = '/api/submontagens';
 const fornecedoresApiBaseUrl = '/api/fornecedores';
 const pedidosExpedicaoApiBaseUrl = '/api/pedidos-expedicao';
 const gerenciamentoServosApiBaseUrl = '/api/gerenciamento-servos/matriz';
+const submontagemSeriaisApiBaseUrl = '/api/submontagem-seriais';
 const AUTO_REFRESH_MS = 15000;
 
 let painelCache = null;
@@ -16,8 +17,10 @@ let materiasPrimasCache = [];
 let submontagensCache = [];
 let fornecedoresCache = [];
 let pedidosDashboardCache = [];
+let historicoPedidosDashboardCache = [];
 let servosDashboardMatriz = null;
 let servosDashboardEscopo = 'global';
+let historicoSeriaisDashboardCache = [];
 let autoRefreshHandle = null;
 
 const refs = {
@@ -96,6 +99,17 @@ const refs = {
   pedidosCardHoje: document.getElementById('dashboard-pedidos-card-hoje'),
   pedidosCardNf: document.getElementById('dashboard-pedidos-card-nf'),
   pedidosCardTransporte: document.getElementById('dashboard-pedidos-card-transporte'),
+  historicoPedidosModal: document.getElementById('dashboard-historico-pedidos-modal'),
+  historicoPedidosTotal: document.getElementById('dashboard-historico-pedidos-total'),
+  historicoPedidosFiltroForm: document.getElementById('dashboard-historico-pedidos-filtro-form'),
+  historicoPedidosFiltroBusca: document.getElementById('dashboard-historico-pedidos-filtro-busca'),
+  historicoPedidosFiltroTransportadora: document.getElementById('dashboard-historico-pedidos-filtro-transportadora'),
+  historicoPedidosFiltroData: document.getElementById('dashboard-historico-pedidos-filtro-data'),
+  historicoPedidosTbody: document.getElementById('dashboard-historico-pedidos-tbody'),
+  historicoPedidosCardColetados: document.getElementById('dashboard-historico-pedidos-card-coletados'),
+  historicoPedidosCardHoje: document.getElementById('dashboard-historico-pedidos-card-hoje'),
+  historicoPedidosCardItens: document.getElementById('dashboard-historico-pedidos-card-itens'),
+  historicoPedidosCardSeriais: document.getElementById('dashboard-historico-pedidos-card-seriais'),
   pedidoDetalheModal: document.getElementById('dashboard-pedido-detalhe-modal'),
   pedidoDetalheTitulo: document.getElementById('dashboard-pedido-detalhe-titulo'),
   pedidoDetalheSubtitulo: document.getElementById('dashboard-pedido-detalhe-subtitulo'),
@@ -109,7 +123,20 @@ const refs = {
   servosThead: document.getElementById('dashboard-servos-thead'),
   servosTbody: document.getElementById('dashboard-servos-tbody'),
   servosBtnDia: document.getElementById('dashboard-servos-btn-dia'),
-  servosBtnGlobal: document.getElementById('dashboard-servos-btn-global')
+  servosBtnGlobal: document.getElementById('dashboard-servos-btn-global'),
+  historicoSeriaisModal: document.getElementById('dashboard-historico-seriais-modal'),
+  historicoSeriaisTotal: document.getElementById('dashboard-historico-seriais-total'),
+  historicoSeriaisFiltroForm: document.getElementById('dashboard-historico-seriais-filtro-form'),
+  historicoSeriaisFiltroNumero: document.getElementById('dashboard-historico-seriais-filtro-numero'),
+  historicoSeriaisFiltroModelo: document.getElementById('dashboard-historico-seriais-filtro-modelo'),
+  historicoSeriaisFiltroMontador: document.getElementById('dashboard-historico-seriais-filtro-montador'),
+  historicoSeriaisFiltroClientePedido: document.getElementById('dashboard-historico-seriais-filtro-cliente-pedido'),
+  historicoSeriaisFiltroData: document.getElementById('dashboard-historico-seriais-filtro-data'),
+  historicoSeriaisFiltroSituacao: document.getElementById('dashboard-historico-seriais-filtro-situacao'),
+  historicoSeriaisTbody: document.getElementById('dashboard-historico-seriais-tbody'),
+  historicoSeriaisCardRegistros: document.getElementById('dashboard-historico-seriais-card-registros'),
+  historicoSeriaisCardDisponiveis: document.getElementById('dashboard-historico-seriais-card-disponiveis'),
+  historicoSeriaisCardSaidas: document.getElementById('dashboard-historico-seriais-card-saidas')
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -136,7 +163,9 @@ function bindEvents() {
   document.getElementById('btn-dashboard-simulacao').addEventListener('click', () => openModal(refs.simulacaoModal));
   document.getElementById('btn-dashboard-indicadores').addEventListener('click', () => openModal(refs.indicadoresModal));
   document.getElementById('btn-dashboard-pedidos').addEventListener('click', abrirModalPedidosDashboard);
+  document.getElementById('btn-dashboard-historico-pedidos').addEventListener('click', abrirModalHistoricoPedidosDashboard);
   document.getElementById('btn-dashboard-servos').addEventListener('click', abrirModalServosDashboard);
+  document.getElementById('btn-dashboard-historico-seriais').addEventListener('click', abrirModalHistoricoSeriaisDashboard);
 
   document.getElementById('btn-fechar-modal-dashboard-estoques').addEventListener('click', () => closeModal(refs.estoquesModal));
   document.getElementById('btn-fechar-modal-dashboard-mp').addEventListener('click', () => closeModal(refs.mpModal));
@@ -144,12 +173,16 @@ function bindEvents() {
   document.getElementById('btn-fechar-modal-dashboard-simulacao').addEventListener('click', () => closeModal(refs.simulacaoModal));
   document.getElementById('btn-fechar-modal-dashboard-indicadores').addEventListener('click', () => closeModal(refs.indicadoresModal));
   document.getElementById('btn-fechar-modal-dashboard-pedidos').addEventListener('click', () => closeModal(refs.pedidosModal));
+  document.getElementById('btn-fechar-modal-dashboard-historico-pedidos').addEventListener('click', () => closeModal(refs.historicoPedidosModal));
   document.getElementById('btn-fechar-modal-dashboard-pedido-detalhe').addEventListener('click', () => closeModal(refs.pedidoDetalheModal));
   document.getElementById('btn-fechar-modal-dashboard-servos').addEventListener('click', () => closeModal(refs.servosModal));
+  document.getElementById('btn-fechar-modal-dashboard-historico-seriais').addEventListener('click', () => closeModal(refs.historicoSeriaisModal));
   document.getElementById('btn-limpar-modal-dashboard-estoques').addEventListener('click', limparFiltrosEstoque);
   document.getElementById('btn-limpar-modal-dashboard-mp').addEventListener('click', limparFiltrosMp);
   document.getElementById('btn-limpar-modal-dashboard-fornecedores').addEventListener('click', limparFiltrosFornecedores);
   document.getElementById('btn-dashboard-pedidos-limpar').addEventListener('click', limparFiltrosPedidosDashboard);
+  document.getElementById('btn-dashboard-historico-pedidos-limpar').addEventListener('click', limparFiltrosHistoricoPedidosDashboard);
+  document.getElementById('btn-dashboard-historico-seriais-limpar').addEventListener('click', limparFiltrosHistoricoSeriaisDashboard);
 
   refs.estoquesFiltroForm.querySelectorAll('input, select').forEach((field) => {
     field.addEventListener('input', renderizarTabelaEstoquesDetalhados);
@@ -170,9 +203,18 @@ function bindEvents() {
     field.addEventListener('change', renderizarPedidosDashboard);
   });
   refs.pedidosTbody.addEventListener('click', handlePedidosDashboardClick);
+  refs.historicoPedidosFiltroForm.querySelectorAll('input, select').forEach((field) => {
+    field.addEventListener('input', renderizarHistoricoPedidosDashboard);
+    field.addEventListener('change', renderizarHistoricoPedidosDashboard);
+  });
+  refs.historicoPedidosTbody.addEventListener('click', handleHistoricoPedidosDashboardClick);
 
   refs.servosBtnDia.addEventListener('click', () => alternarEscopoServosDashboard('dia'));
   refs.servosBtnGlobal.addEventListener('click', () => alternarEscopoServosDashboard('global'));
+  refs.historicoSeriaisFiltroForm.querySelectorAll('input, select').forEach((field) => {
+    field.addEventListener('input', renderizarHistoricoSeriaisDashboard);
+    field.addEventListener('change', renderizarHistoricoSeriaisDashboard);
+  });
 
   refs.simulacaoForm.addEventListener('submit', handleSimulacaoSubmit);
   refs.simulacaoSubmontagemBusca.addEventListener('input', () => {
@@ -182,7 +224,7 @@ function bindEvents() {
   refs.simulacaoSubmontagemBusca.addEventListener('focus', () => renderizarSugestoesSubmontagem(refs.simulacaoSubmontagemBusca.value.trim()));
   refs.simulacaoSugestoes.addEventListener('click', handleSugestaoSubmontagemClick);
 
-  [refs.estoquesModal, refs.mpModal, refs.fornecedoresModal, refs.simulacaoModal, refs.indicadoresModal, refs.pedidosModal, refs.pedidoDetalheModal, refs.servosModal].forEach((modal) => {
+  [refs.estoquesModal, refs.mpModal, refs.fornecedoresModal, refs.simulacaoModal, refs.indicadoresModal, refs.pedidosModal, refs.historicoPedidosModal, refs.pedidoDetalheModal, refs.servosModal, refs.historicoSeriaisModal].forEach((modal) => {
     modal.addEventListener('click', handleBackdrop);
   });
 
@@ -277,6 +319,18 @@ async function carregarPedidosDashboard() {
   renderizarPedidosDashboard();
 }
 
+async function carregarHistoricoPedidosDashboard() {
+  const response = await fetch(`${pedidosExpedicaoApiBaseUrl}?ativos=false`);
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || 'Nao foi possivel carregar o historico de pedidos.');
+  }
+
+  historicoPedidosDashboardCache = Array.isArray(result) ? result : [];
+  renderizarHistoricoPedidosDashboard();
+}
+
 async function carregarServosDashboard() {
   refs.servosTbody.innerHTML = '<tr><td colspan="2" class="empty-state">Carregando matriz de servos...</td></tr>';
 
@@ -289,6 +343,18 @@ async function carregarServosDashboard() {
 
   servosDashboardMatriz = result;
   renderizarServosDashboard();
+}
+
+async function carregarHistoricoSeriaisDashboard() {
+  const response = await fetch(`${submontagemSeriaisApiBaseUrl}?limit=1000`);
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || 'Nao foi possivel carregar o historico de numeros de serie.');
+  }
+
+  historicoSeriaisDashboardCache = Array.isArray(result) ? result : [];
+  renderizarHistoricoSeriaisDashboard();
 }
 
 async function carregarSubmontagens() {
@@ -523,6 +589,54 @@ function renderizarPedidosDashboard() {
   }).join('');
 }
 
+function renderizarHistoricoPedidosDashboard() {
+  const pedidos = obterHistoricoPedidosDashboardFiltrados();
+  const coletadosHoje = historicoPedidosDashboardCache.filter((pedido) => normalizeDateInput(pedido.data_coleta) === normalizeDateInput(new Date())).length;
+  const totalItens = historicoPedidosDashboardCache.reduce((sum, pedido) => sum + obterTotalItensPedidoDashboard(pedido), 0);
+  const totalSeriais = historicoPedidosDashboardCache.reduce((sum, pedido) => (
+    sum + (Array.isArray(pedido.itens)
+      ? pedido.itens.reduce((itemSum, item) => itemSum + (Array.isArray(item.seriais_vinculados) ? item.seriais_vinculados.length : 0), 0)
+      : 0)
+  ), 0);
+
+  refs.historicoPedidosTotal.textContent = `${formatInteger(pedidos.length)} pedido(s) em exibicao`;
+  refs.historicoPedidosCardColetados.textContent = formatInteger(historicoPedidosDashboardCache.length);
+  refs.historicoPedidosCardHoje.textContent = formatInteger(coletadosHoje);
+  refs.historicoPedidosCardItens.textContent = formatInteger(totalItens);
+  refs.historicoPedidosCardSeriais.textContent = formatInteger(totalSeriais);
+
+  if (!historicoPedidosDashboardCache.length) {
+    refs.historicoPedidosTbody.innerHTML = '<tr><td colspan="8" class="empty-state">Nenhum pedido coletado encontrado.</td></tr>';
+    return;
+  }
+
+  if (!pedidos.length) {
+    refs.historicoPedidosTbody.innerHTML = '<tr><td colspan="8" class="empty-state">Nenhum pedido encontrado com os filtros informados.</td></tr>';
+    return;
+  }
+
+  refs.historicoPedidosTbody.innerHTML = pedidos.map((pedido) => {
+    const seriais = Array.isArray(pedido.itens)
+      ? pedido.itens.reduce((sum, item) => sum + (Array.isArray(item.seriais_vinculados) ? item.seriais_vinculados.length : 0), 0)
+      : 0;
+
+    return `
+      <tr>
+        <td>${formatarDataHora(pedido.data_coleta)}</td>
+        <td class="table-code">${escapeHtml(pedido.codigo_pedido || '-')}</td>
+        <td class="table-description">${escapeHtml(pedido.cliente_nome || '-')}</td>
+        <td>${escapeHtml(pedido.cidade || '-')}</td>
+        <td class="table-quantity">${formatInteger(obterTotalItensPedidoDashboard(pedido))}</td>
+        <td class="table-quantity">${formatInteger(seriais)}</td>
+        <td>${escapeHtml(pedido.transportadora || '-')}</td>
+        <td>
+          <button class="btn btn-neutral btn-small" type="button" data-dashboard-historico-pedido-id="${pedido.id}">Ver</button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
 function renderizarDetalhePedidoDashboard(pedido) {
   refs.pedidoDetalheTitulo.textContent = pedido.codigo_pedido
     ? `Pedido ${pedido.codigo_pedido}`
@@ -666,6 +780,41 @@ function renderizarServosDashboard() {
       <td class="servo-sheet-cell servo-sheet-total-muted">-</td>
     </tr>
   `;
+}
+
+function renderizarHistoricoSeriaisDashboard() {
+  const registros = obterHistoricoSeriaisDashboardFiltrado();
+  const disponiveis = historicoSeriaisDashboardCache.filter((registro) => !registro.data_saida).length;
+  const comSaida = historicoSeriaisDashboardCache.filter((registro) => registro.data_saida).length;
+
+  refs.historicoSeriaisTotal.textContent = `${formatInteger(registros.length)} registro(s) encontrado(s)`;
+  refs.historicoSeriaisCardRegistros.textContent = formatInteger(historicoSeriaisDashboardCache.length);
+  refs.historicoSeriaisCardDisponiveis.textContent = formatInteger(disponiveis);
+  refs.historicoSeriaisCardSaidas.textContent = formatInteger(comSaida);
+
+  if (!historicoSeriaisDashboardCache.length) {
+    refs.historicoSeriaisTbody.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhum numero de serie registrado ainda.</td></tr>';
+    return;
+  }
+
+  if (!registros.length) {
+    refs.historicoSeriaisTbody.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhum registro encontrado com os filtros informados.</td></tr>';
+    return;
+  }
+
+  refs.historicoSeriaisTbody.innerHTML = registros.map((registro) => `
+    <tr>
+      <td class="table-code">${escapeHtml(registro.numero_serie || '-')}</td>
+      <td class="table-description">
+        ${escapeHtml(registro.modelo_servo_descricao || '-')}
+        ${registro.modelo_servo_codigo ? `<div class="table-subtext">${escapeHtml(registro.modelo_servo_codigo)}</div>` : ''}
+      </td>
+      <td>${formatarDataHora(registro.data_montagem)}</td>
+      <td>${escapeHtml(registro.montador_nome || '-')}</td>
+      <td>${renderizarPedidoHistoricoSerialDashboard(registro)}</td>
+      <td>${formatarDataHora(registro.data_saida)}</td>
+    </tr>
+  `).join('');
 }
 
 function renderizarTabelaSaidas(items) {
@@ -855,8 +1004,14 @@ function iniciarAtualizacaoAutomatica() {
       if (!refs.pedidosModal.classList.contains('hidden')) {
         await carregarPedidosDashboard();
       }
+      if (!refs.historicoPedidosModal.classList.contains('hidden')) {
+        await carregarHistoricoPedidosDashboard();
+      }
       if (!refs.servosModal.classList.contains('hidden')) {
         await carregarServosDashboard();
+      }
+      if (!refs.historicoSeriaisModal.classList.contains('hidden')) {
+        await carregarHistoricoSeriaisDashboard();
       }
     } catch (error) {
       console.error('Falha ao atualizar o dashboard:', error);
@@ -884,11 +1039,17 @@ function handleBackdrop(event) {
   if (modalName === 'dashboard-pedidos') {
     closeModal(refs.pedidosModal);
   }
+  if (modalName === 'dashboard-historico-pedidos') {
+    closeModal(refs.historicoPedidosModal);
+  }
   if (modalName === 'dashboard-pedido-detalhe') {
     closeModal(refs.pedidoDetalheModal);
   }
   if (modalName === 'dashboard-servos') {
     closeModal(refs.servosModal);
+  }
+  if (modalName === 'dashboard-historico-seriais') {
+    closeModal(refs.historicoSeriaisModal);
   }
 }
 
@@ -907,8 +1068,18 @@ function handleKeyboardShortcuts(event) {
     return;
   }
 
+  if (!refs.historicoSeriaisModal.classList.contains('hidden')) {
+    closeModal(refs.historicoSeriaisModal);
+    return;
+  }
+
   if (!refs.pedidoDetalheModal.classList.contains('hidden')) {
     closeModal(refs.pedidoDetalheModal);
+    return;
+  }
+
+  if (!refs.historicoPedidosModal.classList.contains('hidden')) {
+    closeModal(refs.historicoPedidosModal);
     return;
   }
 
@@ -946,7 +1117,7 @@ function openModal(modal) {
 function closeModal(modal) {
   modal.classList.add('hidden');
   modal.setAttribute('aria-hidden', 'true');
-  const hasModal = [refs.estoquesModal, refs.mpModal, refs.fornecedoresModal, refs.simulacaoModal, refs.indicadoresModal, refs.pedidosModal, refs.pedidoDetalheModal, refs.servosModal]
+  const hasModal = [refs.estoquesModal, refs.mpModal, refs.fornecedoresModal, refs.simulacaoModal, refs.indicadoresModal, refs.pedidosModal, refs.historicoPedidosModal, refs.pedidoDetalheModal, refs.servosModal, refs.historicoSeriaisModal]
     .some((entry) => !entry.classList.contains('hidden'));
   document.body.classList.toggle('has-modal', hasModal);
 }
@@ -969,11 +1140,21 @@ function fecharModalFornecedores() {
 
 async function abrirModalPedidosDashboard() {
   try {
-    refs.pedidosTbody.innerHTML = '<tr><td colspan="8" class="empty-state">Carregando pedidos ativos...</td></tr>';
+    refs.pedidosTbody.innerHTML = '<tr><td colspan="9" class="empty-state">Carregando pedidos ativos...</td></tr>';
     openModal(refs.pedidosModal);
     await carregarPedidosDashboard();
   } catch (error) {
-    refs.pedidosTbody.innerHTML = `<tr><td colspan="8" class="empty-state">${escapeHtml(error.message)}</td></tr>`;
+    refs.pedidosTbody.innerHTML = `<tr><td colspan="9" class="empty-state">${escapeHtml(error.message)}</td></tr>`;
+  }
+}
+
+async function abrirModalHistoricoPedidosDashboard() {
+  try {
+    refs.historicoPedidosTbody.innerHTML = '<tr><td colspan="8" class="empty-state">Carregando historico de pedidos...</td></tr>';
+    openModal(refs.historicoPedidosModal);
+    await carregarHistoricoPedidosDashboard();
+  } catch (error) {
+    refs.historicoPedidosTbody.innerHTML = `<tr><td colspan="8" class="empty-state">${escapeHtml(error.message)}</td></tr>`;
   }
 }
 
@@ -983,6 +1164,16 @@ async function abrirModalServosDashboard() {
     await carregarServosDashboard();
   } catch (error) {
     refs.servosTbody.innerHTML = `<tr><td colspan="2" class="empty-state">${escapeHtml(error.message)}</td></tr>`;
+  }
+}
+
+async function abrirModalHistoricoSeriaisDashboard() {
+  try {
+    refs.historicoSeriaisTbody.innerHTML = '<tr><td colspan="6" class="empty-state">Carregando historico de numeros...</td></tr>';
+    openModal(refs.historicoSeriaisModal);
+    await carregarHistoricoSeriaisDashboard();
+  } catch (error) {
+    refs.historicoSeriaisTbody.innerHTML = `<tr><td colspan="6" class="empty-state">${escapeHtml(error.message)}</td></tr>`;
   }
 }
 
@@ -996,6 +1187,23 @@ function handlePedidosDashboardClick(event) {
   const pedido = pedidosDashboardCache.find((item) => Number(item.id) === pedidoId);
   if (!pedido) {
     mostrarMensagem('Pedido nao encontrado na consulta atual.', 'error');
+    return;
+  }
+
+  renderizarDetalhePedidoDashboard(pedido);
+  openModal(refs.pedidoDetalheModal);
+}
+
+function handleHistoricoPedidosDashboardClick(event) {
+  const trigger = event.target.closest('[data-dashboard-historico-pedido-id]');
+  if (!trigger) {
+    return;
+  }
+
+  const pedidoId = Number(trigger.dataset.dashboardHistoricoPedidoId);
+  const pedido = historicoPedidosDashboardCache.find((item) => Number(item.id) === pedidoId);
+  if (!pedido) {
+    mostrarMensagem('Pedido nao encontrado no historico atual.', 'error');
     return;
   }
 
@@ -1243,6 +1451,16 @@ function limparFiltrosPedidosDashboard() {
   renderizarPedidosDashboard();
 }
 
+function limparFiltrosHistoricoPedidosDashboard() {
+  refs.historicoPedidosFiltroForm.reset();
+  renderizarHistoricoPedidosDashboard();
+}
+
+function limparFiltrosHistoricoSeriaisDashboard() {
+  refs.historicoSeriaisFiltroForm.reset();
+  renderizarHistoricoSeriaisDashboard();
+}
+
 function obterPedidosDashboardFiltrados() {
   const busca = normalizarBusca(refs.pedidosFiltroBusca.value.trim());
   const status = String(refs.pedidosFiltroStatus.value || '').trim().toUpperCase();
@@ -1276,6 +1494,80 @@ function obterPedidosDashboardFiltrados() {
       return Number(a.prioridade_ordem || 0) - Number(b.prioridade_ordem || 0)
         || Number(a.id || 0) - Number(b.id || 0);
     });
+}
+
+function obterHistoricoPedidosDashboardFiltrados() {
+  const busca = normalizarBusca(refs.historicoPedidosFiltroBusca.value.trim());
+  const transportadora = normalizarBusca(refs.historicoPedidosFiltroTransportadora.value.trim());
+  const data = String(refs.historicoPedidosFiltroData.value || '').trim();
+
+  return historicoPedidosDashboardCache
+    .filter((pedido) => {
+      if (transportadora && !normalizarBusca(pedido.transportadora).includes(transportadora)) {
+        return false;
+      }
+
+      if (data && normalizeDateInput(pedido.data_coleta || pedido.data_pedido) !== data) {
+        return false;
+      }
+
+      if (!busca) {
+        return true;
+      }
+
+      return [
+        pedido.codigo_pedido,
+        pedido.cliente_nome,
+        pedido.cidade,
+        pedido.vendedora
+      ].some((value) => normalizarBusca(value).includes(busca));
+    })
+    .sort((a, b) => {
+      const dataA = new Date(a.data_coleta || a.data_pedido || 0).getTime();
+      const dataB = new Date(b.data_coleta || b.data_pedido || 0).getTime();
+      return dataB - dataA || Number(b.id || 0) - Number(a.id || 0);
+    });
+}
+
+function obterHistoricoSeriaisDashboardFiltrado() {
+  const numero = normalizarBusca(refs.historicoSeriaisFiltroNumero.value.trim());
+  const modelo = normalizarBusca(refs.historicoSeriaisFiltroModelo.value.trim());
+  const montador = normalizarBusca(refs.historicoSeriaisFiltroMontador.value.trim());
+  const clientePedido = normalizarBusca(refs.historicoSeriaisFiltroClientePedido.value.trim());
+  const data = String(refs.historicoSeriaisFiltroData.value || '').trim();
+  const situacao = String(refs.historicoSeriaisFiltroSituacao.value || '').trim();
+
+  return historicoSeriaisDashboardCache.filter((registro) => {
+    if (numero && !normalizarBusca(registro.numero_serie).includes(numero)) {
+      return false;
+    }
+
+    if (modelo && !normalizarBusca(`${registro.modelo_servo_codigo} ${registro.modelo_servo_descricao}`).includes(modelo)) {
+      return false;
+    }
+
+    if (montador && !normalizarBusca(registro.montador_nome).includes(montador)) {
+      return false;
+    }
+
+    if (clientePedido && !normalizarBusca(`${registro.cliente_nome} ${registro.numero_pedido}`).includes(clientePedido)) {
+      return false;
+    }
+
+    if (data && normalizeDateInput(registro.data_montagem) !== data) {
+      return false;
+    }
+
+    if (situacao === 'disponivel' && registro.data_saida) {
+      return false;
+    }
+
+    if (situacao === 'com_saida' && !registro.data_saida) {
+      return false;
+    }
+
+    return true;
+  });
 }
 
 function isPedidoProgramadoHoje(pedido) {
@@ -1392,6 +1684,27 @@ function renderServoMateriaPrimaCell(materiaPrima) {
       ${formatServoNumber(quantidade)}
     </td>
   `;
+}
+
+function renderizarPedidoHistoricoSerialDashboard(registro) {
+  if (!registro.numero_pedido) {
+    return '-';
+  }
+
+  return `
+    <span class="table-description">${escapeHtml(registro.cliente_nome || 'Sem cliente')}</span>
+    <div class="table-subtext">${escapeHtml(registro.numero_pedido)}</div>
+  `;
+}
+
+function obterTotalItensPedidoDashboard(pedido) {
+  if (Number(pedido?.total_itens || 0) > 0) {
+    return Number(pedido.total_itens || 0);
+  }
+
+  return Array.isArray(pedido?.itens)
+    ? pedido.itens.reduce((sum, item) => sum + Number(item.quantidade || 0), 0)
+    : 0;
 }
 
 function formatServoNumber(value) {

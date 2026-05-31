@@ -71,7 +71,9 @@
               <a class="btn btn-secondary" href="/pagina-pecas-inacabadas"><span class="btn-label">Pecas Inacabadas</span></a>
               <a class="btn btn-secondary" href="/pagina-retrabalho"><span class="btn-label">Retrabalho</span></a>
               <button id="btn-dashboard-pedidos" class="btn btn-primary" type="button"><span class="btn-label">Gerenciamento de Pedidos Ativos</span></button>
+              <button id="btn-dashboard-historico-pedidos" class="btn btn-secondary" type="button"><span class="btn-label">Historico de Pedidos</span></button>
               <button id="btn-dashboard-servos" class="btn btn-secondary" type="button"><span class="btn-label">Gerenciamento de Servos</span></button>
+              <button id="btn-dashboard-historico-seriais" class="btn btn-secondary" type="button"><span class="btn-label">Historico de Numeros de Serie</span></button>
               <a class="btn btn-secondary" href="/pagina-saidas-expedicao"><span class="btn-label">Saidas da Expedicao</span></a>
             </div>
           </div>
@@ -677,6 +679,86 @@
     </div>
   </div>
 
+  <div id="dashboard-historico-pedidos-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="dashboard-historico-pedidos"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Historico</span>
+          <h2>Historico de Pedidos</h2>
+          <p id="dashboard-historico-pedidos-total">0 pedido(s) coletado(s)</p>
+        </div>
+
+        <button id="btn-fechar-modal-dashboard-historico-pedidos" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div class="view-grid">
+        <div class="view-card">
+          <span>Coletados</span>
+          <strong id="dashboard-historico-pedidos-card-coletados">0</strong>
+        </div>
+        <div class="view-card">
+          <span>Coletados hoje</span>
+          <strong id="dashboard-historico-pedidos-card-hoje">0</strong>
+        </div>
+        <div class="view-card">
+          <span>Itens</span>
+          <strong id="dashboard-historico-pedidos-card-itens">0</strong>
+        </div>
+        <div class="view-card">
+          <span>Seriais</span>
+          <strong id="dashboard-historico-pedidos-card-seriais">0</strong>
+        </div>
+      </div>
+
+      <div class="subtle-divider"></div>
+
+      <form id="dashboard-historico-pedidos-filtro-form" class="toolbar-form stock-toolbar">
+        <div class="field">
+          <label for="dashboard-historico-pedidos-filtro-busca">Busca</label>
+          <input id="dashboard-historico-pedidos-filtro-busca" type="text" placeholder="Cliente, pedido, cidade ou vendedora">
+        </div>
+
+        <div class="field">
+          <label for="dashboard-historico-pedidos-filtro-transportadora">Transportadora</label>
+          <input id="dashboard-historico-pedidos-filtro-transportadora" type="text" placeholder="Nome da transportadora">
+        </div>
+
+        <div class="field">
+          <label for="dashboard-historico-pedidos-filtro-data">Data da coleta</label>
+          <input id="dashboard-historico-pedidos-filtro-data" type="date">
+        </div>
+
+        <div class="toolbar-actions">
+          <button id="btn-dashboard-historico-pedidos-limpar" class="btn btn-neutral" type="button">Limpar</button>
+        </div>
+      </form>
+
+      <div class="table-wrapper dashboard-observer-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Coleta</th>
+              <th>Pedido</th>
+              <th>Cliente</th>
+              <th>Cidade</th>
+              <th>Itens</th>
+              <th>Seriais</th>
+              <th>Transportadora</th>
+              <th>Detalhes</th>
+            </tr>
+          </thead>
+          <tbody id="dashboard-historico-pedidos-tbody">
+            <tr>
+              <td colspan="8" class="empty-state">Carregando historico de pedidos...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <div id="dashboard-pedido-detalhe-modal" class="modal hidden" aria-hidden="true">
     <div class="modal-backdrop" data-close-modal="dashboard-pedido-detalhe"></div>
 
@@ -758,6 +840,99 @@
           <tbody id="dashboard-servos-tbody">
             <tr>
               <td colspan="2" class="empty-state">Carregando matriz de servos...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="dashboard-historico-seriais-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="dashboard-historico-seriais"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Historico</span>
+          <h2>Historico de Numeros de Serie</h2>
+          <p id="dashboard-historico-seriais-total">0 registro(s) encontrado(s)</p>
+        </div>
+
+        <button id="btn-fechar-modal-dashboard-historico-seriais" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div class="view-grid">
+        <div class="view-card">
+          <span>Registros</span>
+          <strong id="dashboard-historico-seriais-card-registros">0</strong>
+        </div>
+        <div class="view-card">
+          <span>Disponiveis</span>
+          <strong id="dashboard-historico-seriais-card-disponiveis">0</strong>
+        </div>
+        <div class="view-card">
+          <span>Com saida</span>
+          <strong id="dashboard-historico-seriais-card-saidas">0</strong>
+        </div>
+      </div>
+
+      <div class="subtle-divider"></div>
+
+      <form id="dashboard-historico-seriais-filtro-form" class="toolbar-form stock-toolbar">
+        <div class="field">
+          <label for="dashboard-historico-seriais-filtro-numero">Numero de serie</label>
+          <input id="dashboard-historico-seriais-filtro-numero" type="text" placeholder="Ex.: 000123">
+        </div>
+
+        <div class="field">
+          <label for="dashboard-historico-seriais-filtro-modelo">Modelo</label>
+          <input id="dashboard-historico-seriais-filtro-modelo" type="text" placeholder="Codigo ou descricao">
+        </div>
+
+        <div class="field">
+          <label for="dashboard-historico-seriais-filtro-montador">Montador</label>
+          <input id="dashboard-historico-seriais-filtro-montador" type="text" placeholder="Nome do montador">
+        </div>
+
+        <div class="field">
+          <label for="dashboard-historico-seriais-filtro-cliente-pedido">Cliente / Pedido</label>
+          <input id="dashboard-historico-seriais-filtro-cliente-pedido" type="text" placeholder="Cliente ou pedido">
+        </div>
+
+        <div class="field">
+          <label for="dashboard-historico-seriais-filtro-data">Data da montagem</label>
+          <input id="dashboard-historico-seriais-filtro-data" type="date">
+        </div>
+
+        <div class="field">
+          <label for="dashboard-historico-seriais-filtro-situacao">Situacao</label>
+          <select id="dashboard-historico-seriais-filtro-situacao">
+            <option value="">Todas</option>
+            <option value="disponivel">Disponiveis</option>
+            <option value="com_saida">Com saida</option>
+          </select>
+        </div>
+
+        <div class="toolbar-actions">
+          <button id="btn-dashboard-historico-seriais-limpar" class="btn btn-neutral" type="button">Limpar</button>
+        </div>
+      </form>
+
+      <div class="table-wrapper dashboard-observer-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Numero de serie</th>
+              <th>Modelo</th>
+              <th>Data da montagem</th>
+              <th>Montador</th>
+              <th>Cliente / Pedido</th>
+              <th>Data da saida</th>
+            </tr>
+          </thead>
+          <tbody id="dashboard-historico-seriais-tbody">
+            <tr>
+              <td colspan="6" class="empty-state">Carregando historico de numeros...</td>
             </tr>
           </tbody>
         </table>
