@@ -3558,6 +3558,19 @@ th {
   min-width: 980px;
 }
 
+.dashboard-detail-chip {
+  display: inline-flex;
+  align-items: center;
+  margin: 2px 4px 2px 0;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: rgba(226, 236, 247, 0.92);
+  color: var(--primary-900);
+  font-size: 0.74rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
 tbody tr:nth-child(even) {
   background: rgba(238, 245, 252, 0.4);
 }

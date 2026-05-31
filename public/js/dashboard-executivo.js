@@ -96,6 +96,12 @@ const refs = {
   pedidosCardHoje: document.getElementById('dashboard-pedidos-card-hoje'),
   pedidosCardNf: document.getElementById('dashboard-pedidos-card-nf'),
   pedidosCardTransporte: document.getElementById('dashboard-pedidos-card-transporte'),
+  pedidoDetalheModal: document.getElementById('dashboard-pedido-detalhe-modal'),
+  pedidoDetalheTitulo: document.getElementById('dashboard-pedido-detalhe-titulo'),
+  pedidoDetalheSubtitulo: document.getElementById('dashboard-pedido-detalhe-subtitulo'),
+  pedidoDetalheResumo: document.getElementById('dashboard-pedido-detalhe-resumo'),
+  pedidoDetalheObservacao: document.getElementById('dashboard-pedido-detalhe-observacao'),
+  pedidoDetalheItensTbody: document.getElementById('dashboard-pedido-detalhe-itens-tbody'),
   servosModal: document.getElementById('dashboard-servos-modal'),
   servosTitulo: document.getElementById('dashboard-servos-titulo'),
   servosSubtitulo: document.getElementById('dashboard-servos-subtitulo'),
@@ -138,6 +144,7 @@ function bindEvents() {
   document.getElementById('btn-fechar-modal-dashboard-simulacao').addEventListener('click', () => closeModal(refs.simulacaoModal));
   document.getElementById('btn-fechar-modal-dashboard-indicadores').addEventListener('click', () => closeModal(refs.indicadoresModal));
   document.getElementById('btn-fechar-modal-dashboard-pedidos').addEventListener('click', () => closeModal(refs.pedidosModal));
+  document.getElementById('btn-fechar-modal-dashboard-pedido-detalhe').addEventListener('click', () => closeModal(refs.pedidoDetalheModal));
   document.getElementById('btn-fechar-modal-dashboard-servos').addEventListener('click', () => closeModal(refs.servosModal));
   document.getElementById('btn-limpar-modal-dashboard-estoques').addEventListener('click', limparFiltrosEstoque);
   document.getElementById('btn-limpar-modal-dashboard-mp').addEventListener('click', limparFiltrosMp);
@@ -162,6 +169,7 @@ function bindEvents() {
     field.addEventListener('input', renderizarPedidosDashboard);
     field.addEventListener('change', renderizarPedidosDashboard);
   });
+  refs.pedidosTbody.addEventListener('click', handlePedidosDashboardClick);
 
   refs.servosBtnDia.addEventListener('click', () => alternarEscopoServosDashboard('dia'));
   refs.servosBtnGlobal.addEventListener('click', () => alternarEscopoServosDashboard('global'));
@@ -174,7 +182,7 @@ function bindEvents() {
   refs.simulacaoSubmontagemBusca.addEventListener('focus', () => renderizarSugestoesSubmontagem(refs.simulacaoSubmontagemBusca.value.trim()));
   refs.simulacaoSugestoes.addEventListener('click', handleSugestaoSubmontagemClick);
 
-  [refs.estoquesModal, refs.mpModal, refs.fornecedoresModal, refs.simulacaoModal, refs.indicadoresModal, refs.pedidosModal, refs.servosModal].forEach((modal) => {
+  [refs.estoquesModal, refs.mpModal, refs.fornecedoresModal, refs.simulacaoModal, refs.indicadoresModal, refs.pedidosModal, refs.pedidoDetalheModal, refs.servosModal].forEach((modal) => {
     modal.addEventListener('click', handleBackdrop);
   });
 
@@ -489,7 +497,7 @@ function renderizarPedidosDashboard() {
   refs.pedidosCardTransporte.textContent = formatInteger(aguardandoTransporte);
 
   if (!pedidos.length) {
-    refs.pedidosTbody.innerHTML = '<tr><td colspan="8" class="empty-state">Nenhum pedido ativo encontrado com os filtros informados.</td></tr>';
+    refs.pedidosTbody.innerHTML = '<tr><td colspan="9" class="empty-state">Nenhum pedido ativo encontrado com os filtros informados.</td></tr>';
     return;
   }
 
@@ -507,9 +515,68 @@ function renderizarPedidosDashboard() {
         <td class="table-quantity">${escapeHtml(progresso)}</td>
         <td class="table-quantity">${formatInteger(faltas)}</td>
         <td>${escapeHtml(pedido.transportadora || '-')}</td>
+        <td>
+          <button class="btn btn-neutral btn-small" type="button" data-dashboard-pedido-id="${pedido.id}">Ver</button>
+        </td>
       </tr>
     `;
   }).join('');
+}
+
+function renderizarDetalhePedidoDashboard(pedido) {
+  refs.pedidoDetalheTitulo.textContent = pedido.codigo_pedido
+    ? `Pedido ${pedido.codigo_pedido}`
+    : `Pedido #${pedido.id}`;
+  refs.pedidoDetalheSubtitulo.textContent = `${pedido.cliente_nome || '-'} | ${pedido.cidade || '-'}`;
+
+  const faltas = Array.isArray(pedido.faltantes) ? pedido.faltantes.length : 0;
+  refs.pedidoDetalheResumo.innerHTML = `
+    <div class="view-card">
+      <span>Status</span>
+      <strong>${escapeHtml(obterTextoStatusPedidoDashboard(pedido))}</strong>
+    </div>
+    <div class="view-card">
+      <span>Saida</span>
+      <strong>${escapeHtml(isPedidoProgramadoHoje(pedido) ? 'Hoje' : formatarDataCurta(pedido.data_programacao_saida))}</strong>
+    </div>
+    <div class="view-card">
+      <span>Itens</span>
+      <strong>${formatInteger(pedido.itens_concluidos || 0)}/${formatInteger(pedido.total_itens || 0)}</strong>
+    </div>
+    <div class="view-card">
+      <span>Faltas</span>
+      <strong>${formatInteger(faltas)}</strong>
+    </div>
+    <div class="view-card">
+      <span>Transportadora</span>
+      <strong>${escapeHtml(pedido.transportadora || '-')}</strong>
+    </div>
+    <div class="view-card">
+      <span>Vendedora</span>
+      <strong>${escapeHtml(pedido.vendedora || '-')}</strong>
+    </div>
+  `;
+
+  const observacao = String(pedido.observacao || '').trim();
+  refs.pedidoDetalheObservacao.className = observacao ? 'message warning' : 'message hidden';
+  refs.pedidoDetalheObservacao.textContent = observacao ? `Observacao: ${observacao}` : '';
+
+  const itens = Array.isArray(pedido.itens) ? pedido.itens : [];
+  if (!itens.length) {
+    refs.pedidoDetalheItensTbody.innerHTML = '<tr><td colspan="6" class="empty-state">Pedido sem itens cadastrados.</td></tr>';
+    return;
+  }
+
+  refs.pedidoDetalheItensTbody.innerHTML = itens.map((item) => `
+    <tr>
+      <td class="table-code">${escapeHtml(item.codigo || '-')}</td>
+      <td class="table-description">${escapeHtml(item.descricao || '-')}</td>
+      <td class="table-quantity">${formatInteger(item.quantidade || 0)}</td>
+      <td>${renderizarStatusItemPedidoDashboard(item)}</td>
+      <td>${escapeHtml(formatarSeriaisItemPedidoDashboard(item))}</td>
+      <td class="table-description">${renderizarComponentesItemPedidoDashboard(item)}</td>
+    </tr>
+  `).join('');
 }
 
 function renderizarServosDashboard() {
@@ -817,6 +884,9 @@ function handleBackdrop(event) {
   if (modalName === 'dashboard-pedidos') {
     closeModal(refs.pedidosModal);
   }
+  if (modalName === 'dashboard-pedido-detalhe') {
+    closeModal(refs.pedidoDetalheModal);
+  }
   if (modalName === 'dashboard-servos') {
     closeModal(refs.servosModal);
   }
@@ -834,6 +904,11 @@ function handleKeyboardShortcuts(event) {
 
   if (!refs.servosModal.classList.contains('hidden')) {
     closeModal(refs.servosModal);
+    return;
+  }
+
+  if (!refs.pedidoDetalheModal.classList.contains('hidden')) {
+    closeModal(refs.pedidoDetalheModal);
     return;
   }
 
@@ -871,7 +946,7 @@ function openModal(modal) {
 function closeModal(modal) {
   modal.classList.add('hidden');
   modal.setAttribute('aria-hidden', 'true');
-  const hasModal = [refs.estoquesModal, refs.mpModal, refs.fornecedoresModal, refs.simulacaoModal, refs.indicadoresModal, refs.pedidosModal, refs.servosModal]
+  const hasModal = [refs.estoquesModal, refs.mpModal, refs.fornecedoresModal, refs.simulacaoModal, refs.indicadoresModal, refs.pedidosModal, refs.pedidoDetalheModal, refs.servosModal]
     .some((entry) => !entry.classList.contains('hidden'));
   document.body.classList.toggle('has-modal', hasModal);
 }
@@ -909,6 +984,23 @@ async function abrirModalServosDashboard() {
   } catch (error) {
     refs.servosTbody.innerHTML = `<tr><td colspan="2" class="empty-state">${escapeHtml(error.message)}</td></tr>`;
   }
+}
+
+function handlePedidosDashboardClick(event) {
+  const trigger = event.target.closest('[data-dashboard-pedido-id]');
+  if (!trigger) {
+    return;
+  }
+
+  const pedidoId = Number(trigger.dataset.dashboardPedidoId);
+  const pedido = pedidosDashboardCache.find((item) => Number(item.id) === pedidoId);
+  if (!pedido) {
+    mostrarMensagem('Pedido nao encontrado na consulta atual.', 'error');
+    return;
+  }
+
+  renderizarDetalhePedidoDashboard(pedido);
+  openModal(refs.pedidoDetalheModal);
 }
 
 async function alternarEscopoServosDashboard(escopo) {
@@ -1234,6 +1326,53 @@ function obterTextoStatusPedidoDashboard(pedido) {
   }
 
   return pedido?.status || 'AGUARDANDO MONTAGEM';
+}
+
+function renderizarStatusItemPedidoDashboard(item) {
+  const texto = item.concluido ? 'Concluido' : item.pode_atender ? 'Disponivel' : 'Pendente';
+  let cssClass = 'status-chip';
+
+  if (texto === 'Concluido') {
+    cssClass += ' is-success';
+  } else if (texto === 'Disponivel') {
+    cssClass += ' is-info';
+  } else {
+    cssClass += ' is-warning';
+  }
+
+  return `<span class="${cssClass}">${escapeHtml(texto)}</span>`;
+}
+
+function formatarSeriaisItemPedidoDashboard(item) {
+  if (!item.exige_numero_serie) {
+    return '-';
+  }
+
+  const vinculados = Array.isArray(item.seriais_vinculados) ? item.seriais_vinculados.length : 0;
+  const necessarios = Number(item.quantidade_seriais_necessarios || item.quantidade || 0);
+  return `${formatInteger(vinculados)}/${formatInteger(necessarios)}`;
+}
+
+function renderizarComponentesItemPedidoDashboard(item) {
+  const componentes = [];
+
+  if (item.componente_serial) {
+    componentes.push(`${item.componente_serial.codigo || '-'} x ${formatDecimal(item.quantidade_seriais_necessarios || 0)}`);
+  }
+
+  (item.componentes_avulsos || []).forEach((componente) => {
+    const quantidade = Number(item.quantidade || 0) * Number(componente.quantidade_por_item_venda || 0);
+    componentes.push(`${componente.codigo || '-'} x ${formatDecimal(quantidade)}`);
+  });
+
+  if (!componentes.length) {
+    return '-';
+  }
+
+  return componentes
+    .slice(0, 4)
+    .map((componente) => `<span class="dashboard-detail-chip">${escapeHtml(componente)}</span>`)
+    .join('') + (componentes.length > 4 ? `<span class="dashboard-detail-chip">+${componentes.length - 4}</span>` : '');
 }
 
 function renderServoMetricCell(value, extraClass = '') {

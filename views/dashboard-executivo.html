@@ -664,11 +664,54 @@
               <th>Itens</th>
               <th>Faltas</th>
               <th>Transportadora</th>
+              <th>Detalhes</th>
             </tr>
           </thead>
           <tbody id="dashboard-pedidos-tbody">
             <tr>
-              <td colspan="8" class="empty-state">Carregando pedidos ativos...</td>
+              <td colspan="9" class="empty-state">Carregando pedidos ativos...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="dashboard-pedido-detalhe-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="dashboard-pedido-detalhe"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Pedido</span>
+          <h2 id="dashboard-pedido-detalhe-titulo">Detalhes do pedido</h2>
+          <p id="dashboard-pedido-detalhe-subtitulo">Visualizacao de itens e andamento.</p>
+        </div>
+
+        <button id="btn-fechar-modal-dashboard-pedido-detalhe" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="dashboard-pedido-detalhe-resumo" class="view-grid"></div>
+
+      <div id="dashboard-pedido-detalhe-observacao" class="message hidden"></div>
+
+      <div class="subtle-divider"></div>
+
+      <div class="table-wrapper dashboard-observer-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Codigo</th>
+              <th>Descricao</th>
+              <th>Qtd.</th>
+              <th>Status</th>
+              <th>Seriais</th>
+              <th>Componentes</th>
+            </tr>
+          </thead>
+          <tbody id="dashboard-pedido-detalhe-itens-tbody">
+            <tr>
+              <td colspan="6" class="empty-state">Selecione um pedido para visualizar os itens.</td>
             </tr>
           </tbody>
         </table>
