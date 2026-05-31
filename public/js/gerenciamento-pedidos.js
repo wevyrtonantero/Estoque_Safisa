@@ -1883,7 +1883,7 @@ async function handleDetalheItemChanges(event) {
     renderizarItensPedidoDetalhe(pedido);
     atualizarIndicadores();
     renderizarPedidos();
-    notificarAtualizacaoOperacional(['pedidos-expedicao']);
+    notificarAtualizacaoOperacional(['pedidos-expedicao', 'estoque']);
     refs.detalheResumo.innerHTML = `
       <span class="selected-tag">${escapeHtml(pedido.status)}</span>
       <span class="selected-tag">Itens: ${formatInteger(pedido.itens_concluidos || 0)}/${formatInteger(pedido.total_itens || 0)}</span>

@@ -291,8 +291,8 @@ textarea {
 
 .servo-sheet-total-col,
   .servo-sheet-total-cell {
-    width: 42px;
-    min-width: 42px;
+    width: 48px;
+    min-width: 48px;
     text-align: center;
     font-weight: 800;
     color: #06aa84;
@@ -327,7 +327,7 @@ textarea {
 }
 
 .servo-sheet-total-col.servo-sheet-head-accent {
-  font-size: 0.52rem;
+  font-size: 0.62rem;
   letter-spacing: 0.05em;
 }
 
@@ -342,7 +342,7 @@ textarea {
 .servo-sheet-vertical-col > span,
 .servo-sheet-vertical-col {
   color: #6f84a3;
-  font-size: 0.53rem;
+  font-size: 0.58rem;
   font-weight: 700;
   letter-spacing: 0.06em;
 }
@@ -355,6 +355,29 @@ textarea {
   padding: 4px 0;
   writing-mode: vertical-rl;
   transform: rotate(180deg);
+  text-transform: uppercase;
+}
+
+.servo-sheet-resource-col {
+  width: 52px;
+  min-width: 52px;
+  max-width: 52px;
+  height: 116px;
+  text-align: center;
+  vertical-align: bottom;
+  color: #6f84a3;
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.servo-sheet-resource-col > span {
+  display: inline-block;
+  width: 78px;
+  margin: 0 0 22px 10px;
+  transform: rotate(-45deg);
+  transform-origin: center center;
+  white-space: nowrap;
   text-transform: uppercase;
 }
 
@@ -376,7 +399,7 @@ textarea {
   display: inline-flex;
   align-items: flex-start;
   gap: 4px;
-  font-size: 0.64rem;
+  font-size: 0.76rem;
   font-weight: 800;
   letter-spacing: 0.01em;
   text-transform: uppercase;
@@ -394,12 +417,12 @@ textarea {
   .servo-sheet-total-cell {
     padding: 6px 6px !important;
     text-align: center;
-    font-size: 0.69rem;
+    font-size: 0.82rem;
     font-weight: 800;
   }
 
 .servo-sheet-total-cell {
-  font-size: 0.76rem;
+  font-size: 0.86rem;
   background: #fbfdff;
 }
 
@@ -460,7 +483,7 @@ textarea {
   }
 
   .servo-sheet-model-title {
-    font-size: 0.66rem;
+    font-size: 0.72rem;
   }
 }
 
@@ -536,7 +559,20 @@ textarea {
 
   .servo-sheet-vertical-col > span {
     min-height: 88px;
-    font-size: 0.48rem;
+    font-size: 0.52rem;
+  }
+
+  .servo-sheet-resource-col {
+    width: 40px;
+    min-width: 40px;
+    max-width: 40px;
+    height: 88px;
+    font-size: 0.58rem;
+  }
+
+  .servo-sheet-resource-col > span {
+    width: 64px;
+    margin: 0 0 17px 8px;
   }
 
   .servo-sheet-model-cell {
@@ -544,13 +580,13 @@ textarea {
   }
 
   .servo-sheet-model-title {
-    font-size: 0.56rem;
+    font-size: 0.68rem;
   }
 
   .servo-sheet-cell,
   .servo-sheet-total-cell {
     padding: 4px 4px !important;
-    font-size: 0.58rem;
+    font-size: 0.68rem;
   }
 
   .servo-sheet-total-row th,
@@ -1914,6 +1950,7 @@ textarea {
   gap: 10px;
 }
 
+.span-2 { grid-column: span 2; }
 .span-3 { grid-column: span 3; }
 .span-4 { grid-column: span 4; }
 .span-5 { grid-column: span 5; }
@@ -4032,6 +4069,112 @@ tbody tr:hover {
   background: #fff;
 }
 
+.numero-serie-register-grid {
+  align-items: end;
+}
+
+.numero-serie-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+  padding: 18px;
+  border: 1px solid rgba(29, 92, 151, 0.18);
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(255, 247, 236, 0.96), rgba(232, 243, 253, 0.96)),
+    #ffffff;
+}
+
+.numero-serie-stage-main {
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+  text-align: center;
+}
+
+.numero-serie-stage-main span {
+  color: var(--text-soft);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.numero-serie-stage-main strong {
+  display: block;
+  width: min(100%, 360px);
+  padding: 10px 18px;
+  border-radius: 18px;
+  color: #ffffff;
+  font-size: 2.25rem;
+  line-height: 1.1;
+  background: linear-gradient(135deg, var(--primary-800), var(--accent));
+  box-shadow: 0 18px 32px rgba(18, 66, 118, 0.2);
+  overflow-wrap: anywhere;
+}
+
+.numero-serie-stage-main small {
+  color: var(--primary-800);
+  font-weight: 700;
+}
+
+.numero-serie-stage-actions,
+.numero-serie-mode-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.numero-serie-mode-row {
+  justify-content: space-between;
+  padding: 12px 14px;
+  border: 1px dashed rgba(18, 66, 118, 0.22);
+  border-radius: 16px;
+  background: rgba(245, 249, 253, 0.86);
+}
+
+.numero-serie-manual-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--primary-900);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.numero-serie-manual-toggle input {
+  width: 20px;
+  height: 20px;
+}
+
+.numero-serie-manual-field {
+  width: min(100%, 300px);
+}
+
+.numero-serie-register-grid .field input,
+.numero-serie-register-grid .field select {
+  padding-block: 10px;
+  border-radius: 10px;
+}
+
+.numero-serie-modal-actions {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.btn-serial-register {
+  min-width: 180px;
+  background: linear-gradient(135deg, #1e8b68, #ef8b1d);
+  box-shadow: 0 16px 28px rgba(30, 139, 104, 0.2);
+}
+
+.btn-serial-register:hover {
+  background: linear-gradient(135deg, #177a5b, #d97813);
+}
+
 @keyframes portalButtonPulse {
   0%,
   100% {
@@ -4058,6 +4201,26 @@ tbody tr:hover {
 
   .pedido-kit-imagem-preview {
     max-height: 68vh;
+  }
+
+  .numero-serie-stage {
+    grid-template-columns: 1fr;
+  }
+
+  .numero-serie-stage-actions,
+  .numero-serie-mode-row,
+  .numero-serie-modal-actions {
+    justify-content: stretch;
+  }
+
+  .numero-serie-stage-actions .btn,
+  .numero-serie-modal-actions .btn,
+  .numero-serie-manual-field {
+    width: 100%;
+  }
+
+  .numero-serie-stage-main strong {
+    font-size: 1.8rem;
   }
 
   .portal-shell {

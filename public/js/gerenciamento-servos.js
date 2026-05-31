@@ -138,11 +138,11 @@ function renderizarTabela() {
           <span>${escapeHtml(pedido.cliente_nome)}</span>
         </th>
       `).join('')}
-      <th class="servo-sheet-vertical-col servo-sheet-divider-left">ESTOQUE</th>
-      <th class="servo-sheet-vertical-col">CORPOS</th>
-      <th class="servo-sheet-vertical-col">ZINCO</th>
-      <th class="servo-sheet-vertical-col">USINAGEM</th>
-      <th class="servo-sheet-vertical-col">MAT-PRIMA</th>
+      <th class="servo-sheet-resource-col servo-sheet-divider-left"><span>ESTOQUE</span></th>
+      <th class="servo-sheet-resource-col"><span>CORPOS</span></th>
+      <th class="servo-sheet-resource-col"><span>ZINCO</span></th>
+      <th class="servo-sheet-resource-col"><span>USINAGEM</span></th>
+      <th class="servo-sheet-resource-col"><span>MAT-PRIMA</span></th>
     </tr>
   `;
 
@@ -169,7 +169,7 @@ function renderizarTabela() {
           <th class="sticky-col servo-sheet-model-cell">
             <div class="servo-sheet-model-title">${escapeHtml(row.label)}${corpoMarker}</div>
           </th>
-          <td class="servo-sheet-total-cell">${formatNumber(row.total)}</td>
+          <td class="servo-sheet-total-cell ${Number(row.total || 0) === 0 ? 'is-zero' : ''}">${formatNumberOrEmpty(row.total)}</td>
           ${pedidos.map((pedido) => renderMetricCell(row.pedidos[String(pedido.id)] || 0)).join('')}
           ${renderMetricCell(row.estoque, 'servo-sheet-divider-left')}
           ${renderMetricCell(row.corpos)}
@@ -181,8 +181,8 @@ function renderizarTabela() {
     }).join('')}
     <tr class="servo-sheet-total-row">
       <th class="sticky-col servo-sheet-model-cell">TOTAL GERAL</th>
-      <td class="servo-sheet-total-cell">${formatNumber(rows.reduce((sum, row) => sum + Number(row.total || 0), 0))}</td>
-      ${pedidos.map((pedido) => `<td class="servo-sheet-cell servo-sheet-total-inline">${formatNumber(totalPedidos[String(pedido.id)] || 0)}</td>`).join('')}
+      <td class="servo-sheet-total-cell">${formatNumberOrEmpty(rows.reduce((sum, row) => sum + Number(row.total || 0), 0))}</td>
+      ${pedidos.map((pedido) => `<td class="servo-sheet-cell servo-sheet-total-inline">${formatNumberOrEmpty(totalPedidos[String(pedido.id)] || 0)}</td>`).join('')}
       <td class="servo-sheet-cell servo-sheet-divider-left servo-sheet-total-muted">-</td>
       <td class="servo-sheet-cell servo-sheet-total-muted">-</td>
       <td class="servo-sheet-cell servo-sheet-total-muted">-</td>
@@ -195,7 +195,7 @@ function renderizarTabela() {
 function renderMetricCell(value, extraClass = '') {
   const number = Number(value || 0);
   const isZero = number === 0;
-  return `<td class="servo-sheet-cell ${extraClass} ${isZero ? 'is-zero' : 'is-valued'}">${isZero ? '0' : formatNumber(number)}</td>`;
+  return `<td class="servo-sheet-cell ${extraClass} ${isZero ? 'is-zero' : 'is-valued'}">${formatNumberOrEmpty(number)}</td>`;
 }
 
 function renderMateriaPrimaCell(materiaPrima) {
@@ -221,6 +221,11 @@ function formatNumber(value) {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2
   });
+}
+
+function formatNumberOrEmpty(value) {
+  const number = Number(value || 0);
+  return number === 0 ? '' : formatNumber(number);
 }
 
 function escapeHtml(value) {

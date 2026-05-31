@@ -64,3 +64,26 @@ CREATE TABLE IF NOT EXISTS pedido_expedicao_item_seriais (
   CONSTRAINT fk_pedido_item_serial_serial
     FOREIGN KEY (id_submontagem_serial) REFERENCES submontagem_seriais(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS pedido_expedicao_item_reservas (
+  id BIGINT NOT NULL AUTO_INCREMENT,
+  id_pedido_item BIGINT NOT NULL,
+  id_peca INT NOT NULL,
+  id_estoque INT NOT NULL,
+  quantidade DECIMAL(10, 2) NOT NULL,
+  id_movimentacao_estoque INT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_pedido_item_reservas_item (id_pedido_item),
+  KEY idx_pedido_item_reservas_peca (id_peca),
+  KEY idx_pedido_item_reservas_estoque (id_estoque),
+  CONSTRAINT fk_pedido_item_reserva_item
+    FOREIGN KEY (id_pedido_item) REFERENCES pedido_expedicao_itens(id)
+    ON DELETE CASCADE,
+  CONSTRAINT fk_pedido_item_reserva_peca
+    FOREIGN KEY (id_peca) REFERENCES pecas(id),
+  CONSTRAINT fk_pedido_item_reserva_estoque
+    FOREIGN KEY (id_estoque) REFERENCES estoques(id),
+  CONSTRAINT fk_pedido_item_reserva_movimentacao
+    FOREIGN KEY (id_movimentacao_estoque) REFERENCES estoque_movimentacoes(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

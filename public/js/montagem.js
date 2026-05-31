@@ -108,6 +108,22 @@ const refs = {
   efetuarPreviewTbody: document.getElementById('montagem-efetuar-preview-tbody'),
   efetuarSolicitarFaltantes: document.getElementById('btn-montagem-efetuar-solicitar-faltantes'),
   efetuarSubmit: document.getElementById('btn-confirmar-modal-montagem-efetuar'),
+  desmembrarModal: document.getElementById('montagem-desmembrar-modal'),
+  desmembrarMensagem: document.getElementById('montagem-desmembrar-mensagem'),
+  desmembrarForm: document.getElementById('montagem-desmembrar-form'),
+  desmembrarSubmontagemId: document.getElementById('montagem-desmembrar-submontagem-id'),
+  desmembrarBusca: document.getElementById('montagem-desmembrar-submontagem-busca'),
+  desmembrarSugestoes: document.getElementById('montagem-desmembrar-submontagem-sugestoes'),
+  desmembrarQuantidade: document.getElementById('montagem-desmembrar-quantidade'),
+  desmembrarDestino: document.getElementById('montagem-desmembrar-destino'),
+  desmembrarObservacao: document.getElementById('montagem-desmembrar-observacao'),
+  desmembrarPreviewTitulo: document.getElementById('montagem-desmembrar-preview-titulo'),
+  desmembrarPreviewSubtitulo: document.getElementById('montagem-desmembrar-preview-subtitulo'),
+  desmembrarPreviewProntoChip: document.getElementById('montagem-desmembrar-preview-pronto-chip'),
+  desmembrarPreviewComponentesChip: document.getElementById('montagem-desmembrar-preview-componentes-chip'),
+  desmembrarPreviewStatusChip: document.getElementById('montagem-desmembrar-preview-status-chip'),
+  desmembrarPreviewTbody: document.getElementById('montagem-desmembrar-preview-tbody'),
+  desmembrarSubmit: document.getElementById('btn-confirmar-modal-montagem-desmembrar'),
   numeroSerieModal: document.getElementById('montagem-numeros-serie-modal'),
   numeroSerieMensagem: document.getElementById('montagem-numeros-serie-mensagem'),
   numeroSerieForm: document.getElementById('montagem-numeros-serie-form'),
@@ -115,10 +131,21 @@ const refs = {
   numeroSerieModeloBusca: document.getElementById('montagem-numero-serie-modelo-busca'),
   numeroSerieModeloSugestoes: document.getElementById('montagem-numero-serie-modelo-sugestoes'),
   numeroSerieAtual: document.getElementById('montagem-numero-serie-atual'),
+  numeroSerieDestaque: document.getElementById('montagem-numero-serie-destaque'),
   numeroSerieResumo: document.getElementById('montagem-numero-serie-resumo'),
   numeroSerieQuantidade: document.getElementById('montagem-numero-serie-quantidade'),
   numeroSerieMontador: document.getElementById('montagem-numero-serie-montador'),
   numeroSerieFaixa: document.getElementById('montagem-numero-serie-faixa'),
+  numeroSerieFaixaVisual: document.getElementById('montagem-numero-serie-faixa-visual'),
+  numeroSerieManualToggle: document.getElementById('montagem-numero-serie-manual-toggle'),
+  numeroSerieManualWrap: document.getElementById('montagem-numero-serie-manual-wrap'),
+  numeroSerieManual: document.getElementById('montagem-numero-serie-manual'),
+  numeroSerieHistoricoModal: document.getElementById('montagem-numero-serie-historico-modal'),
+  numeroSerieSequenciaModal: document.getElementById('montagem-numero-serie-sequencia-modal'),
+  numeroSerieSequenciaMensagem: document.getElementById('montagem-numero-serie-sequencia-mensagem'),
+  numeroSerieSequenciaForm: document.getElementById('montagem-numero-serie-sequencia-form'),
+  numeroSerieSequenciaValor: document.getElementById('montagem-numero-serie-sequencia-valor'),
+  numeroSerieSequenciaPreview: document.getElementById('montagem-numero-serie-sequencia-preview'),
   numeroSerieDiagnosticoModal: document.getElementById('montagem-numero-serie-diagnostico-modal'),
   numeroSerieDiagnosticoTitulo: document.getElementById('montagem-numero-serie-diagnostico-titulo'),
   numeroSerieDiagnosticoSubtitulo: document.getElementById('montagem-numero-serie-diagnostico-subtitulo'),
@@ -220,12 +247,14 @@ function bindEvents() {
       esconderSugestoes();
       esconderSugestoesSolicitacao();
       esconderSugestoesEfetuarMontagem();
+      esconderSugestoesDesmembrar();
       esconderSugestoesNumeroSerieCadastro();
       esconderSugestoesNumeroSerieEdicao();
       esconderSugestoesSubmontagem();
     }
   });
   document.getElementById('montagem-btn-transferencia-menu').addEventListener('click', abrirModalTransferencia);
+  document.getElementById('montagem-btn-desmembrar').addEventListener('click', abrirModalDesmembrar);
   document.getElementById('montagem-btn-solicitar').addEventListener('click', () => abrirModalSolicitacao());
   document.getElementById('montagem-btn-solicitar-inline').addEventListener('click', () => abrirModalSolicitacao());
   document.getElementById('montagem-btn-efetuar').addEventListener('click', abrirModalEfetuarMontagem);
@@ -263,7 +292,14 @@ function bindEvents() {
   document.getElementById('btn-cancelar-modal-montagem-solicitacao').addEventListener('click', fecharModalSolicitacao);
   document.getElementById('btn-fechar-modal-montagem-efetuar').addEventListener('click', fecharModalEfetuarMontagem);
   document.getElementById('btn-cancelar-modal-montagem-efetuar').addEventListener('click', fecharModalEfetuarMontagem);
+  document.getElementById('btn-fechar-modal-montagem-desmembrar').addEventListener('click', fecharModalDesmembrar);
+  document.getElementById('btn-cancelar-modal-montagem-desmembrar').addEventListener('click', fecharModalDesmembrar);
   document.getElementById('btn-fechar-modal-montagem-numeros-serie').addEventListener('click', fecharModalNumerosSerie);
+  document.getElementById('btn-abrir-modal-montagem-numero-serie-historico').addEventListener('click', abrirModalHistoricoNumeroSerie);
+  document.getElementById('btn-fechar-modal-montagem-numero-serie-historico').addEventListener('click', fecharModalHistoricoNumeroSerie);
+  document.getElementById('btn-abrir-modal-montagem-numero-serie-sequencia').addEventListener('click', abrirModalSequenciaNumeroSerie);
+  document.getElementById('btn-fechar-modal-montagem-numero-serie-sequencia').addEventListener('click', fecharModalSequenciaNumeroSerie);
+  document.getElementById('btn-cancelar-modal-montagem-numero-serie-sequencia').addEventListener('click', fecharModalSequenciaNumeroSerie);
   document.getElementById('btn-abrir-modal-montagem-numero-serie-diagnostico').addEventListener('click', abrirModalDiagnosticoNumeroSerie);
   document.getElementById('btn-fechar-modal-montagem-numero-serie-diagnostico').addEventListener('click', fecharModalDiagnosticoNumeroSerie);
   document.getElementById('btn-voltar-modal-montagem-numero-serie-diagnostico').addEventListener('click', fecharModalDiagnosticoNumeroSerie);
@@ -288,7 +324,10 @@ function bindEvents() {
     refs.consumirProducaoModal,
     refs.solicitacaoModal,
     refs.efetuarModal,
+    refs.desmembrarModal,
     refs.numeroSerieModal,
+    refs.numeroSerieHistoricoModal,
+    refs.numeroSerieSequenciaModal,
     refs.numeroSerieDiagnosticoModal,
     refs.numeroSerieEditarModal,
     refs.simulacaoModal,
@@ -298,6 +337,16 @@ function bindEvents() {
   ].forEach((modal) => modal.addEventListener('click', handleModalBackdrop));
   refs.solicitacaoForm.addEventListener('submit', handleAdicionarSolicitacaoNaLista);
   refs.efetuarForm.addEventListener('submit', handleEfetuarMontagem);
+  refs.desmembrarForm.addEventListener('submit', handleDesmembrarSubmontagem);
+  refs.desmembrarBusca.addEventListener('input', () => {
+    refs.desmembrarSubmontagemId.value = '';
+    atualizarPreviewDesmembrar();
+    renderizarSugestoesDesmembrar(refs.desmembrarBusca.value.trim());
+  });
+  refs.desmembrarBusca.addEventListener('focus', () => renderizarSugestoesDesmembrar(refs.desmembrarBusca.value.trim()));
+  refs.desmembrarSugestoes.addEventListener('click', handleSugestaoDesmembrarClick);
+  refs.desmembrarQuantidade.addEventListener('input', () => atualizarPreviewDesmembrar());
+  refs.desmembrarDestino.addEventListener('change', () => atualizarPreviewDesmembrar());
   refs.efetuarBusca.addEventListener('input', () => {
     refs.efetuarSubmontagemId.value = '';
     atualizarPreviewEfetuarMontagem();
@@ -318,6 +367,10 @@ function bindEvents() {
     atualizarFaixaNumeroSerie();
     atualizarDiagnosticoNumeroSerie();
   });
+  refs.numeroSerieManualToggle.addEventListener('change', atualizarModoNumeroSerie);
+  refs.numeroSerieManual.addEventListener('input', atualizarFaixaNumeroSerie);
+  refs.numeroSerieSequenciaForm.addEventListener('submit', handleSalvarSequenciaNumeroSerie);
+  refs.numeroSerieSequenciaValor.addEventListener('input', atualizarPreviewSequenciaNumeroSerie);
   refs.numeroSerieFiltroNumero.addEventListener('input', renderizarRegistrosNumeroSerie);
   refs.numeroSerieFiltroModelo.addEventListener('input', renderizarRegistrosNumeroSerie);
   refs.numeroSerieFiltroMontador.addEventListener('input', renderizarRegistrosNumeroSerie);
@@ -886,6 +939,190 @@ function fecharModalEfetuarMontagem() {
   closeModal(refs.efetuarModal);
 }
 
+function preencherSelectDestinosDesmembrar(select, selecionadoId = '') {
+  select.innerHTML = `
+    <option value="">Selecione</option>
+    ${estoquesCache
+      .filter((estoque) => Number(estoque.ativo) === 1)
+      .map((estoque) => `<option value="${estoque.id}">${escapeHtml(estoque.nome)}</option>`)
+      .join('')}
+  `;
+
+  if (selecionadoId !== '' && selecionadoId !== null && selecionadoId !== undefined) {
+    select.value = String(selecionadoId);
+  }
+}
+
+function abrirModalDesmembrar() {
+  const montagem = obterEstoquePorNome('mont');
+  refs.desmembrarMensagem.className = 'message hidden';
+  refs.desmembrarMensagem.textContent = '';
+  refs.desmembrarForm.reset();
+  refs.desmembrarSubmontagemId.value = '';
+  refs.desmembrarQuantidade.value = '1';
+  refs.desmembrarBusca.value = '';
+  preencherSelectDestinosDesmembrar(refs.desmembrarDestino, montagem ? montagem.id : '');
+  refs.desmembrarPreviewTitulo.textContent = 'Selecione uma submontagem';
+  refs.desmembrarPreviewSubtitulo.textContent = 'A Montagem vai baixar o item pronto e devolver os componentes para outro estoque.';
+  refs.desmembrarPreviewProntoChip.textContent = 'Pronto atual: 0';
+  refs.desmembrarPreviewComponentesChip.textContent = 'Componentes: 0';
+  refs.desmembrarPreviewStatusChip.textContent = 'Status: aguardando selecao';
+  refs.desmembrarPreviewTbody.innerHTML = '<tr><td colspan="4" class="empty-state">Selecione a submontagem para visualizar o retorno dos componentes.</td></tr>';
+  refs.desmembrarSubmit.disabled = true;
+  esconderSugestoesDesmembrar();
+  openModal(refs.desmembrarModal);
+}
+
+function fecharModalDesmembrar() {
+  esconderSugestoesDesmembrar();
+  closeModal(refs.desmembrarModal);
+}
+
+function renderizarSugestoesDesmembrar(termo) {
+  const filtro = normalizarBusca(termo);
+  const itens = saldosMontagemCache
+    .filter((item) => String(item.classificacao || '').toUpperCase() === 'SUBMONTAGEM' && Number(item.quantidade || 0) > 0)
+    .filter((item) => {
+      if (!filtro) {
+        return true;
+      }
+
+      return normalizarBusca(`${item.codigo} ${item.descricao}`).includes(filtro);
+    })
+    .slice(0, 8);
+
+  renderizarPainelAutocomplete(
+    refs.desmembrarSugestoes,
+    itens,
+    (item) => ({
+      id: item.id_peca,
+      title: `${item.codigo} - ${item.descricao}`,
+      subtitle: `Saldo pronto na Montagem: ${formatInteger(item.quantidade)}`
+    }),
+    'Nenhuma submontagem pronta disponivel para desmembrar.'
+  );
+}
+
+function handleSugestaoDesmembrarClick(event) {
+  const option = event.target.closest('button[data-id]');
+  if (!option) {
+    return;
+  }
+
+  const item = saldosMontagemCache.find((entry) => Number(entry.id_peca) === Number(option.dataset.id));
+  if (!item) {
+    return;
+  }
+
+  refs.desmembrarSubmontagemId.value = String(item.id_peca);
+  refs.desmembrarBusca.value = `${item.codigo} - ${item.descricao}`;
+  esconderSugestoesDesmembrar();
+  atualizarPreviewDesmembrar();
+}
+
+async function atualizarPreviewDesmembrar() {
+  const submontagemId = Number.parseInt(refs.desmembrarSubmontagemId.value, 10);
+  const quantidadeInformada = Number.parseFloat(refs.desmembrarQuantidade.value);
+  const quantidade = Number.isFinite(quantidadeInformada) && quantidadeInformada > 0 ? quantidadeInformada : 0;
+  const submontagem = saldosMontagemCache.find((item) => Number(item.id_peca) === submontagemId);
+  const destino = estoquesCache.find((estoque) => Number(estoque.id) === Number(refs.desmembrarDestino.value));
+
+  if (!submontagem) {
+    refs.desmembrarPreviewTitulo.textContent = 'Selecione uma submontagem';
+    refs.desmembrarPreviewSubtitulo.textContent = 'A Montagem vai baixar o item pronto e devolver os componentes para outro estoque.';
+    refs.desmembrarPreviewProntoChip.textContent = 'Pronto atual: 0';
+    refs.desmembrarPreviewComponentesChip.textContent = 'Componentes: 0';
+    refs.desmembrarPreviewStatusChip.textContent = 'Status: aguardando selecao';
+    refs.desmembrarPreviewTbody.innerHTML = '<tr><td colspan="4" class="empty-state">Selecione a submontagem para visualizar o retorno dos componentes.</td></tr>';
+    refs.desmembrarSubmit.disabled = true;
+    return;
+  }
+
+  refs.desmembrarPreviewTitulo.textContent = `${submontagem.codigo} - ${submontagem.descricao}`;
+  refs.desmembrarPreviewSubtitulo.textContent = [
+    `Saldo pronto atual: ${formatInteger(submontagem.quantidade)}`,
+    destino ? `Destino dos componentes: ${destino.nome}` : 'Selecione o estoque de destino'
+  ].join(' | ');
+
+  try {
+    const componentes = await carregarEstruturaSubmontagem(submontagem.id_peca);
+
+    if (!componentes.length) {
+      refs.desmembrarPreviewProntoChip.textContent = `Pronto atual: ${formatInteger(submontagem.quantidade)}`;
+      refs.desmembrarPreviewComponentesChip.textContent = 'Componentes: 0';
+      refs.desmembrarPreviewStatusChip.textContent = 'Status: sem estrutura';
+      refs.desmembrarPreviewTbody.innerHTML = '<tr><td colspan="4" class="empty-state">Esta submontagem nao possui componentes cadastrados.</td></tr>';
+      refs.desmembrarSubmit.disabled = true;
+      return;
+    }
+
+    refs.desmembrarPreviewProntoChip.textContent = `Pronto atual: ${formatInteger(submontagem.quantidade)}`;
+    refs.desmembrarPreviewComponentesChip.textContent = `Componentes: ${componentes.length}`;
+    refs.desmembrarPreviewStatusChip.textContent = quantidade > 0 && destino
+      ? 'Status: pronto para desmembrar'
+      : 'Status: defina quantidade e destino';
+    refs.desmembrarPreviewTbody.innerHTML = componentes.map((componente) => `
+      <tr>
+        <td class="table-code">${escapeHtml(componente.codigo_componente)}</td>
+        <td class="table-description">${escapeHtml(componente.descricao_componente)}</td>
+        <td class="table-quantity">${formatDecimal(componente.quantidade)}</td>
+        <td class="table-quantity">${formatDecimal(Number((Number(componente.quantidade) * quantidade).toFixed(2)))}</td>
+      </tr>
+    `).join('');
+    refs.desmembrarSubmit.disabled = !(quantidade > 0 && destino);
+  } catch (error) {
+    refs.desmembrarPreviewProntoChip.textContent = `Pronto atual: ${formatInteger(submontagem.quantidade)}`;
+    refs.desmembrarPreviewComponentesChip.textContent = 'Componentes: 0';
+    refs.desmembrarPreviewStatusChip.textContent = 'Status: erro';
+    refs.desmembrarPreviewTbody.innerHTML = `<tr><td colspan="4" class="empty-state">${escapeHtml(error.message)}</td></tr>`;
+    refs.desmembrarSubmit.disabled = true;
+  }
+}
+
+async function handleDesmembrarSubmontagem(event) {
+  event.preventDefault();
+
+  try {
+    const montagem = obterEstoquePorNome('mont');
+    if (!montagem) {
+      throw new Error('Estoque da Montagem nao encontrado.');
+    }
+
+    if (!refs.desmembrarSubmontagemId.value) {
+      throw new Error('Selecione uma submontagem valida.');
+    }
+
+    if (!refs.desmembrarDestino.value) {
+      throw new Error('Selecione o estoque de destino.');
+    }
+
+    const response = await fetch(`${submontagensApiBaseUrl}/${refs.desmembrarSubmontagemId.value}/desmembrar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id_estoque_origem: montagem.id,
+        id_estoque_destino: refs.desmembrarDestino.value,
+        quantidade: refs.desmembrarQuantidade.value,
+        observacao: refs.desmembrarObservacao.value.trim()
+      })
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.message || 'Nao foi possivel desmembrar a submontagem.');
+    }
+
+    fecharModalDesmembrar();
+    mostrarMensagem('Submontagem desmembrada com sucesso.', 'success');
+    await carregarEstoqueMontagem();
+    notificarAtualizacaoOperacional(['estoque']);
+  } catch (error) {
+    refs.desmembrarMensagem.textContent = error.message;
+    refs.desmembrarMensagem.className = 'message error';
+    refs.desmembrarMensagem.classList.remove('hidden');
+  }
+}
+
 async function abrirModalNumerosSerie() {
   resetFormularioNumeroSerie();
   refs.numeroSerieTbody.innerHTML = '<tr><td colspan="7" class="empty-state">Carregando registros...</td></tr>';
@@ -913,6 +1150,66 @@ function fecharModalNumerosSerie() {
   closeModal(refs.numeroSerieModal);
 }
 
+function abrirModalHistoricoNumeroSerie() {
+  openModal(refs.numeroSerieHistoricoModal);
+}
+
+function fecharModalHistoricoNumeroSerie() {
+  closeModal(refs.numeroSerieHistoricoModal);
+}
+
+function abrirModalSequenciaNumeroSerie() {
+  refs.numeroSerieSequenciaMensagem.className = 'message hidden';
+  refs.numeroSerieSequenciaMensagem.textContent = '';
+  refs.numeroSerieSequenciaForm.reset();
+  refs.numeroSerieSequenciaValor.value = proximoNumeroSeriePreview?.numero_serie || '';
+  atualizarPreviewSequenciaNumeroSerie();
+  openModal(refs.numeroSerieSequenciaModal);
+}
+
+function fecharModalSequenciaNumeroSerie() {
+  closeModal(refs.numeroSerieSequenciaModal);
+}
+
+function atualizarPreviewSequenciaNumeroSerie() {
+  const valor = refs.numeroSerieSequenciaValor.value.trim();
+  refs.numeroSerieSequenciaPreview.classList.toggle('empty', !valor);
+  refs.numeroSerieSequenciaPreview.innerHTML = valor
+    ? `<span class="selected-tag">Proximo automatico: ${escapeHtml(valor.toUpperCase())}</span>`
+    : 'O numero informado sera usado no proximo registro automatico.';
+}
+
+async function handleSalvarSequenciaNumeroSerie(event) {
+  event.preventDefault();
+
+  try {
+    const valor = refs.numeroSerieSequenciaValor.value.trim();
+    if (!valor) {
+      throw new Error('Informe o proximo numero da sequencia.');
+    }
+
+    const response = await fetch(`${submontagemSeriaisApiBaseUrl}/sequencia`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ numero_serie: valor })
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.message || 'Nao foi possivel salvar a sequencia.');
+    }
+
+    proximoNumeroSeriePreview = result;
+    atualizarFaixaNumeroSerie();
+    fecharModalSequenciaNumeroSerie();
+    mostrarMensagemNumeroSerie(`Sequencia atualizada. Proximo numero: ${result.numero_serie}.`, 'success');
+  } catch (error) {
+    refs.numeroSerieSequenciaMensagem.textContent = error.message;
+    refs.numeroSerieSequenciaMensagem.className = 'message error';
+    refs.numeroSerieSequenciaMensagem.classList.remove('hidden');
+  }
+}
+
 function abrirModalDiagnosticoNumeroSerie() {
   reabrirModalNumeroSerieAoFecharDiagnostico = !refs.numeroSerieModal.classList.contains('hidden');
   if (reabrirModalNumeroSerieAoFecharDiagnostico) {
@@ -938,6 +1235,11 @@ function resetFormularioNumeroSerie() {
   refs.numeroSerieMontador.value = ultimoMontadorNumeroSerie || '';
   refs.numeroSerieAtual.value = '-';
   refs.numeroSerieFaixa.value = '-';
+  refs.numeroSerieDestaque.textContent = '-';
+  refs.numeroSerieFaixaVisual.textContent = 'Faixa prevista: -';
+  refs.numeroSerieManualToggle.checked = false;
+  refs.numeroSerieManual.value = '';
+  atualizarModoNumeroSerie();
   diagnosticoNumeroSerieAtual = null;
   renderizarResumoNumeroSerie(null);
   resetDiagnosticoNumeroSerie();
@@ -1177,7 +1479,7 @@ function handleSugestaoNumeroSerieEdicaoClick(event) {
 function renderizarResumoNumeroSerie(item) {
   if (!item) {
     refs.numeroSerieResumo.classList.add('selected-tags', 'empty');
-    refs.numeroSerieResumo.textContent = 'Selecione um modelo para registrar o lote.';
+    refs.numeroSerieResumo.textContent = 'Selecione um modelo para registrar o numero.';
     return;
   }
 
@@ -1217,9 +1519,40 @@ function esconderSugestoesNumeroSerieEdicao() {
   refs.numeroSerieEditarModeloSugestoes.innerHTML = '';
 }
 
+function isNumeroSerieManualAtivo() {
+  return Boolean(refs.numeroSerieManualToggle?.checked);
+}
+
+function atualizarModoNumeroSerie() {
+  const manualAtivo = isNumeroSerieManualAtivo();
+  refs.numeroSerieManualWrap.classList.toggle('hidden', !manualAtivo);
+  refs.numeroSerieQuantidade.disabled = manualAtivo;
+
+  if (manualAtivo) {
+    refs.numeroSerieQuantidade.value = '1';
+  }
+
+  atualizarFaixaNumeroSerie();
+  atualizarDiagnosticoNumeroSerie();
+}
+
 function atualizarFaixaNumeroSerie() {
+  if (isNumeroSerieManualAtivo()) {
+    const numeroManual = refs.numeroSerieManual.value.trim().toUpperCase();
+    const numeroVisual = numeroManual || 'Digite o numero';
+    const faixaVisual = numeroManual ? `${numeroManual} (manual)` : '-';
+
+    refs.numeroSerieAtual.value = numeroManual || '-';
+    refs.numeroSerieFaixa.value = faixaVisual;
+    refs.numeroSerieDestaque.textContent = numeroVisual;
+    refs.numeroSerieFaixaVisual.textContent = `Faixa prevista: ${faixaVisual}`;
+    return;
+  }
+
   if (!proximoNumeroSeriePreview || !Number.isInteger(Number(proximoNumeroSeriePreview.numero_sequencial))) {
     refs.numeroSerieFaixa.value = '-';
+    refs.numeroSerieDestaque.textContent = '-';
+    refs.numeroSerieFaixaVisual.textContent = 'Faixa prevista: -';
     return;
   }
 
@@ -1230,7 +1563,10 @@ function atualizarFaixaNumeroSerie() {
   const primeiro = formatarNumeroSerieSequencial(numeroInicial);
   const ultimo = formatarNumeroSerieSequencial(numeroFinal);
 
+  refs.numeroSerieAtual.value = primeiro;
   refs.numeroSerieFaixa.value = primeiro === ultimo ? primeiro : `${primeiro} ate ${ultimo}`;
+  refs.numeroSerieDestaque.textContent = primeiro;
+  refs.numeroSerieFaixaVisual.textContent = `Faixa prevista: ${refs.numeroSerieFaixa.value}`;
 }
 
 function resetDiagnosticoNumeroSerie() {
@@ -1413,7 +1749,9 @@ async function handleRegistrarNumerosSerie(event) {
 
   try {
     const modeloId = Number.parseInt(refs.numeroSerieModeloId.value, 10);
-    const quantidade = Number.parseInt(refs.numeroSerieQuantidade.value, 10);
+    const manualAtivo = isNumeroSerieManualAtivo();
+    const numeroManual = refs.numeroSerieManual.value.trim().toUpperCase();
+    const quantidade = manualAtivo ? 1 : Number.parseInt(refs.numeroSerieQuantidade.value, 10);
     const montador = refs.numeroSerieMontador.value.trim();
 
     if (!Number.isInteger(modeloId)) {
@@ -1422,6 +1760,10 @@ async function handleRegistrarNumerosSerie(event) {
 
     if (!Number.isInteger(quantidade) || quantidade <= 0) {
       throw new Error('Informe uma quantidade valida para o registro.');
+    }
+
+    if (manualAtivo && !numeroManual) {
+      throw new Error('Informe o numero manual que deseja registrar.');
     }
 
     if (!montador) {
@@ -1435,6 +1777,7 @@ async function handleRegistrarNumerosSerie(event) {
       body: JSON.stringify({
         id_modelo_servo: modeloId,
         quantidade,
+        numero_manual: manualAtivo ? numeroManual : '',
         montador_nome: montador
       })
     });
@@ -1445,9 +1788,14 @@ async function handleRegistrarNumerosSerie(event) {
     }
 
     ultimoMontadorNumeroSerie = montador;
-    const houveConcorrencia = result.primeiro_numero_serie !== numeroEsperado;
+    const houveConcorrencia = !result.registro_manual && result.primeiro_numero_serie !== numeroEsperado;
 
-    if (houveConcorrencia) {
+    if (result.registro_manual) {
+      mostrarMensagemNumeroSerie(
+        `Numero manual registrado com sucesso: ${result.primeiro_numero_serie}.`,
+        'success'
+      );
+    } else if (houveConcorrencia) {
       mostrarMensagemNumeroSerie(
         `Lote registrado com sucesso. Outro operador gravou antes e a faixa confirmada foi de ${result.primeiro_numero_serie} ate ${result.ultimo_numero_serie}.`,
         'success'
@@ -1462,6 +1810,9 @@ async function handleRegistrarNumerosSerie(event) {
     refs.numeroSerieModeloId.value = '';
     refs.numeroSerieModeloBusca.value = '';
     refs.numeroSerieQuantidade.value = '1';
+    refs.numeroSerieManualToggle.checked = false;
+    refs.numeroSerieManual.value = '';
+    atualizarModoNumeroSerie();
     renderizarResumoNumeroSerie(null);
     resetDiagnosticoNumeroSerie();
     esconderSugestoesNumeroSerieCadastro();
@@ -2807,6 +3158,11 @@ function esconderSugestoesEfetuarMontagem() {
   refs.efetuarSugestoes.innerHTML = '';
 }
 
+function esconderSugestoesDesmembrar() {
+  refs.desmembrarSugestoes.classList.add('hidden');
+  refs.desmembrarSugestoes.innerHTML = '';
+}
+
 function esconderSugestoesSubmontagem() {
   refs.simulacaoSugestoes.classList.add('hidden');
   refs.simulacaoSugestoes.innerHTML = '';
@@ -2823,7 +3179,10 @@ function handleModalBackdrop(event) {
   if (event.target.dataset.closeModal === 'montagem-consumir-producao') fecharModalConsumirProducao();
   if (event.target.dataset.closeModal === 'montagem-solicitacao') fecharModalSolicitacao();
   if (event.target.dataset.closeModal === 'montagem-efetuar') fecharModalEfetuarMontagem();
+  if (event.target.dataset.closeModal === 'montagem-desmembrar') fecharModalDesmembrar();
   if (event.target.dataset.closeModal === 'montagem-numeros-serie') fecharModalNumerosSerie();
+  if (event.target.dataset.closeModal === 'montagem-numero-serie-historico') fecharModalHistoricoNumeroSerie();
+  if (event.target.dataset.closeModal === 'montagem-numero-serie-sequencia') fecharModalSequenciaNumeroSerie();
   if (event.target.dataset.closeModal === 'montagem-numero-serie-diagnostico') fecharModalDiagnosticoNumeroSerie();
   if (event.target.dataset.closeModal === 'montagem-numero-serie-editar') fecharModalEditarNumeroSerie();
   if (event.target.dataset.closeModal === 'montagem-simulacao') fecharModalSimulacao();
@@ -2841,6 +3200,7 @@ function handleKeyboardShortcuts(event) {
   esconderSugestoes();
   esconderSugestoesSolicitacao();
   esconderSugestoesEfetuarMontagem();
+  esconderSugestoesDesmembrar();
   esconderSugestoesNumeroSerieCadastro();
   esconderSugestoesNumeroSerieEdicao();
   esconderSugestoesSubmontagem();
@@ -2890,8 +3250,23 @@ function handleKeyboardShortcuts(event) {
     return;
   }
 
+  if (!refs.desmembrarModal.classList.contains('hidden')) {
+    fecharModalDesmembrar();
+    return;
+  }
+
   if (!refs.numeroSerieEditarModal.classList.contains('hidden')) {
     fecharModalEditarNumeroSerie();
+    return;
+  }
+
+  if (!refs.numeroSerieSequenciaModal.classList.contains('hidden')) {
+    fecharModalSequenciaNumeroSerie();
+    return;
+  }
+
+  if (!refs.numeroSerieHistoricoModal.classList.contains('hidden')) {
+    fecharModalHistoricoNumeroSerie();
     return;
   }
 
@@ -2950,7 +3325,10 @@ function closeModal(modal) {
     refs.consumirProducaoModal,
     refs.solicitacaoModal,
     refs.efetuarModal,
+    refs.desmembrarModal,
     refs.numeroSerieModal,
+    refs.numeroSerieHistoricoModal,
+    refs.numeroSerieSequenciaModal,
     refs.numeroSerieDiagnosticoModal,
     refs.numeroSerieEditarModal,
     refs.simulacaoModal,

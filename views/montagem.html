@@ -61,10 +61,11 @@
 
             <div class="sector-menu-list">
               <button id="montagem-btn-transferencia-menu" class="btn btn-primary" type="button"><span class="btn-label">Enviar para Expedicao</span></button>
+              <button id="montagem-btn-desmembrar" class="btn btn-neutral" type="button"><span class="btn-label">Desmembrar</span></button>
               <button id="montagem-btn-solicitar" class="btn btn-neutral" type="button"><span class="btn-label">Solicitar Pecas</span></button>
               <button id="montagem-btn-efetuar" class="btn btn-success" type="button"><span class="btn-label">Efetuar Montagem</span></button>
-              <button id="montagem-btn-numeros-serie" class="btn btn-secondary" type="button"><span class="btn-label">Numeros de Serie</span></button>
-              <button id="montagem-btn-seriais-disponiveis" class="btn btn-secondary" type="button"><span class="btn-label">Seriais Disponiveis</span><span id="montagem-badge-seriais-disponiveis" class="btn-badge hidden">0</span></button>
+              <button id="montagem-btn-numeros-serie" class="btn btn-secondary" type="button"><span class="btn-label">Registrar Numero</span></button>
+              <button id="montagem-btn-seriais-disponiveis" class="btn btn-secondary" type="button"><span class="btn-label">Numeros Disponiveis</span><span id="montagem-badge-seriais-disponiveis" class="btn-badge hidden">0</span></button>
               <button id="montagem-btn-simular" class="btn btn-secondary" type="button"><span class="btn-label">Simulacao de Montagem</span></button>
               <button id="montagem-btn-gerenciamento-servos" class="btn btn-secondary" type="button"><span class="btn-label">Gerenciamento de Servos</span></button>
               <button id="montagem-btn-pedidos-menu" class="btn btn-neutral" type="button"><span class="btn-label">Meus Pedidos</span><span id="montagem-badge-pedidos" class="btn-badge hidden">0</span></button>
@@ -662,6 +663,92 @@
     </div>
   </div>
 
+  <div id="montagem-desmembrar-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="montagem-desmembrar"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Montagem</span>
+          <h2>Desmembrar submontagem</h2>
+          <p>Baixe a submontagem pronta da Montagem e devolva seus componentes para o estoque escolhido.</p>
+        </div>
+
+        <button id="btn-fechar-modal-montagem-desmembrar" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="montagem-desmembrar-mensagem" class="message hidden"></div>
+
+      <form id="montagem-desmembrar-form" class="form-grid">
+        <input type="hidden" id="montagem-desmembrar-submontagem-id">
+
+        <div class="field span-6">
+          <label for="montagem-desmembrar-submontagem-busca">Submontagem pronta</label>
+          <div class="autocomplete">
+            <input id="montagem-desmembrar-submontagem-busca" type="text" placeholder="Digite codigo ou descricao da submontagem">
+            <div id="montagem-desmembrar-submontagem-sugestoes" class="autocomplete-panel hidden"></div>
+          </div>
+        </div>
+
+        <div class="field span-3">
+          <label for="montagem-desmembrar-quantidade">Quantidade</label>
+          <input id="montagem-desmembrar-quantidade" type="number" min="1" step="1" value="1" required>
+        </div>
+
+        <div class="field span-3">
+          <label for="montagem-desmembrar-destino">Estoque de destino</label>
+          <select id="montagem-desmembrar-destino" required>
+            <option value="">Selecione</option>
+          </select>
+        </div>
+
+        <div id="montagem-desmembrar-preview" class="span-12 embedded-section">
+          <div class="structure-highlight">
+            <div>
+              <p class="page-kicker">Retorno dos Componentes</p>
+              <h3 id="montagem-desmembrar-preview-titulo">Selecione uma submontagem</h3>
+              <p id="montagem-desmembrar-preview-subtitulo">A Montagem vai baixar o item pronto e devolver os componentes para outro estoque.</p>
+            </div>
+
+            <div class="structure-kpis">
+              <span id="montagem-desmembrar-preview-pronto-chip" class="mini-chip">Pronto atual: 0</span>
+              <span id="montagem-desmembrar-preview-componentes-chip" class="mini-chip">Componentes: 0</span>
+              <span id="montagem-desmembrar-preview-status-chip" class="mini-chip">Status: aguardando selecao</span>
+            </div>
+          </div>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Codigo</th>
+                  <th>Descricao</th>
+                  <th>Qtd. Estrutura</th>
+                  <th>Qtd. Retornada</th>
+                </tr>
+              </thead>
+              <tbody id="montagem-desmembrar-preview-tbody">
+                <tr>
+                  <td colspan="4" class="empty-state">Selecione a submontagem para visualizar o retorno dos componentes.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="field span-12">
+          <label for="montagem-desmembrar-observacao">Observacao</label>
+          <input id="montagem-desmembrar-observacao" type="text" maxlength="255" placeholder="Opcional">
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button id="btn-cancelar-modal-montagem-desmembrar" class="btn btn-neutral" type="button">Cancelar</button>
+          <button id="btn-confirmar-modal-montagem-desmembrar" class="btn btn-success" type="submit">Confirmar desmembramento</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <div id="montagem-numeros-serie-modal" class="modal hidden" aria-hidden="true">
     <div class="modal-backdrop" data-close-modal="montagem-numeros-serie"></div>
 
@@ -669,8 +756,8 @@
       <div class="modal-header">
         <div>
           <span class="section-pill">Montagem</span>
-          <h2>Registro de numeros de serie</h2>
-          <p>Registre somente submontagens elegiveis. O numero de serie e automatico, consome componentes da Montagem e envia a peca pronta para a Expedicao.</p>
+          <h2>Registrar numero</h2>
+          <p>Registre submontagens elegiveis, com numero automatico ou um numero manual unico.</p>
         </div>
 
         <button id="btn-fechar-modal-montagem-numeros-serie" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
@@ -678,10 +765,37 @@
 
       <div id="montagem-numeros-serie-mensagem" class="message hidden"></div>
 
-      <form id="montagem-numeros-serie-form" class="form-grid">
+      <form id="montagem-numeros-serie-form" class="form-grid numero-serie-register-grid">
         <input type="hidden" id="montagem-numero-serie-modelo-id">
+        <input id="montagem-numero-serie-atual" type="hidden" value="-">
+        <input id="montagem-numero-serie-faixa" type="hidden" value="-">
 
-        <div class="field span-8">
+        <div class="span-12 numero-serie-stage">
+          <div class="numero-serie-stage-main">
+            <span>Numero em registro</span>
+            <strong id="montagem-numero-serie-destaque">-</strong>
+            <small id="montagem-numero-serie-faixa-visual">Faixa prevista: -</small>
+          </div>
+
+          <div class="numero-serie-stage-actions">
+            <button id="btn-abrir-modal-montagem-numero-serie-sequencia" class="btn btn-neutral btn-small" type="button">Alterar sequencia</button>
+            <button id="btn-abrir-modal-montagem-numero-serie-historico" class="btn btn-secondary btn-small" type="button">Historico</button>
+          </div>
+        </div>
+
+        <div class="span-12 numero-serie-mode-row">
+          <label class="numero-serie-manual-toggle" for="montagem-numero-serie-manual-toggle">
+            <input id="montagem-numero-serie-manual-toggle" type="checkbox">
+            <span>Registrar numero unico manual</span>
+          </label>
+
+          <div id="montagem-numero-serie-manual-wrap" class="field numero-serie-manual-field hidden">
+            <label for="montagem-numero-serie-manual">Numero manual</label>
+            <input id="montagem-numero-serie-manual" type="text" maxlength="20" placeholder="Ex.: A-61267">
+          </div>
+        </div>
+
+        <div class="field span-6">
           <label for="montagem-numero-serie-modelo-busca">Modelo do servo</label>
           <div class="autocomplete">
             <input id="montagem-numero-serie-modelo-busca" type="text" placeholder="Digite codigo ou descricao da submontagem">
@@ -689,16 +803,7 @@
           </div>
         </div>
 
-        <div class="field span-4">
-          <label for="montagem-numero-serie-atual">Numero de serie inicial</label>
-          <input id="montagem-numero-serie-atual" type="text" readonly value="-">
-        </div>
-
-        <div id="montagem-numero-serie-resumo" class="span-12 selected-tags empty">
-          Selecione uma submontagem para registrar o lote.
-        </div>
-
-        <div class="field span-4">
+        <div class="field span-2">
           <label for="montagem-numero-serie-quantidade">Quantidade</label>
           <input id="montagem-numero-serie-quantidade" type="number" min="1" step="1" value="1" required>
         </div>
@@ -708,9 +813,8 @@
           <input id="montagem-numero-serie-montador" type="text" maxlength="120" list="montagem-numero-serie-montadores" placeholder="Digite ou selecione o montador" required>
         </div>
 
-        <div class="field span-4">
-          <label for="montagem-numero-serie-faixa">Faixa prevista</label>
-          <input id="montagem-numero-serie-faixa" type="text" readonly value="-">
+        <div id="montagem-numero-serie-resumo" class="span-12 selected-tags empty">
+          Selecione uma submontagem para registrar o numero.
         </div>
 
         <div class="span-12 selected-tags">
@@ -719,13 +823,27 @@
           <span id="montagem-numero-serie-diagnostico-status-chip" class="selected-tag">Status: aguardando selecao</span>
         </div>
 
-        <div class="span-12 modal-actions">
+        <div class="span-12 modal-actions numero-serie-modal-actions">
           <button id="btn-abrir-modal-montagem-numero-serie-diagnostico" class="btn btn-neutral" type="button">Ver diagnostico</button>
-          <button id="btn-salvar-modal-montagem-numeros-serie" class="btn btn-primary" type="submit">Registrar lote</button>
+          <button id="btn-salvar-modal-montagem-numeros-serie" class="btn btn-primary btn-serial-register" type="submit">Registrar</button>
         </div>
       </form>
+    </div>
+  </div>
 
-      <div class="subtle-divider"></div>
+  <div id="montagem-numero-serie-historico-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="montagem-numero-serie-historico"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Montagem</span>
+          <h2>Historico de numeros</h2>
+          <p>Consulte os numeros ja registrados e edite o modelo quando precisar.</p>
+        </div>
+
+        <button id="btn-fechar-modal-montagem-numero-serie-historico" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
 
       <div class="section-header-inline">
         <div>
@@ -784,6 +902,40 @@
           </tbody>
         </table>
       </div>
+    </div>
+  </div>
+
+  <div id="montagem-numero-serie-sequencia-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="montagem-numero-serie-sequencia"></div>
+
+    <div class="modal-dialog modal-small">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Sequencia</span>
+          <h2>Alterar proximo numero</h2>
+          <p>Defina qual sera o proximo numero automatico gerado pela Montagem.</p>
+        </div>
+
+        <button id="btn-fechar-modal-montagem-numero-serie-sequencia" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="montagem-numero-serie-sequencia-mensagem" class="message hidden"></div>
+
+      <form id="montagem-numero-serie-sequencia-form" class="form-grid">
+        <div class="field span-12">
+          <label for="montagem-numero-serie-sequencia-valor">Proximo numero</label>
+          <input id="montagem-numero-serie-sequencia-valor" type="text" placeholder="Ex.: A-61267 ou 61267" required>
+        </div>
+
+        <div id="montagem-numero-serie-sequencia-preview" class="span-12 selected-tags empty">
+          O numero informado sera usado no proximo registro automatico.
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button id="btn-cancelar-modal-montagem-numero-serie-sequencia" class="btn btn-neutral" type="button">Cancelar</button>
+          <button class="btn btn-success" type="submit">Salvar sequencia</button>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -1077,8 +1229,8 @@
       <div class="modal-header">
         <div>
           <span class="section-pill">Montagem</span>
-          <h2>Numeros de serie disponiveis</h2>
-          <p id="seriais-disponiveis-subtitulo">Veja os modelos disponiveis. Clique para abrir os numeros de serie.</p>
+          <h2>Numeros disponiveis</h2>
+          <p id="seriais-disponiveis-subtitulo">Veja os modelos disponiveis. Clique para abrir os numeros.</p>
         </div>
 
         <button id="btn-fechar-modal-seriais-disponiveis" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
@@ -1098,7 +1250,7 @@
           </thead>
           <tbody id="seriais-disponiveis-tbody">
             <tr>
-              <td colspan="4" class="empty-state">Carregando numeros de serie disponiveis...</td>
+              <td colspan="4" class="empty-state">Carregando numeros disponiveis...</td>
             </tr>
           </tbody>
         </table>

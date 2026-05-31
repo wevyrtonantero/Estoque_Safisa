@@ -215,6 +215,31 @@ class PedidoExpedicaoModel {
           FOREIGN KEY (id_submontagem_serial) REFERENCES submontagem_seriais(id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS pedido_expedicao_item_reservas (
+        id BIGINT NOT NULL AUTO_INCREMENT,
+        id_pedido_item BIGINT NOT NULL,
+        id_peca INT NOT NULL,
+        id_estoque INT NOT NULL,
+        quantidade DECIMAL(10, 2) NOT NULL,
+        id_movimentacao_estoque INT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        KEY idx_pedido_item_reservas_item (id_pedido_item),
+        KEY idx_pedido_item_reservas_peca (id_peca),
+        KEY idx_pedido_item_reservas_estoque (id_estoque),
+        CONSTRAINT fk_pedido_item_reserva_item
+          FOREIGN KEY (id_pedido_item) REFERENCES pedido_expedicao_itens(id)
+          ON DELETE CASCADE,
+        CONSTRAINT fk_pedido_item_reserva_peca
+          FOREIGN KEY (id_peca) REFERENCES pecas(id),
+        CONSTRAINT fk_pedido_item_reserva_estoque
+          FOREIGN KEY (id_estoque) REFERENCES estoques(id),
+        CONSTRAINT fk_pedido_item_reserva_movimentacao
+          FOREIGN KEY (id_movimentacao_estoque) REFERENCES estoque_movimentacoes(id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
   }
 
   static async findPecaById(idPeca, connection = pool) {
@@ -308,6 +333,195 @@ class PedidoExpedicaoModel {
       vinculo,
       serial
     };
+  }
+
+  static async fetchReservasAvulsasByItemIds(idsItens, connection = pool) {
+    if (!idsItens.length) {
+      return [];
+    }
+
+    const placeholders = idsItens.map(() => '?').join(', ');
+    const [rows] = await connection.query(
+      `
+        SELECT
+          pir.id,
+          pir.id_pedido_item,
+          pir.id_peca,
+          pir.id_estoque,
+          pir.quantidade,
+          pir.id_movimentacao_estoque,
+          pir.created_at,
+          p.codigo,
+          p.descricao,
+          e.nome AS estoque_nome
+        FROM pedido_expedicao_item_reservas pir
+        INNER JOIN pecas p ON p.id = pir.id_peca
+        INNER JOIN estoques e ON e.id = pir.id_estoque
+        WHERE pir.id_pedido_item IN (${placeholders})
+        ORDER BY pir.id ASC
+      `,
+      idsItens
+    );
+
+    return rows.map((row) => ({
+      id: Number(row.id),
+      id_pedido_item: Number(row.id_pedido_item),
+      id_peca: Number(row.id_peca),
+      id_estoque: Number(row.id_estoque),
+      quantidade: Number(row.quantidade || 0),
+      id_movimentacao_estoque: row.id_movimentacao_estoque === null ? null : Number(row.id_movimentacao_estoque),
+      codigo: row.codigo,
+      descricao: row.descricao,
+      estoque_nome: row.estoque_nome,
+      created_at: row.created_at || null
+    }));
+  }
+
+  static async reserveAvulsoComponentsInTransaction(connection, pedido, itemHydrated) {
+    const componentes = (itemHydrated.componentes_avulsos || [])
+      .map((componente) => ({
+        id_peca: Number(componente.id_peca),
+        codigo: componente.codigo,
+        descricao: componente.descricao,
+        quantidade: Number(
+          (Number(itemHydrated.quantidade || 0) * Number(componente.quantidade_por_item_venda || 0)).toFixed(2)
+        )
+      }))
+      .filter((componente) => componente.id_peca && componente.quantidade > 0);
+
+    if (!componentes.length) {
+      throw this.createBusinessError('Este item nao possui componentes avulsos para separar.');
+    }
+
+    const estoqueExpedicao = await EstoqueModel.findStockByName(EstoqueModel.EXPEDICAO_NOME, connection);
+    if (!estoqueExpedicao || Number(estoqueExpedicao.ativo) !== 1) {
+      throw this.createBusinessError('O estoque da Expedicao nao esta disponivel para validar a separacao.');
+    }
+
+    for (const componente of componentes) {
+      const saldoExpedicao = await EstoqueModel.findSaldoForUpdate(
+        connection,
+        estoqueExpedicao.id,
+        componente.id_peca
+      );
+      const quantidadeDisponivel = saldoExpedicao ? Number(saldoExpedicao.quantidade) : 0;
+
+      if (quantidadeDisponivel < componente.quantidade) {
+        throw this.createBusinessError(
+          `Nao e possivel marcar OK. Faltam ${Number((componente.quantidade - quantidadeDisponivel).toFixed(2))} unidade(s) de ${componente.codigo} na Expedicao.`
+        );
+      }
+
+      await EstoqueModel.persistSaldo(
+        connection,
+        estoqueExpedicao.id,
+        componente.id_peca,
+        Number((quantidadeDisponivel - componente.quantidade).toFixed(2)),
+        saldoExpedicao
+      );
+
+      const idMovimentacao = await EstoqueModel.createMovimentacao(connection, {
+        id_peca: componente.id_peca,
+        id_estoque_origem: estoqueExpedicao.id,
+        id_estoque_destino: null,
+        tipo_movimentacao: 'AJUSTE',
+        quantidade: componente.quantidade,
+        observacao: `Reserva do item ${componente.codigo} para o pedido ${pedido.codigo_pedido}.`.slice(0, 255)
+      });
+
+      await connection.query(
+        `
+          INSERT INTO pedido_expedicao_item_reservas (
+            id_pedido_item,
+            id_peca,
+            id_estoque,
+            quantidade,
+            id_movimentacao_estoque
+          ) VALUES (?, ?, ?, ?, ?)
+        `,
+        [
+          Number(itemHydrated.id),
+          componente.id_peca,
+          estoqueExpedicao.id,
+          componente.quantidade,
+          idMovimentacao
+        ]
+      );
+    }
+  }
+
+  static async releaseAvulsoReservationsInTransaction(connection, idPedidoItem, pedidoCodigo = '') {
+    const itemId = normalizeOptionalInteger(idPedidoItem);
+    if (!Number.isInteger(itemId)) {
+      return [];
+    }
+
+    const [rows] = await connection.query(
+      `
+        SELECT
+          pir.*,
+          p.codigo,
+          p.descricao,
+          e.nome AS estoque_nome
+        FROM pedido_expedicao_item_reservas pir
+        INNER JOIN pecas p ON p.id = pir.id_peca
+        INNER JOIN estoques e ON e.id = pir.id_estoque
+        WHERE pir.id_pedido_item = ?
+        ORDER BY pir.id ASC
+        FOR UPDATE
+      `,
+      [itemId]
+    );
+
+    const reservas = rows.map((row) => ({
+      id: Number(row.id),
+      id_pedido_item: Number(row.id_pedido_item),
+      id_peca: Number(row.id_peca),
+      id_estoque: Number(row.id_estoque),
+      quantidade: Number(row.quantidade || 0),
+      codigo: row.codigo,
+      descricao: row.descricao,
+      estoque_nome: row.estoque_nome
+    }));
+
+    for (const reserva of reservas) {
+      if (reserva.quantidade <= 0) {
+        continue;
+      }
+
+      const saldoAtual = await EstoqueModel.findSaldoForUpdate(
+        connection,
+        reserva.id_estoque,
+        reserva.id_peca
+      );
+      const quantidadeAtual = saldoAtual ? Number(saldoAtual.quantidade) : 0;
+
+      await EstoqueModel.persistSaldo(
+        connection,
+        reserva.id_estoque,
+        reserva.id_peca,
+        Number((quantidadeAtual + reserva.quantidade).toFixed(2)),
+        saldoAtual
+      );
+
+      await EstoqueModel.createMovimentacao(connection, {
+        id_peca: reserva.id_peca,
+        id_estoque_origem: null,
+        id_estoque_destino: reserva.id_estoque,
+        tipo_movimentacao: 'AJUSTE',
+        quantidade: reserva.quantidade,
+        observacao: `Retorno da reserva do item ${reserva.codigo}${pedidoCodigo ? ` do pedido ${pedidoCodigo}` : ''}.`.slice(0, 255)
+      });
+    }
+
+    if (reservas.length) {
+      await connection.query(
+        'DELETE FROM pedido_expedicao_item_reservas WHERE id_pedido_item = ?',
+        [itemId]
+      );
+    }
+
+    return reservas;
   }
 
   static async findResumoClientes(filters = {}, connection = pool) {
@@ -632,6 +846,10 @@ class PedidoExpedicaoModel {
           await this.releaseSerialBindingInTransaction(connection, Number(serial.id));
         }
 
+        if (itemAtual.separado_avulso) {
+          await this.releaseAvulsoReservationsInTransaction(connection, Number(itemAtual.id), pedidoAtual.codigo_pedido);
+        }
+
         await connection.query('DELETE FROM pedido_expedicao_itens WHERE id = ?', [Number(itemAtual.id)]);
       }
 
@@ -686,6 +904,10 @@ class PedidoExpedicaoModel {
           for (const serial of excedentes) {
             await this.releaseSerialBindingInTransaction(connection, Number(serial.id));
           }
+        }
+
+        if (quantidadeNova !== quantidadeAnterior && itemAtual.separado_avulso) {
+          await this.releaseAvulsoReservationsInTransaction(connection, Number(itemAtual.id), pedidoAtual.codigo_pedido);
         }
 
         await connection.query(
@@ -756,6 +978,10 @@ class PedidoExpedicaoModel {
       for (const item of pedido.itens || []) {
         for (const serial of item.seriais_vinculados || []) {
           await this.releaseSerialBindingInTransaction(connection, Number(serial.id));
+        }
+
+        if (item.separado_avulso) {
+          await this.releaseAvulsoReservationsInTransaction(connection, Number(item.id), pedido.codigo_pedido);
         }
       }
 
@@ -1113,6 +1339,10 @@ class PedidoExpedicaoModel {
 
     pedidosFiltrados.forEach((pedido) => {
       (pedido.itens || []).forEach((item) => {
+        if (item.separado_avulso) {
+          return;
+        }
+
         (item.componentes_avulsos || []).forEach((componente) => {
           const codigoComponente = String(componente.codigo || '').trim().toUpperCase();
           if (!codigoComponente.startsWith('KT-')) {
@@ -1384,13 +1614,22 @@ class PedidoExpedicaoModel {
     }, connection);
     const itemIds = itens.map((item) => item.id);
     const seriais = await this.fetchSeriaisVinculadosByItemIds(itemIds, connection);
+    const reservasAvulsas = await this.fetchReservasAvulsasByItemIds(itemIds, connection);
     const seriaisMap = new Map();
+    const reservasAvulsasMap = new Map();
 
     seriais.forEach((serial) => {
       if (!seriaisMap.has(serial.id_pedido_item)) {
         seriaisMap.set(serial.id_pedido_item, []);
       }
       seriaisMap.get(serial.id_pedido_item).push(serial);
+    });
+
+    reservasAvulsas.forEach((reserva) => {
+      if (!reservasAvulsasMap.has(reserva.id_pedido_item)) {
+        reservasAvulsasMap.set(reserva.id_pedido_item, []);
+      }
+      reservasAvulsasMap.get(reserva.id_pedido_item).push(reserva);
     });
 
     const composicaoPorItemVenda = new Map();
@@ -1442,6 +1681,7 @@ class PedidoExpedicaoModel {
       const itemHydrated = {
         ...item,
         seriais_vinculados: seriaisMap.get(item.id) || [],
+        reservas_avulsas: reservasAvulsasMap.get(item.id) || [],
         composicao_venda: composicaoItem,
         componente_serial: componenteSerialLocal,
         componentes_avulsos: componentesAvulsos,
@@ -1559,20 +1799,33 @@ class PedidoExpedicaoModel {
         }
 
         const diagnosticoAvulsos = [];
+        const reservasAvulsasPorPeca = new Map();
+        (item.reservas_avulsas || []).forEach((reserva) => {
+          const idPeca = Number(reserva.id_peca);
+          const quantidadeAtual = Number(reservasAvulsasPorPeca.get(idPeca) || 0);
+          reservasAvulsasPorPeca.set(idPeca, Number((quantidadeAtual + Number(reserva.quantidade || 0)).toFixed(2)));
+        });
+
         for (const componente of item.componentes_avulsos) {
           const quantidadeNecessaria = Number((quantidade * Number(componente.quantidade_por_item_venda || 0)).toFixed(2));
+          const quantidadeReservada = Math.min(
+            quantidadeNecessaria,
+            Number(reservasAvulsasPorPeca.get(Number(componente.id_peca)) || 0)
+          );
+          const quantidadePendente = Number((quantidadeNecessaria - quantidadeReservada).toFixed(2));
           const expedicaoDisponivel = Number(expedicaoMap.get(componente.id_peca) || 0);
           const montagemDisponivel = Number(montagemMap.get(componente.id_peca) || 0);
           const almoxarifadoDisponivel = Number(almoxarifadoMap.get(componente.id_peca) || 0);
-          const totalParaEstePedido = expedicaoDisponivel + montagemDisponivel + almoxarifadoDisponivel;
+          const totalParaEstePedido = quantidadeReservada + expedicaoDisponivel + montagemDisponivel + almoxarifadoDisponivel;
           const falta = Math.max(0, quantidadeNecessaria - totalParaEstePedido);
-          this.reserveAcrossStocks(stockMaps, componente.id_peca, quantidadeNecessaria);
+          this.reserveAcrossStocks(stockMaps, componente.id_peca, quantidadePendente);
 
           diagnosticoAvulsos.push({
             id_peca: componente.id_peca,
             codigo: componente.codigo,
             descricao: componente.descricao,
             quantidade_necessaria: quantidadeNecessaria,
+            quantidade_reservada_pedido: quantidadeReservada,
             expedicao_disponivel: expedicaoDisponivel,
             montagem_disponivel: montagemDisponivel,
             almoxarifado_disponivel: almoxarifadoDisponivel,
@@ -1734,39 +1987,26 @@ class PedidoExpedicaoModel {
         throw this.createBusinessError('Item do pedido nao encontrado.');
       }
 
-      if (separado) {
-        const pedido = await this.findById(Number(item.id_pedido), connection);
-        const itemHydrated = pedido?.itens?.find((entry) => Number(entry.id) === Number(item.id));
-        if (!pedido || !itemHydrated) {
-          throw this.createBusinessError('Pedido nao encontrado para validar a separacao.');
-        }
+      const pedido = await this.findById(Number(item.id_pedido), connection);
+      const itemHydrated = pedido?.itens?.find((entry) => Number(entry.id) === Number(item.id));
+      if (!pedido || !itemHydrated) {
+        throw this.createBusinessError('Pedido nao encontrado para validar a separacao.');
+      }
 
-        const estoqueExpedicao = await EstoqueModel.findStockByName(EstoqueModel.EXPEDICAO_NOME, connection);
-        if (!estoqueExpedicao || Number(estoqueExpedicao.ativo) !== 1) {
-          throw this.createBusinessError('O estoque da Expedicao nao esta disponivel para validar a separacao.');
-        }
+      if (pedido.status === STATUS.PEDIDO_COLETADO) {
+        throw this.createBusinessError('Nao e possivel alterar um item de pedido que ja foi coletado.');
+      }
 
-        for (const componente of itemHydrated.componentes_avulsos || []) {
-          const quantidadeNecessaria = Number(
-            (Number(itemHydrated.quantidade || 0) * Number(componente.quantidade_por_item_venda || 0)).toFixed(2)
-          );
-          if (quantidadeNecessaria <= 0) {
-            continue;
-          }
+      if (separado && !itemHydrated.exige_separacao_manual) {
+        throw this.createBusinessError('Este item nao exige separacao manual.');
+      }
 
-          const saldoExpedicao = await EstoqueModel.findSaldoForUpdate(
-            connection,
-            estoqueExpedicao.id,
-            Number(componente.id_peca)
-          );
-          const quantidadeDisponivel = saldoExpedicao ? Number(saldoExpedicao.quantidade) : 0;
+      const reservasAtuais = await this.fetchReservasAvulsasByItemIds([itemId], connection);
 
-          if (quantidadeDisponivel < quantidadeNecessaria) {
-            throw this.createBusinessError(
-              `Nao e possivel marcar OK. Faltam ${Number((quantidadeNecessaria - quantidadeDisponivel).toFixed(2))} unidade(s) de ${componente.codigo} na Expedicao.`
-            );
-          }
-        }
+      if (separado && reservasAtuais.length === 0) {
+        await this.reserveAvulsoComponentsInTransaction(connection, pedido, itemHydrated);
+      } else if (!separado && reservasAtuais.length > 0) {
+        await this.releaseAvulsoReservationsInTransaction(connection, itemId, pedido.codigo_pedido);
       }
 
       await connection.query(
@@ -2348,6 +2588,13 @@ class PedidoExpedicaoModel {
         const componentesBaixa = [];
         const solicitacaoRef = Number(item.id);
         const ehComposicaoVenda = Array.isArray(item.composicao_venda) && item.composicao_venda.length > 0;
+        const reservasAvulsasPorPeca = new Map();
+
+        (item.reservas_avulsas || []).forEach((reserva) => {
+          const idPeca = Number(reserva.id_peca);
+          const quantidadeAtual = Number(reservasAvulsasPorPeca.get(idPeca) || 0);
+          reservasAvulsasPorPeca.set(idPeca, Number((quantidadeAtual + Number(reserva.quantidade || 0)).toFixed(2)));
+        });
 
         solicitacoesSaida.push({
           solicitacao_ref: solicitacaoRef,
@@ -2376,11 +2623,36 @@ class PedidoExpedicaoModel {
         }
 
         for (const componente of item.componentes_avulsos || []) {
+          const quantidadeTotal = Number((Number(item.quantidade || 0) * Number(componente.quantidade_por_item_venda || 0)).toFixed(2));
+          const quantidadeReservada = Math.min(
+            quantidadeTotal,
+            Number(reservasAvulsasPorPeca.get(Number(componente.id_peca)) || 0)
+          );
+          const quantidadePendente = Number((quantidadeTotal - quantidadeReservada).toFixed(2));
+
+          if (quantidadeReservada > 0) {
+            componentesBaixa.push({
+              id_peca: Number(componente.id_peca),
+              codigo: componente.codigo,
+              descricao: componente.descricao,
+              quantidade: quantidadeReservada,
+              somente_expedicao: false,
+              baixa_ja_reservada: true,
+              forma_atendimento: ehComposicaoVenda ? 'COMPOSICAO_VENDA' : 'PRONTO',
+              solicitacao_ref: solicitacaoRef,
+              observacao: `Coleta do pedido ${pedido.codigo_pedido}: confirmacao de item reservado ${componente.codigo}.`
+            });
+          }
+
+          if (quantidadePendente <= 0) {
+            continue;
+          }
+
           componentesBaixa.push({
             id_peca: Number(componente.id_peca),
             codigo: componente.codigo,
             descricao: componente.descricao,
-            quantidade: Number((Number(item.quantidade || 0) * Number(componente.quantidade_por_item_venda || 0)).toFixed(2)),
+            quantidade: quantidadePendente,
             somente_expedicao: false,
             forma_atendimento: ehComposicaoVenda ? 'COMPOSICAO_VENDA' : 'PRONTO',
             solicitacao_ref: solicitacaoRef,

@@ -113,6 +113,7 @@ const SubmontagemSerialController = {
       const payload = {
         id_modelo_servo: normalizeOptionalInteger(req.body?.id_modelo_servo),
         quantidade: normalizeOptionalInteger(req.body?.quantidade),
+        numero_manual: req.body?.numero_manual,
         id_montador: req.currentUser?.id || null,
         montador_nome: montadorNome
       };
@@ -130,6 +131,7 @@ const SubmontagemSerialController = {
           quantidade_criada: result.quantidade_criada,
           primeiro_numero_serie: result.primeiro_numero_serie,
           ultimo_numero_serie: result.ultimo_numero_serie,
+          registro_manual: result.registro_manual,
           montador_nome: montadorNome
         }
       });
@@ -146,6 +148,40 @@ const SubmontagemSerialController = {
       }
 
       return res.status(500).json({ message: 'Erro ao criar o lote de numeros de serie.' });
+    }
+  },
+
+  async updateSequence(req, res) {
+    try {
+      const antes = await SubmontagemSerialModel.getNextSerialPreview();
+      const atualizado = await SubmontagemSerialModel.setNextSerialSequence({
+        numero_serie: req.body?.numero_serie,
+        numero_sequencial: req.body?.numero_sequencial,
+        proximo_numero: req.body?.proximo_numero
+      });
+
+      await recordAuditLog(req, {
+        modulo: 'SUBMONTAGEM_SERIAIS',
+        acao: 'UPDATE_SEQUENCE',
+        entidade_tipo: 'SUBMONTAGEM_SERIAL_CONFIG',
+        entidade_id: null,
+        descricao: `Proximo numero de serie alterado para ${atualizado.numero_serie}.`,
+        antes,
+        depois: atualizado
+      });
+
+      return res.status(200).json(atualizado);
+    } catch (error) {
+      console.error('Erro ao atualizar sequencia de numeros de serie:', error);
+
+      if (error.statusCode) {
+        return res.status(error.statusCode).json({
+          message: error.message,
+          details: error.details || null
+        });
+      }
+
+      return res.status(500).json({ message: 'Erro ao atualizar a sequencia de numeros de serie.' });
     }
   },
 

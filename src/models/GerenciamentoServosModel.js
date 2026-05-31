@@ -184,6 +184,10 @@ class GerenciamentoServosModel {
   }
 
   static async buildCompositionMap(idsItemVenda, connection = pool) {
+    if (!idsItemVenda.length) {
+      return new Map();
+    }
+
     const rows = await ComposicaoVendaModel.findAll({ ids_item_venda: idsItemVenda }, connection);
     const map = new Map();
 
@@ -368,11 +372,28 @@ class GerenciamentoServosModel {
 
   static async getMatrix(scope = 'global', connection = pool) {
     const normalizedScope = normalizeScope(scope);
-    const pedidos = await this.findRelevantOrders(normalizedScope, connection);
-    const pedidoIds = pedidos.map((pedido) => Number(pedido.id));
-    const itens = await PedidoExpedicaoModel.fetchItensByPedidoIds(pedidoIds, connection);
-    const composicaoMap = await this.buildCompositionMap([...new Set(itens.map((item) => Number(item.id_peca)))], connection);
+    const pedidosBase = await this.findRelevantOrders(normalizedScope, connection);
+    const pedidoIdsBase = pedidosBase.map((pedido) => Number(pedido.id));
+    const itensBase = await PedidoExpedicaoModel.fetchItensByPedidoIds(pedidoIdsBase, connection);
+    const composicaoMap = await this.buildCompositionMap([...new Set(itensBase.map((item) => Number(item.id_peca)))], connection);
     const stockIds = await this.getStockIds(connection);
+    const modelKeys = new Set(this.MODEL_DEFINITIONS.map((model) => model.key));
+    const demandasPorItem = new Map();
+    const pedidosComServoIds = new Set();
+
+    itensBase.forEach((item) => {
+      const classificacao = this.classifyItemDemand(item, composicaoMap.get(Number(item.id_peca)) || []);
+      if (!classificacao || !modelKeys.has(classificacao.modelKey) || toNumber(classificacao.quantidade) <= 0) {
+        return;
+      }
+
+      demandasPorItem.set(Number(item.id), classificacao);
+      pedidosComServoIds.add(Number(item.id_pedido));
+    });
+
+    const pedidos = pedidosBase.filter((pedido) => pedidosComServoIds.has(Number(pedido.id)));
+    const pedidoIds = pedidos.map((pedido) => Number(pedido.id));
+    const itens = itensBase.filter((item) => pedidosComServoIds.has(Number(item.id_pedido)));
 
     const pedidosColumns = pedidos.map((pedido) => ({
       id: Number(pedido.id),
@@ -398,7 +419,7 @@ class GerenciamentoServosModel {
     );
 
     itens.forEach((item) => {
-      const classificacao = this.classifyItemDemand(item, composicaoMap.get(Number(item.id_peca)) || []);
+      const classificacao = demandasPorItem.get(Number(item.id));
       if (!classificacao || !rowMap.has(classificacao.modelKey)) {
         return;
       }

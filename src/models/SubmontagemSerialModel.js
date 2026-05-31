@@ -3,6 +3,7 @@ const EstoqueModel = require('./EstoqueModel');
 
 const SERIAL_BLOCK_SIZE = 100000;
 const SERIAL_PREFIX_START = 'A'.charCodeAt(0);
+const SERIAL_SEQUENCE_CONFIG_KEY = 'proximo_numero_sequencial';
 const ELIGIBLE_CODE_KEYWORDS = Object.freeze(['VF', 'MC', 'AL', 'BR', 'SAF', 'CJ', 'MBF']);
 const ELIGIBLE_ITEM_CODES = Object.freeze([
   '600',
@@ -31,6 +32,20 @@ function normalizeOptionalInteger(value) {
 
 function padSerialNumber(value) {
   return String(value);
+}
+
+function normalizeManualSerial(value) {
+  const normalized = String(value || '').trim().toUpperCase();
+
+  if (!normalized) {
+    return '';
+  }
+
+  if (normalized.length > 20) {
+    return '';
+  }
+
+  return normalized;
 }
 
 class SubmontagemSerialModel {
@@ -102,6 +117,17 @@ class SubmontagemSerialModel {
         DEFAULT CHARSET = utf8mb4
         COLLATE = utf8mb4_unicode_ci
     `);
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS submontagem_serial_config (
+        chave VARCHAR(80) NOT NULL,
+        valor VARCHAR(120) NOT NULL,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (chave)
+      ) ENGINE = InnoDB
+        DEFAULT CHARSET = utf8mb4
+        COLLATE = utf8mb4_unicode_ci
+    `);
   }
 
   static mapRow(row) {
@@ -163,6 +189,7 @@ class SubmontagemSerialModel {
       `
         SELECT *
         FROM submontagem_seriais
+        WHERE numero_sequencial > 0
         ORDER BY numero_sequencial DESC
         LIMIT 1
       `
@@ -171,9 +198,95 @@ class SubmontagemSerialModel {
     return rows[0] ? this.mapRow(rows[0]) : null;
   }
 
+  static normalizeSerialSequenceInput(data = {}) {
+    const directSequence = normalizeOptionalInteger(data.numero_sequencial);
+    if (Number.isInteger(directSequence) && directSequence > 0) {
+      return directSequence;
+    }
+
+    const serialText = String(data.numero_serie || data.proximo_numero || '').trim().toUpperCase();
+    if (!serialText) {
+      return null;
+    }
+
+    const onlyDigits = serialText.match(/^\d+$/);
+    if (onlyDigits) {
+      return Number.parseInt(serialText, 10);
+    }
+
+    const serialMatch = serialText.match(/^[A-Z]\s*-?\s*(\d+)$/);
+    if (!serialMatch) {
+      return null;
+    }
+
+    return Number.parseInt(serialMatch[1], 10);
+  }
+
+  static async getConfiguredNextSequence(db = pool) {
+    await this.ensureSchema(db);
+
+    const [rows] = await db.query(
+      `
+        SELECT valor
+        FROM submontagem_serial_config
+        WHERE chave = ?
+        LIMIT 1
+      `,
+      [SERIAL_SEQUENCE_CONFIG_KEY]
+    );
+
+    const sequence = normalizeOptionalInteger(rows[0]?.valor);
+    return Number.isInteger(sequence) && sequence > 0 ? sequence : null;
+  }
+
+  static async getNextSequenceForUpdate(connection) {
+    const [configRows] = await connection.query(
+      `
+        SELECT valor
+        FROM submontagem_serial_config
+        WHERE chave = ?
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [SERIAL_SEQUENCE_CONFIG_KEY]
+    );
+
+    const configuredSequence = normalizeOptionalInteger(configRows[0]?.valor);
+    if (Number.isInteger(configuredSequence) && configuredSequence > 0) {
+      return configuredSequence;
+    }
+
+    const [rows] = await connection.query(
+      `
+        SELECT numero_sequencial
+        FROM submontagem_seriais
+        WHERE numero_sequencial > 0
+        ORDER BY numero_sequencial DESC
+        LIMIT 1
+        FOR UPDATE
+      `
+    );
+
+    return (rows[0]?.numero_sequencial ? Number(rows[0].numero_sequencial) : 61123) + 1;
+  }
+
+  static async saveNextSequence(nextSequence, db = pool) {
+    await db.query(
+      `
+        INSERT INTO submontagem_serial_config (chave, valor)
+        VALUES (?, ?)
+        ON DUPLICATE KEY UPDATE valor = VALUES(valor)
+      `,
+      [SERIAL_SEQUENCE_CONFIG_KEY, String(nextSequence)]
+    );
+  }
+
   static async getNextSerialPreview(db = pool) {
-    const lastSerial = await this.findLastSerial(db);
-    const nextSequence = (lastSerial?.numero_sequencial || 61123) + 1;
+    const [configuredSequence, lastSerial] = await Promise.all([
+      this.getConfiguredNextSequence(db),
+      this.findLastSerial(db)
+    ]);
+    const nextSequence = configuredSequence || ((lastSerial?.numero_sequencial || 61123) + 1);
 
     return {
       numero_sequencial: nextSequence,
@@ -303,7 +416,9 @@ class SubmontagemSerialModel {
         SELECT *
         FROM submontagem_seriais
         WHERE ${conditions.join(' AND ')}
-        ORDER BY numero_sequencial ASC
+        ORDER BY
+          CASE WHEN numero_sequencial > 0 THEN numero_sequencial ELSE 999999999999 END ASC,
+          id ASC
         LIMIT ${limit}
       `,
       params
@@ -322,8 +437,8 @@ class SubmontagemSerialModel {
           modelo_servo_codigo,
           modelo_servo_descricao,
           COUNT(*) AS quantidade_disponivel,
-          MIN(numero_sequencial) AS menor_numero_sequencial,
-          MAX(numero_sequencial) AS maior_numero_sequencial
+          MIN(CASE WHEN numero_sequencial > 0 THEN numero_sequencial END) AS menor_numero_sequencial,
+          MAX(CASE WHEN numero_sequencial > 0 THEN numero_sequencial END) AS maior_numero_sequencial
         FROM submontagem_seriais
         WHERE numero_pedido IS NULL
           AND data_saida IS NULL
@@ -355,11 +470,68 @@ class SubmontagemSerialModel {
     };
   }
 
+  static async setNextSerialSequence(data = {}, db = pool) {
+    await this.ensureSchema(db);
+
+    const nextSequence = this.normalizeSerialSequenceInput(data);
+    if (!Number.isInteger(nextSequence) || nextSequence <= 0) {
+      throw this.createBusinessError('Informe um proximo numero de serie valido. Exemplo: A-61267 ou 61267.');
+    }
+
+    const connection = await db.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      const numeroSerie = this.formatSerial(nextSequence);
+      const [rows] = await connection.query(
+        `
+          SELECT id, numero_serie
+          FROM submontagem_seriais
+          WHERE numero_sequencial = ?
+             OR numero_serie = ?
+          LIMIT 1
+          FOR UPDATE
+        `,
+        [nextSequence, numeroSerie]
+      );
+
+      if (rows.length) {
+        throw this.createBusinessError(`O numero ${numeroSerie} ja foi registrado. Escolha um proximo numero ainda nao usado.`);
+      }
+
+      await this.saveNextSequence(nextSequence, connection);
+      await connection.commit();
+
+      return this.getNextSerialPreview(db);
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }
+
+  static async getNextManualSequenceForUpdate(connection) {
+    const [rows] = await connection.query(
+      `
+        SELECT MIN(numero_sequencial) AS menor_numero_sequencial
+        FROM submontagem_seriais
+        WHERE numero_sequencial < 0
+        FOR UPDATE
+      `
+    );
+
+    const currentMin = Number(rows[0]?.menor_numero_sequencial || 0);
+    return currentMin < 0 ? currentMin - 1 : -1;
+  }
+
   static async createBatch(data = {}, db = pool) {
     await this.ensureSchema(db);
 
     const idModeloServo = normalizeOptionalInteger(data.id_modelo_servo);
-    const quantidade = normalizeOptionalInteger(data.quantidade);
+    const manualSerial = normalizeManualSerial(data.numero_manual);
+    const quantidade = manualSerial ? 1 : normalizeOptionalInteger(data.quantidade);
     const montadorNome = String(data.montador_nome || '').trim();
 
     if (!Number.isInteger(idModeloServo)) {
@@ -368,6 +540,10 @@ class SubmontagemSerialModel {
 
     if (!Number.isInteger(quantidade) || quantidade <= 0) {
       throw this.createBusinessError('A quantidade informada deve ser um numero inteiro maior que zero.');
+    }
+
+    if (data.numero_manual && !manualSerial) {
+      throw this.createBusinessError('O numero manual deve ter ate 20 caracteres.');
     }
 
     if (!montadorNome) {
@@ -395,18 +571,33 @@ class SubmontagemSerialModel {
         throw this.createBusinessError('O estoque da Expedicao nao esta disponivel para receber o modelo seriado.');
       }
 
-      const [rows] = await connection.query(
-        `
-          SELECT numero_sequencial
-          FROM submontagem_seriais
-          ORDER BY numero_sequencial DESC
-          LIMIT 1
-          FOR UPDATE
-        `
-      );
-
-      const lastSequence = rows[0]?.numero_sequencial ? Number(rows[0].numero_sequencial) : 61123;
+      const nextSequence = manualSerial ? null : await this.getNextSequenceForUpdate(connection);
+      const lastSequence = manualSerial ? null : nextSequence - 1;
       const observacaoMovimento = `Montagem com registro de numero de serie por ${montadorNome}. Envio automatico para a Expedicao.`;
+
+      if (!manualSerial) {
+        const firstSequence = nextSequence;
+        const lastPlannedSequence = nextSequence + quantidade - 1;
+        const plannedSerials = Array.from(
+          { length: quantidade },
+          (_, index) => this.formatSerial(firstSequence + index)
+        );
+        const [existingSerialRows] = await connection.query(
+          `
+            SELECT numero_serie
+            FROM submontagem_seriais
+            WHERE numero_sequencial BETWEEN ? AND ?
+               OR numero_serie IN (?)
+            LIMIT 1
+            FOR UPDATE
+          `,
+          [firstSequence, lastPlannedSequence, plannedSerials]
+        );
+
+        if (existingSerialRows.length) {
+          throw this.createBusinessError(`O numero ${existingSerialRows[0].numero_serie} ja foi registrado. Ajuste a sequencia antes de gravar.`);
+        }
+      }
 
       let componentesConsumidos = [];
 
@@ -493,9 +684,28 @@ class SubmontagemSerialModel {
 
       const createdRecords = [];
 
+      if (manualSerial) {
+        const [manualRows] = await connection.query(
+          `
+            SELECT id
+            FROM submontagem_seriais
+            WHERE numero_serie = ?
+            LIMIT 1
+            FOR UPDATE
+          `,
+          [manualSerial]
+        );
+
+        if (manualRows.length) {
+          throw this.createBusinessError(`O numero de serie ${manualSerial} ja foi registrado.`);
+        }
+      }
+
       for (let index = 1; index <= quantidade; index += 1) {
-        const numeroSequencial = lastSequence + index;
-        const numeroSerie = this.formatSerial(numeroSequencial);
+        const numeroSequencial = manualSerial
+          ? await this.getNextManualSequenceForUpdate(connection)
+          : lastSequence + index;
+        const numeroSerie = manualSerial || this.formatSerial(numeroSequencial);
 
         const [result] = await connection.query(
           `
@@ -534,12 +744,17 @@ class SubmontagemSerialModel {
         });
       }
 
+      if (!manualSerial) {
+        await this.saveNextSequence(lastSequence + quantidade + 1, connection);
+      }
+
       await connection.commit();
 
       return {
         quantidade_criada: createdRecords.length,
         primeiro_numero_serie: createdRecords[0]?.numero_serie || null,
         ultimo_numero_serie: createdRecords[createdRecords.length - 1]?.numero_serie || null,
+        registro_manual: Boolean(manualSerial),
         estoque_origem_componentes: estoqueMontagem.nome,
         estoque_destino_submontagem: estoqueExpedicao.nome,
         componentes_consumidos: componentesConsumidos,

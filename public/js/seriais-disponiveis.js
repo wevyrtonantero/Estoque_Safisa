@@ -19,11 +19,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   openButton.addEventListener('click', async () => {
     try {
-      tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Carregando numeros de serie disponiveis...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Carregando numeros disponiveis...</td></tr>';
       openModal();
       await carregarTabela();
     } catch (error) {
-      tbody.innerHTML = `<tr><td colspan="4" class="empty-state">${escapeHtml(error.message || 'Nao foi possivel carregar os numeros de serie disponiveis.')}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="4" class="empty-state">${escapeHtml(error.message || 'Nao foi possivel carregar os numeros disponiveis.')}</td></tr>`;
     }
   });
 
@@ -79,7 +79,7 @@ document.addEventListener('DOMContentLoaded', () => {
     subtitulo.textContent = `Modelos disponiveis agora: ${formatInteger((resumoAtual.modelos || []).length)}. Clique em ver numeros para abrir a lista detalhada.`;
 
     if (!Array.isArray(resumoAtual.modelos) || !resumoAtual.modelos.length) {
-      tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Nenhum numero de serie disponivel no momento.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Nenhum numero disponivel no momento.</td></tr>';
       return;
     }
 
@@ -130,7 +130,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderizarTabelaAgrupada() {
     if (!Array.isArray(resumoAtual.modelos) || !resumoAtual.modelos.length) {
-      tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Nenhum numero de serie disponivel no momento.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="4" class="empty-state">Nenhum numero disponivel no momento.</td></tr>';
       return;
     }
 
