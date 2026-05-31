@@ -70,8 +70,8 @@
               <a class="btn btn-secondary" href="/pagina-consulta-estoques"><span class="btn-label">Consulta TV</span></a>
               <a class="btn btn-secondary" href="/pagina-pecas-inacabadas"><span class="btn-label">Pecas Inacabadas</span></a>
               <a class="btn btn-secondary" href="/pagina-retrabalho"><span class="btn-label">Retrabalho</span></a>
-              <a class="btn btn-primary" href="/pagina-gerenciamento-pedidos"><span class="btn-label">Gerenciamento de Pedidos Ativos</span></a>
-              <a class="btn btn-secondary" href="/pagina-gerenciamento-servos"><span class="btn-label">Gerenciamento de Servos</span></a>
+              <button id="btn-dashboard-pedidos" class="btn btn-primary" type="button"><span class="btn-label">Gerenciamento de Pedidos Ativos</span></button>
+              <button id="btn-dashboard-servos" class="btn btn-secondary" type="button"><span class="btn-label">Gerenciamento de Servos</span></button>
               <a class="btn btn-secondary" href="/pagina-saidas-expedicao"><span class="btn-label">Saidas da Expedicao</span></a>
             </div>
           </div>
@@ -588,6 +588,133 @@
           <tbody id="dashboard-destaques-tbody">
             <tr>
               <td colspan="4" class="empty-state">Carregando destaques de estoque...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="dashboard-pedidos-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="dashboard-pedidos"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Consulta</span>
+          <h2>Pedidos ativos</h2>
+          <p id="dashboard-pedidos-total">0 pedido(s) ativo(s)</p>
+        </div>
+
+        <button id="btn-fechar-modal-dashboard-pedidos" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div class="view-grid">
+        <div class="view-card">
+          <span>Ativos</span>
+          <strong id="dashboard-pedidos-card-ativos">0</strong>
+        </div>
+        <div class="view-card">
+          <span>Sai hoje</span>
+          <strong id="dashboard-pedidos-card-hoje">0</strong>
+        </div>
+        <div class="view-card">
+          <span>Aguardando NF</span>
+          <strong id="dashboard-pedidos-card-nf">0</strong>
+        </div>
+        <div class="view-card">
+          <span>Aguardando transporte</span>
+          <strong id="dashboard-pedidos-card-transporte">0</strong>
+        </div>
+      </div>
+
+      <div class="subtle-divider"></div>
+
+      <form id="dashboard-pedidos-filtro-form" class="toolbar-form stock-toolbar">
+        <div class="field">
+          <label for="dashboard-pedidos-filtro-busca">Busca</label>
+          <input id="dashboard-pedidos-filtro-busca" type="text" placeholder="Cliente, pedido, cidade ou transportadora">
+        </div>
+
+        <div class="field">
+          <label for="dashboard-pedidos-filtro-status">Status</label>
+          <select id="dashboard-pedidos-filtro-status">
+            <option value="">Todos</option>
+            <option value="AGUARDANDO MONTAGEM">Aguardando montagem</option>
+            <option value="EM MONTAGEM">Em montagem</option>
+            <option value="AGUARDANDO NF">Aguardando NF</option>
+            <option value="AGUARDANDO TRANSPORTADORA">Aguardando transportadora</option>
+          </select>
+        </div>
+
+        <div class="toolbar-actions">
+          <button id="btn-dashboard-pedidos-limpar" class="btn btn-neutral" type="button">Limpar</button>
+        </div>
+      </form>
+
+      <div class="table-wrapper dashboard-observer-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Saida</th>
+              <th>Pedido</th>
+              <th>Cliente</th>
+              <th>Cidade</th>
+              <th>Status</th>
+              <th>Itens</th>
+              <th>Faltas</th>
+              <th>Transportadora</th>
+            </tr>
+          </thead>
+          <tbody id="dashboard-pedidos-tbody">
+            <tr>
+              <td colspan="8" class="empty-state">Carregando pedidos ativos...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="dashboard-servos-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="dashboard-servos"></div>
+
+    <div class="modal-dialog modal-wide dashboard-servo-modal-dialog">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Consulta</span>
+          <h2>Gerenciamento de Servos</h2>
+          <p id="dashboard-servos-subtitulo">Matriz em modo leitura para acompanhamento.</p>
+        </div>
+
+        <button id="btn-fechar-modal-dashboard-servos" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div class="servo-sheet-panel-head dashboard-servo-panel-head">
+        <div>
+          <h3 id="dashboard-servos-titulo">Consulta de servos</h3>
+          <p class="servo-sheet-panel-subtext">Visualizacao compacta. Use a rolagem horizontal para ver todos os pedidos.</p>
+        </div>
+
+        <div class="segmented-control servo-sheet-scope-switch">
+          <button id="dashboard-servos-btn-dia" class="segmented-btn" type="button">Pedidos do dia</button>
+          <button id="dashboard-servos-btn-global" class="segmented-btn is-active" type="button">Global</button>
+        </div>
+      </div>
+
+      <div id="dashboard-servos-resumo" class="summary-chip-row"></div>
+
+      <div class="table-wrapper servo-sheet-wrapper dashboard-servo-wrapper">
+        <table class="servo-sheet-table" id="dashboard-servos-tabela">
+          <thead id="dashboard-servos-thead">
+            <tr>
+              <th class="sticky-col servo-sheet-model-col">Modelo</th>
+              <th class="servo-sheet-total-col">Total</th>
+            </tr>
+          </thead>
+          <tbody id="dashboard-servos-tbody">
+            <tr>
+              <td colspan="2" class="empty-state">Carregando matriz de servos...</td>
             </tr>
           </tbody>
         </table>

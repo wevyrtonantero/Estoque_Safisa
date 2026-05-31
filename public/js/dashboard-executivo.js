@@ -4,6 +4,8 @@ const estoquePrioridadesApiBaseUrl = '/api/estoque/prioridades';
 const estoqueMateriaPrimaApiBaseUrl = '/api/estoque-materias-primas/saldos';
 const submontagensApiBaseUrl = '/api/submontagens';
 const fornecedoresApiBaseUrl = '/api/fornecedores';
+const pedidosExpedicaoApiBaseUrl = '/api/pedidos-expedicao';
+const gerenciamentoServosApiBaseUrl = '/api/gerenciamento-servos/matriz';
 const AUTO_REFRESH_MS = 15000;
 
 let painelCache = null;
@@ -13,6 +15,9 @@ let alertasAlmoxCache = [];
 let materiasPrimasCache = [];
 let submontagensCache = [];
 let fornecedoresCache = [];
+let pedidosDashboardCache = [];
+let servosDashboardMatriz = null;
+let servosDashboardEscopo = 'global';
 let autoRefreshHandle = null;
 
 const refs = {
@@ -80,7 +85,25 @@ const refs = {
   indicadorProduzido: document.getElementById('dashboard-indicador-produzido'),
   indicadorRefugo: document.getElementById('dashboard-indicador-refugo'),
   indicadorProduzidoHoje: document.getElementById('dashboard-indicador-produzido-hoje'),
-  indicadorRefugoHoje: document.getElementById('dashboard-indicador-refugo-hoje')
+  indicadorRefugoHoje: document.getElementById('dashboard-indicador-refugo-hoje'),
+  pedidosModal: document.getElementById('dashboard-pedidos-modal'),
+  pedidosTotal: document.getElementById('dashboard-pedidos-total'),
+  pedidosFiltroForm: document.getElementById('dashboard-pedidos-filtro-form'),
+  pedidosFiltroBusca: document.getElementById('dashboard-pedidos-filtro-busca'),
+  pedidosFiltroStatus: document.getElementById('dashboard-pedidos-filtro-status'),
+  pedidosTbody: document.getElementById('dashboard-pedidos-tbody'),
+  pedidosCardAtivos: document.getElementById('dashboard-pedidos-card-ativos'),
+  pedidosCardHoje: document.getElementById('dashboard-pedidos-card-hoje'),
+  pedidosCardNf: document.getElementById('dashboard-pedidos-card-nf'),
+  pedidosCardTransporte: document.getElementById('dashboard-pedidos-card-transporte'),
+  servosModal: document.getElementById('dashboard-servos-modal'),
+  servosTitulo: document.getElementById('dashboard-servos-titulo'),
+  servosSubtitulo: document.getElementById('dashboard-servos-subtitulo'),
+  servosResumo: document.getElementById('dashboard-servos-resumo'),
+  servosThead: document.getElementById('dashboard-servos-thead'),
+  servosTbody: document.getElementById('dashboard-servos-tbody'),
+  servosBtnDia: document.getElementById('dashboard-servos-btn-dia'),
+  servosBtnGlobal: document.getElementById('dashboard-servos-btn-global')
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -106,15 +129,20 @@ function bindEvents() {
   document.getElementById('btn-dashboard-fornecedores').addEventListener('click', abrirModalFornecedores);
   document.getElementById('btn-dashboard-simulacao').addEventListener('click', () => openModal(refs.simulacaoModal));
   document.getElementById('btn-dashboard-indicadores').addEventListener('click', () => openModal(refs.indicadoresModal));
+  document.getElementById('btn-dashboard-pedidos').addEventListener('click', abrirModalPedidosDashboard);
+  document.getElementById('btn-dashboard-servos').addEventListener('click', abrirModalServosDashboard);
 
   document.getElementById('btn-fechar-modal-dashboard-estoques').addEventListener('click', () => closeModal(refs.estoquesModal));
   document.getElementById('btn-fechar-modal-dashboard-mp').addEventListener('click', () => closeModal(refs.mpModal));
   document.getElementById('btn-fechar-modal-dashboard-fornecedores').addEventListener('click', fecharModalFornecedores);
   document.getElementById('btn-fechar-modal-dashboard-simulacao').addEventListener('click', () => closeModal(refs.simulacaoModal));
   document.getElementById('btn-fechar-modal-dashboard-indicadores').addEventListener('click', () => closeModal(refs.indicadoresModal));
+  document.getElementById('btn-fechar-modal-dashboard-pedidos').addEventListener('click', () => closeModal(refs.pedidosModal));
+  document.getElementById('btn-fechar-modal-dashboard-servos').addEventListener('click', () => closeModal(refs.servosModal));
   document.getElementById('btn-limpar-modal-dashboard-estoques').addEventListener('click', limparFiltrosEstoque);
   document.getElementById('btn-limpar-modal-dashboard-mp').addEventListener('click', limparFiltrosMp);
   document.getElementById('btn-limpar-modal-dashboard-fornecedores').addEventListener('click', limparFiltrosFornecedores);
+  document.getElementById('btn-dashboard-pedidos-limpar').addEventListener('click', limparFiltrosPedidosDashboard);
 
   refs.estoquesFiltroForm.querySelectorAll('input, select').forEach((field) => {
     field.addEventListener('input', renderizarTabelaEstoquesDetalhados);
@@ -130,6 +158,14 @@ function bindEvents() {
     field.addEventListener('input', renderizarFornecedores);
   });
 
+  refs.pedidosFiltroForm.querySelectorAll('input, select').forEach((field) => {
+    field.addEventListener('input', renderizarPedidosDashboard);
+    field.addEventListener('change', renderizarPedidosDashboard);
+  });
+
+  refs.servosBtnDia.addEventListener('click', () => alternarEscopoServosDashboard('dia'));
+  refs.servosBtnGlobal.addEventListener('click', () => alternarEscopoServosDashboard('global'));
+
   refs.simulacaoForm.addEventListener('submit', handleSimulacaoSubmit);
   refs.simulacaoSubmontagemBusca.addEventListener('input', () => {
     refs.simulacaoSubmontagemId.value = '';
@@ -138,7 +174,7 @@ function bindEvents() {
   refs.simulacaoSubmontagemBusca.addEventListener('focus', () => renderizarSugestoesSubmontagem(refs.simulacaoSubmontagemBusca.value.trim()));
   refs.simulacaoSugestoes.addEventListener('click', handleSugestaoSubmontagemClick);
 
-  [refs.estoquesModal, refs.mpModal, refs.fornecedoresModal, refs.simulacaoModal, refs.indicadoresModal].forEach((modal) => {
+  [refs.estoquesModal, refs.mpModal, refs.fornecedoresModal, refs.simulacaoModal, refs.indicadoresModal, refs.pedidosModal, refs.servosModal].forEach((modal) => {
     modal.addEventListener('click', handleBackdrop);
   });
 
@@ -219,6 +255,32 @@ async function carregarFornecedores() {
   }
 
   fornecedoresCache = Array.isArray(result) ? result : [];
+}
+
+async function carregarPedidosDashboard() {
+  const response = await fetch(`${pedidosExpedicaoApiBaseUrl}?ativos=true`);
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || 'Nao foi possivel carregar os pedidos ativos.');
+  }
+
+  pedidosDashboardCache = Array.isArray(result) ? result : [];
+  renderizarPedidosDashboard();
+}
+
+async function carregarServosDashboard() {
+  refs.servosTbody.innerHTML = '<tr><td colspan="2" class="empty-state">Carregando matriz de servos...</td></tr>';
+
+  const response = await fetch(`${gerenciamentoServosApiBaseUrl}?escopo=${encodeURIComponent(servosDashboardEscopo)}`);
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(result.message || 'Nao foi possivel carregar a matriz de servos.');
+  }
+
+  servosDashboardMatriz = result;
+  renderizarServosDashboard();
 }
 
 async function carregarSubmontagens() {
@@ -413,6 +475,132 @@ function renderizarFornecedores() {
   `).join('');
 }
 
+function renderizarPedidosDashboard() {
+  const pedidos = obterPedidosDashboardFiltrados();
+  const ativos = pedidosDashboardCache.filter((pedido) => pedido.status !== 'PEDIDO COLETADO');
+  const programadosHoje = ativos.filter((pedido) => isPedidoProgramadoHoje(pedido)).length;
+  const aguardandoNf = ativos.filter((pedido) => pedido.status === 'AGUARDANDO NF').length;
+  const aguardandoTransporte = ativos.filter((pedido) => pedido.status === 'AGUARDANDO TRANSPORTADORA').length;
+
+  refs.pedidosTotal.textContent = `${formatInteger(pedidos.length)} pedido(s) em exibicao`;
+  refs.pedidosCardAtivos.textContent = formatInteger(ativos.length);
+  refs.pedidosCardHoje.textContent = formatInteger(programadosHoje);
+  refs.pedidosCardNf.textContent = formatInteger(aguardandoNf);
+  refs.pedidosCardTransporte.textContent = formatInteger(aguardandoTransporte);
+
+  if (!pedidos.length) {
+    refs.pedidosTbody.innerHTML = '<tr><td colspan="8" class="empty-state">Nenhum pedido ativo encontrado com os filtros informados.</td></tr>';
+    return;
+  }
+
+  refs.pedidosTbody.innerHTML = pedidos.map((pedido) => {
+    const faltas = Array.isArray(pedido.faltantes) ? pedido.faltantes.length : 0;
+    const progresso = `${formatInteger(pedido.itens_concluidos || 0)}/${formatInteger(pedido.total_itens || 0)}`;
+
+    return `
+      <tr>
+        <td>${isPedidoProgramadoHoje(pedido) ? '<span class="status-chip is-info">Hoje</span>' : formatarDataCurta(pedido.data_programacao_saida)}</td>
+        <td class="table-code">${escapeHtml(pedido.codigo_pedido || '-')}</td>
+        <td class="table-description">${escapeHtml(pedido.cliente_nome || '-')}</td>
+        <td>${escapeHtml(pedido.cidade || '-')}</td>
+        <td>${renderizarStatusPedidoDashboard(pedido)}</td>
+        <td class="table-quantity">${escapeHtml(progresso)}</td>
+        <td class="table-quantity">${formatInteger(faltas)}</td>
+        <td>${escapeHtml(pedido.transportadora || '-')}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function renderizarServosDashboard() {
+  const pedidos = servosDashboardMatriz?.pedidos || [];
+  const rows = servosDashboardMatriz?.rows || [];
+  const resumo = servosDashboardMatriz?.resumo || {};
+  const data = servosDashboardMatriz?.data_referencia || '-';
+
+  refs.servosTitulo.textContent = `Consulta de servos - ${servosDashboardEscopo === 'dia' ? 'Pedidos do dia' : 'Visao global'}`;
+  refs.servosSubtitulo.textContent = `Referencia ${data}. Matriz em modo leitura para acompanhamento.`;
+  refs.servosBtnDia.classList.toggle('is-active', servosDashboardEscopo === 'dia');
+  refs.servosBtnGlobal.classList.toggle('is-active', servosDashboardEscopo === 'global');
+
+  refs.servosResumo.innerHTML = [
+    ['Escopo', resumo.escopo === 'dia' ? 'Dia' : 'Global'],
+    ['Pedidos', resumo.pedidos || 0],
+    ['Modelos', resumo.modelos || 0],
+    ['Demanda', formatServoNumber(resumo.demanda_total)],
+    ['Estoque', formatServoNumber(resumo.estoque_total)],
+    ['Corpos', formatServoNumber(resumo.corpos_total)],
+    ['Zinco', formatServoNumber(resumo.zinco_total)],
+    ['Usinagem', formatServoNumber(resumo.usinagem_total)]
+  ].map(([label, value]) => `
+    <span class="summary-chip">
+      <small>${escapeHtml(label)}</small>
+      <strong>${escapeHtml(value)}</strong>
+    </span>
+  `).join('');
+
+  refs.servosThead.innerHTML = `
+    <tr>
+      <th class="sticky-col servo-sheet-model-col">
+        <div class="servo-sheet-model-head">
+          <span>MODELO</span>
+          <strong>${escapeHtml(data)}</strong>
+        </div>
+      </th>
+      <th class="servo-sheet-total-col servo-sheet-head-accent">TOTAL</th>
+      ${pedidos.map((pedido) => `
+        <th class="servo-sheet-vertical-col" title="${escapeHtml(`${pedido.cliente_nome} | ${pedido.codigo_pedido}`)}">
+          <span>${escapeHtml(pedido.cliente_nome)}</span>
+        </th>
+      `).join('')}
+      <th class="servo-sheet-resource-col servo-sheet-divider-left"><span>ESTOQUE</span></th>
+      <th class="servo-sheet-resource-col"><span>CORPOS</span></th>
+      <th class="servo-sheet-resource-col"><span>ZINCO</span></th>
+      <th class="servo-sheet-resource-col"><span>USINAGEM</span></th>
+      <th class="servo-sheet-resource-col"><span>MAT-PRIMA</span></th>
+    </tr>
+  `;
+
+  if (!rows.length) {
+    refs.servosTbody.innerHTML = `<tr><td colspan="${2 + pedidos.length + 5}" class="empty-state">Nenhum modelo encontrado para este escopo.</td></tr>`;
+    return;
+  }
+
+  const totalPedidos = Object.fromEntries(pedidos.map((pedido) => [String(pedido.id), 0]));
+  rows.forEach((row) => {
+    pedidos.forEach((pedido) => {
+      totalPedidos[String(pedido.id)] += Number(row.pedidos[String(pedido.id)] || 0);
+    });
+  });
+
+  refs.servosTbody.innerHTML = `
+    ${rows.map((row) => `
+      <tr class="servo-sheet-row">
+        <th class="sticky-col servo-sheet-model-cell">
+          <div class="servo-sheet-model-title">${escapeHtml(row.label)}${row.corpo_compartilhado ? '<span class="servo-sheet-body-marker" title="Corpo compartilhado">*</span>' : ''}</div>
+        </th>
+        ${renderServoMetricCell(row.total, 'servo-sheet-total-cell')}
+        ${pedidos.map((pedido) => renderServoMetricCell(row.pedidos[String(pedido.id)] || 0)).join('')}
+        ${renderServoMetricCell(row.estoque, 'servo-sheet-divider-left')}
+        ${renderServoMetricCell(row.corpos)}
+        ${renderServoMetricCell(row.zinco)}
+        ${renderServoMetricCell(row.usinagem)}
+        ${renderServoMateriaPrimaCell(row.materia_prima)}
+      </tr>
+    `).join('')}
+    <tr class="servo-sheet-total-row">
+      <th class="sticky-col servo-sheet-model-cell">TOTAL GERAL</th>
+      <td class="servo-sheet-total-cell">${formatServoNumberOrEmpty(rows.reduce((sum, row) => sum + Number(row.total || 0), 0))}</td>
+      ${pedidos.map((pedido) => `<td class="servo-sheet-cell servo-sheet-total-inline">${formatServoNumberOrEmpty(totalPedidos[String(pedido.id)] || 0)}</td>`).join('')}
+      <td class="servo-sheet-cell servo-sheet-divider-left servo-sheet-total-muted">-</td>
+      <td class="servo-sheet-cell servo-sheet-total-muted">-</td>
+      <td class="servo-sheet-cell servo-sheet-total-muted">-</td>
+      <td class="servo-sheet-cell servo-sheet-total-muted">-</td>
+      <td class="servo-sheet-cell servo-sheet-total-muted">-</td>
+    </tr>
+  `;
+}
+
 function renderizarTabelaSaidas(items) {
   if (!items.length) {
     refs.saidasTbody.innerHTML = '<tr><td colspan="3" class="empty-state">Nenhuma saida registrada.</td></tr>';
@@ -597,6 +785,12 @@ function iniciarAtualizacaoAutomatica() {
         carregarAlertasAlmox(),
         carregarMateriasPrimas()
       ]);
+      if (!refs.pedidosModal.classList.contains('hidden')) {
+        await carregarPedidosDashboard();
+      }
+      if (!refs.servosModal.classList.contains('hidden')) {
+        await carregarServosDashboard();
+      }
     } catch (error) {
       console.error('Falha ao atualizar o dashboard:', error);
     }
@@ -620,6 +814,12 @@ function handleBackdrop(event) {
   if (modalName === 'dashboard-indicadores') {
     closeModal(refs.indicadoresModal);
   }
+  if (modalName === 'dashboard-pedidos') {
+    closeModal(refs.pedidosModal);
+  }
+  if (modalName === 'dashboard-servos') {
+    closeModal(refs.servosModal);
+  }
 }
 
 function handleKeyboardShortcuts(event) {
@@ -629,6 +829,16 @@ function handleKeyboardShortcuts(event) {
 
   if (!refs.indicadoresModal.classList.contains('hidden')) {
     closeModal(refs.indicadoresModal);
+    return;
+  }
+
+  if (!refs.servosModal.classList.contains('hidden')) {
+    closeModal(refs.servosModal);
+    return;
+  }
+
+  if (!refs.pedidosModal.classList.contains('hidden')) {
+    closeModal(refs.pedidosModal);
     return;
   }
 
@@ -661,7 +871,7 @@ function openModal(modal) {
 function closeModal(modal) {
   modal.classList.add('hidden');
   modal.setAttribute('aria-hidden', 'true');
-  const hasModal = [refs.estoquesModal, refs.mpModal, refs.fornecedoresModal, refs.simulacaoModal, refs.indicadoresModal]
+  const hasModal = [refs.estoquesModal, refs.mpModal, refs.fornecedoresModal, refs.simulacaoModal, refs.indicadoresModal, refs.pedidosModal, refs.servosModal]
     .some((entry) => !entry.classList.contains('hidden'));
   document.body.classList.toggle('has-modal', hasModal);
 }
@@ -680,6 +890,36 @@ async function abrirModalFornecedores() {
 
 function fecharModalFornecedores() {
   closeModal(refs.fornecedoresModal);
+}
+
+async function abrirModalPedidosDashboard() {
+  try {
+    refs.pedidosTbody.innerHTML = '<tr><td colspan="8" class="empty-state">Carregando pedidos ativos...</td></tr>';
+    openModal(refs.pedidosModal);
+    await carregarPedidosDashboard();
+  } catch (error) {
+    refs.pedidosTbody.innerHTML = `<tr><td colspan="8" class="empty-state">${escapeHtml(error.message)}</td></tr>`;
+  }
+}
+
+async function abrirModalServosDashboard() {
+  try {
+    openModal(refs.servosModal);
+    await carregarServosDashboard();
+  } catch (error) {
+    refs.servosTbody.innerHTML = `<tr><td colspan="2" class="empty-state">${escapeHtml(error.message)}</td></tr>`;
+  }
+}
+
+async function alternarEscopoServosDashboard(escopo) {
+  if (servosDashboardEscopo === escopo) {
+    return;
+  }
+
+  servosDashboardEscopo = escopo;
+  refs.servosBtnDia.classList.toggle('is-active', servosDashboardEscopo === 'dia');
+  refs.servosBtnGlobal.classList.toggle('is-active', servosDashboardEscopo === 'global');
+  await carregarServosDashboard();
 }
 
 function handleGlobalClick(event) {
@@ -904,6 +1144,132 @@ function limparFiltrosMp() {
 function limparFiltrosFornecedores() {
   refs.fornecedoresFiltroForm.reset();
   renderizarFornecedores();
+}
+
+function limparFiltrosPedidosDashboard() {
+  refs.pedidosFiltroForm.reset();
+  renderizarPedidosDashboard();
+}
+
+function obterPedidosDashboardFiltrados() {
+  const busca = normalizarBusca(refs.pedidosFiltroBusca.value.trim());
+  const status = String(refs.pedidosFiltroStatus.value || '').trim().toUpperCase();
+
+  return pedidosDashboardCache
+    .filter((pedido) => pedido.status !== 'PEDIDO COLETADO')
+    .filter((pedido) => {
+      if (status && String(pedido.status || '').toUpperCase() !== status) {
+        return false;
+      }
+
+      if (!busca) {
+        return true;
+      }
+
+      return [
+        pedido.codigo_pedido,
+        pedido.cliente_nome,
+        pedido.cidade,
+        pedido.transportadora,
+        pedido.vendedora
+      ].some((value) => normalizarBusca(value).includes(busca));
+    })
+    .sort((a, b) => {
+      const aHoje = isPedidoProgramadoHoje(a);
+      const bHoje = isPedidoProgramadoHoje(b);
+      if (aHoje !== bHoje) {
+        return aHoje ? -1 : 1;
+      }
+
+      return Number(a.prioridade_ordem || 0) - Number(b.prioridade_ordem || 0)
+        || Number(a.id || 0) - Number(b.id || 0);
+    });
+}
+
+function isPedidoProgramadoHoje(pedido) {
+  return normalizeDateInput(pedido?.data_programacao_saida) === normalizeDateInput(new Date());
+}
+
+function normalizeDateInput(value) {
+  if (!value) {
+    return '';
+  }
+
+  if (value instanceof Date) {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const day = String(value.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  const text = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) {
+    return text.slice(0, 10);
+  }
+
+  const data = new Date(text);
+  return Number.isNaN(data.getTime()) ? '' : data.toISOString().slice(0, 10);
+}
+
+function renderizarStatusPedidoDashboard(pedido) {
+  const texto = obterTextoStatusPedidoDashboard(pedido);
+  let cssClass = 'status-chip';
+
+  if (texto === 'Faltam itens') {
+    cssClass += ' is-danger';
+  } else if (texto === 'AGUARDANDO NF') {
+    cssClass += ' is-warning';
+  } else if (texto === 'AGUARDANDO TRANSPORTADORA') {
+    cssClass += ' is-success';
+  } else if (texto === 'EM MONTAGEM') {
+    cssClass += ' is-info';
+  }
+
+  return `<span class="${cssClass}">${escapeHtml(texto)}</span>`;
+}
+
+function obterTextoStatusPedidoDashboard(pedido) {
+  if (!pedido?.pode_atender && ['AGUARDANDO MONTAGEM', 'EM MONTAGEM'].includes(pedido?.status)) {
+    return 'Faltam itens';
+  }
+
+  return pedido?.status || 'AGUARDANDO MONTAGEM';
+}
+
+function renderServoMetricCell(value, extraClass = '') {
+  const number = Number(value || 0);
+  const isZero = number === 0;
+  return `<td class="servo-sheet-cell ${extraClass} ${isZero ? 'is-zero' : 'is-valued'}">${formatServoNumberOrEmpty(number)}</td>`;
+}
+
+function renderServoMateriaPrimaCell(materiaPrima) {
+  const quantidade = Number(materiaPrima?.quantidade || 0);
+  if (!quantidade) {
+    return `<td class="servo-sheet-cell is-dash" title="${escapeHtml(materiaPrima?.codigo || '-')}">-</td>`;
+  }
+
+  return `
+    <td class="servo-sheet-cell is-valued" title="${escapeHtml(`${materiaPrima.codigo || '-'} ${materiaPrima.unidade || ''}`.trim())}">
+      ${formatServoNumber(quantidade)}
+    </td>
+  `;
+}
+
+function formatServoNumber(value) {
+  const number = Number(value || 0);
+  if (Number.isInteger(number)) {
+    return String(number);
+  }
+
+  return number.toLocaleString('pt-BR', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2
+  });
+}
+
+function formatServoNumberOrEmpty(value) {
+  const number = Number(value || 0);
+  return number === 0 ? '' : formatServoNumber(number);
 }
 
 function obterAlertasAlmoxOperacionais() {

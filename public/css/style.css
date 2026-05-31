@@ -3487,6 +3487,77 @@ th {
   text-overflow: ellipsis;
 }
 
+.dashboard-observer-table {
+  max-height: min(520px, calc(100vh - 260px));
+  overflow: auto;
+}
+
+.dashboard-observer-table th,
+.dashboard-observer-table td {
+  white-space: nowrap;
+}
+
+.dashboard-observer-table .table-description {
+  min-width: 220px;
+  white-space: normal;
+}
+
+.modal-dialog.dashboard-servo-modal-dialog {
+  width: min(1240px, 100%);
+}
+
+.dashboard-servo-panel-head {
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.dashboard-servo-panel-head h3 {
+  margin: 0 0 4px;
+  color: var(--primary-900);
+  font-size: 1.04rem;
+}
+
+.summary-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.summary-chip {
+  display: inline-flex;
+  min-width: 96px;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid rgba(190, 208, 225, 0.76);
+  border-radius: 12px;
+  background: rgba(245, 249, 253, 0.92);
+}
+
+.summary-chip small {
+  color: var(--text-soft);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.summary-chip strong {
+  color: var(--primary-900);
+  font-size: 0.95rem;
+  line-height: 1.1;
+}
+
+.dashboard-servo-wrapper {
+  max-height: min(560px, calc(100vh - 300px));
+  border-radius: 14px;
+}
+
+.dashboard-servo-wrapper .servo-sheet-table {
+  min-width: 980px;
+}
+
 tbody tr:nth-child(even) {
   background: rgba(238, 245, 252, 0.4);
 }
