@@ -74,7 +74,7 @@ function resolveIndicatorHost() {
 
   const portalShell = document.querySelector('.portal-shell');
   if (portalShell) {
-    return portalShell;
+    return resolvePortalActionsHost(portalShell);
   }
 
   return null;
@@ -94,6 +94,18 @@ function resolveTopbarActionsHost() {
   const actions = document.createElement('div');
   actions.className = 'topbar-actions topbar-actions-session';
   topbar.appendChild(actions);
+  return actions;
+}
+
+function resolvePortalActionsHost(portalShell) {
+  const existingActions = Array.from(portalShell.children).find((child) => child.classList?.contains('portal-session-actions'));
+  if (existingActions) {
+    return existingActions;
+  }
+
+  const actions = document.createElement('div');
+  actions.className = 'portal-session-actions';
+  portalShell.appendChild(actions);
   return actions;
 }
 

@@ -74,19 +74,32 @@
 
   function resolveHost() {
     const topbar = document.querySelector('.workspace > .topbar');
-    if (!topbar) {
-      return document.body;
+    if (topbar) {
+      const existingActions = Array.from(topbar.children).find((child) => child.classList?.contains('topbar-actions'));
+      if (existingActions) {
+        return existingActions;
+      }
+
+      const actions = document.createElement('div');
+      actions.className = 'topbar-actions topbar-actions-session';
+      topbar.appendChild(actions);
+      return actions;
     }
 
-    const existingActions = Array.from(topbar.children).find((child) => child.classList?.contains('topbar-actions'));
-    if (existingActions) {
-      return existingActions;
+    const portalShell = document.querySelector('.portal-shell');
+    if (portalShell) {
+      const existingActions = Array.from(portalShell.children).find((child) => child.classList?.contains('portal-session-actions'));
+      if (existingActions) {
+        return existingActions;
+      }
+
+      const actions = document.createElement('div');
+      actions.className = 'portal-session-actions';
+      portalShell.appendChild(actions);
+      return actions;
     }
 
-    const actions = document.createElement('div');
-    actions.className = 'topbar-actions topbar-actions-session';
-    topbar.appendChild(actions);
-    return actions;
+    return document.body;
   }
 
   function bindEvents() {

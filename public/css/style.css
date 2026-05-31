@@ -4205,10 +4205,19 @@ tbody tr:hover {
   z-index: 1;
 }
 
-.portal-shell .session-indicator {
+.portal-session-actions {
   position: absolute;
   top: 18px;
   right: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.portal-session-actions .session-indicator {
+  position: static;
   z-index: 2;
 }
 
@@ -4397,6 +4406,30 @@ tbody tr:hover {
   mix-blend-mode: screen;
 }
 
+.portal-footer-author {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  line-height: 1.2;
+}
+
+.portal-footer-author-prefix {
+  color: rgba(243, 248, 255, 0.96);
+  font-size: 0.76rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.portal-footer-author-name {
+  color: rgba(243, 248, 255, 0.96);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  text-shadow: 0 0 14px rgba(58, 139, 255, 0.2);
+}
+
 .portal-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -4467,7 +4500,7 @@ tbody tr:hover {
 }
 
 @media (max-width: 860px) {
-  .portal-shell .session-indicator {
+  .portal-session-actions {
     position: static;
     align-self: flex-end;
     margin-bottom: 8px;
