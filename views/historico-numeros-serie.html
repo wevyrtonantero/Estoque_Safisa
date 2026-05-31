@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="/img/icon-safisa.ico" type="image/x-icon">
+  <title>SAFISA | Historico de Numeros de Serie</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <main class="workspace">
+    <header class="topbar">
+      <div class="topbar-copy">
+        <p class="page-kicker">Consulta SAFISA</p>
+        <h1 class="page-title">Historico de Numeros de Serie</h1>
+        <p class="page-subtitle">Consulte os numeros registrados na Montagem e acompanhe se ja foram vinculados a uma saida.</p>
+      </div>
+
+      <div class="topbar-actions">
+        <a id="historico-seriais-voltar" class="btn btn-neutral" href="/pagina-montagem"><span class="btn-label">Voltar para Montagem</span></a>
+      </div>
+    </header>
+
+    <section class="summary-row">
+      <article class="summary-card">
+        <span>Registros</span>
+        <strong id="historico-seriais-card-registros">0</strong>
+      </article>
+
+      <article class="summary-card">
+        <span>Disponiveis</span>
+        <strong id="historico-seriais-card-disponiveis">0</strong>
+      </article>
+
+      <article class="summary-card">
+        <span>Com saida</span>
+        <strong id="historico-seriais-card-saidas">0</strong>
+      </article>
+    </section>
+
+    <div id="historico-seriais-mensagem" class="message hidden"></div>
+
+    <section class="content-card">
+      <div class="card-top">
+        <div>
+          <span class="section-pill">Numeros de serie</span>
+          <h2>Historico registrado</h2>
+          <p id="historico-seriais-total">0 registro(s) encontrado(s)</p>
+        </div>
+      </div>
+
+      <form id="historico-seriais-filtros" class="toolbar-form stock-toolbar">
+        <div class="field">
+          <label for="historico-seriais-numero">Numero de serie</label>
+          <input id="historico-seriais-numero" type="text" placeholder="Ex.: 000123">
+        </div>
+
+        <div class="field">
+          <label for="historico-seriais-modelo">Modelo</label>
+          <input id="historico-seriais-modelo" type="text" placeholder="Codigo ou descricao">
+        </div>
+
+        <div class="field">
+          <label for="historico-seriais-montador">Montador</label>
+          <input id="historico-seriais-montador" type="text" placeholder="Nome do montador">
+        </div>
+
+        <div class="field">
+          <label for="historico-seriais-cliente-pedido">Cliente / Pedido</label>
+          <input id="historico-seriais-cliente-pedido" type="text" placeholder="Cliente ou numero do pedido">
+        </div>
+
+        <div class="field">
+          <label for="historico-seriais-data">Data da montagem</label>
+          <input id="historico-seriais-data" type="date">
+        </div>
+
+        <div class="field">
+          <label for="historico-seriais-situacao">Situacao</label>
+          <select id="historico-seriais-situacao">
+            <option value="">Todas</option>
+            <option value="disponivel">Disponiveis</option>
+            <option value="com_saida">Com saida</option>
+          </select>
+        </div>
+
+        <button class="btn btn-primary" type="submit">Buscar</button>
+        <button id="historico-seriais-limpar" class="btn btn-neutral" type="button">Limpar</button>
+      </form>
+
+      <div class="table-wrapper" data-print-table data-print-title="Historico de Numeros de Serie">
+        <table>
+          <thead>
+            <tr>
+              <th>Numero de serie</th>
+              <th>Modelo</th>
+              <th>Data da montagem</th>
+              <th>Montador</th>
+              <th>Cliente / Pedido</th>
+              <th>Data da saida</th>
+            </tr>
+          </thead>
+          <tbody id="historico-seriais-tbody">
+            <tr>
+              <td colspan="6" class="empty-state">Carregando historico...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="/js/table-print.js"></script>
+  <script src="/js/historico-numeros-serie.js"></script>
+  <script src="/js/session-indicator.js"></script>
+</body>
+</html>

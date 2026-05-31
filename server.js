@@ -180,6 +180,10 @@ app.get('/pagina-gerenciamento-servos', requirePageRoles(OPERATION_READ_ROLES), 
   sendView(res, 'gerenciamento-servos.html');
 });
 
+app.get('/pagina-historico-numeros-serie', requirePageRoles(OPERATION_READ_ROLES), (req, res) => {
+  sendView(res, 'historico-numeros-serie.html');
+});
+
 app.get('/pagina-expedicao', requirePageRoles(OPERATION_READ_ROLES), (req, res) => {
   sendView(res, 'expedicao.html');
 });
