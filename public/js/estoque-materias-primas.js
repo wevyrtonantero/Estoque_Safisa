@@ -297,14 +297,14 @@ function resetModalMovimentacao() {
 }
 
 function renderizarSugestoes(termo) {
-  const filtro = termo.toLowerCase();
+  const filtro = normalizarBusca(termo);
   const itens = materiasPrimasCache.filter((item) => {
     if (!filtro) {
       return true;
     }
 
-    return `${item.codigo} ${item.nome} ${item.liga || ''}`.toLowerCase().includes(filtro);
-  }).slice(0, 8);
+    return normalizarBusca(`${item.codigo} ${item.nome} ${item.liga || ''}`).includes(filtro);
+  }).sort((a, b) => compararPorPrioridadeCodigo(a, b, filtro)).slice(0, 8);
 
   if (itens.length === 0) {
     refs.modalSugestoes.innerHTML = '<div class="autocomplete-empty">Nenhuma materia-prima encontrada.</div>';
@@ -714,6 +714,41 @@ function formatQuantity(value) {
 
 function formatarData(value) {
   return value ? new Date(value).toLocaleString('pt-BR') : '-';
+}
+
+function normalizarBusca(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+function compararPorPrioridadeCodigo(a, b, termo) {
+  const rankA = obterPrioridadeCodigo(a, termo);
+  const rankB = obterPrioridadeCodigo(b, termo);
+
+  if (rankA !== rankB) {
+    return rankA - rankB;
+  }
+
+  return String(a?.codigo || '').localeCompare(String(b?.codigo || ''), 'pt-BR', { numeric: true })
+    || String(a?.descricao || a?.nome || '').localeCompare(String(b?.descricao || b?.nome || ''), 'pt-BR', { numeric: true });
+}
+
+function obterPrioridadeCodigo(item, termo) {
+  const busca = normalizarBusca(termo);
+  if (!busca) {
+    return 0;
+  }
+
+  const codigo = normalizarBusca(item?.codigo);
+  const descricao = normalizarBusca(item?.descricao || item?.nome);
+
+  if (codigo === busca) return 0;
+  if (codigo.startsWith(busca)) return 1;
+  if (codigo.includes(busca)) return 2;
+  if (descricao.includes(busca)) return 3;
+  return 4;
 }
 
 function escapeHtml(value) {

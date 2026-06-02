@@ -12,6 +12,8 @@ const STATUS = Object.freeze({
   PEDIDO_COLETADO: 'PEDIDO COLETADO'
 });
 
+const BUSINESS_TIME_ZONE = process.env.APP_TIME_ZONE || process.env.TZ || 'America/Sao_Paulo';
+
 function normalizeOptionalInteger(value) {
   if (value === undefined || value === null || value === '') {
     return null;
@@ -61,6 +63,10 @@ function normalizeDateOnly(value) {
     return '';
   }
 
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value.trim())) {
+    return value.trim().slice(0, 10);
+  }
+
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
     return '';
@@ -72,12 +78,31 @@ function normalizeDateOnly(value) {
   return `${year}-${month}-${day}`;
 }
 
-function getTodayDateOnly() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
+function getDateOnlyInTimeZone(date = new Date(), timeZone = BUSINESS_TIME_ZONE) {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).formatToParts(date);
+    const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+
+    if (values.year && values.month && values.day) {
+      return `${values.year}-${values.month}-${values.day}`;
+    }
+  } catch (_) {
+    // Usa a data local do servidor se o timezone configurado nao estiver disponivel.
+  }
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function getTodayDateOnly() {
+  return getDateOnlyInTimeZone();
 }
 
 function compareOrderAge(a, b) {
@@ -1363,11 +1388,15 @@ class PedidoExpedicaoModel {
             codigo: componente.codigo,
             descricao: componente.descricao,
             quantidade_requerida: 0,
-            clientes: new Set()
+            clientes: new Set(),
+            codigos_origem: new Set()
           };
 
           atual.quantidade_requerida = Number((atual.quantidade_requerida + quantidadeNecessaria).toFixed(2));
           atual.clientes.add(pedido.cliente_nome || pedido.codigo_pedido || '-');
+          if (item.codigo) {
+            atual.codigos_origem.add(item.codigo);
+          }
           kitsMap.set(key, atual);
         });
       });
@@ -1388,7 +1417,8 @@ class PedidoExpedicaoModel {
           quantidade_requerida: item.quantidade_requerida,
           quantidade_em_estoque: quantidadeEmEstoque,
           quantidade_pendente: quantidadePendente,
-          clientes: [...item.clientes].sort((a, b) => String(a).localeCompare(String(b), 'pt-BR'))
+          clientes: [...item.clientes].sort((a, b) => String(a).localeCompare(String(b), 'pt-BR')),
+          codigos_origem: [...item.codigos_origem].sort((a, b) => String(a).localeCompare(String(b), 'pt-BR', { numeric: true }))
         };
       })
       .sort((a, b) => String(a.codigo).localeCompare(String(b.codigo), 'pt-BR'));
@@ -2210,15 +2240,17 @@ class PedidoExpedicaoModel {
         throw this.createBusinessError('Nao e possivel mover um pedido coletado para a programacao do dia.');
       }
 
+      const dataProgramacao = programadoHoje ? getTodayDateOnly() : null;
+
       await connection.query(
         `
           UPDATE pedidos_expedicao
           SET
-            data_programacao_saida = ${programadoHoje ? 'CURDATE()' : 'NULL'},
+            data_programacao_saida = ?,
             updated_by = ?
           WHERE id = ?
         `,
-        [usuarioId, pedidoId]
+        [dataProgramacao, usuarioId, pedidoId]
       );
 
       await connection.commit();

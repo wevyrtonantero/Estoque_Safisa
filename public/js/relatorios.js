@@ -6,6 +6,7 @@ let estoquesCache = [];
 let itensCache = [];
 let solicitacoesCache = [];
 let filtroDebounceTimer = null;
+let solicitacaoEmAndamento = false;
 
 const refs = {
   mensagem: document.getElementById('relatorios-mensagem'),
@@ -20,7 +21,8 @@ const refs = {
   solicitacaoSugestoes: document.getElementById('solicitacao-item-sugestoes'),
   solicitacaoResumo: document.getElementById('solicitacao-item-resumo'),
   solicitacaoQuantidade: document.getElementById('solicitacao-quantidade'),
-  solicitacaoObservacao: document.getElementById('solicitacao-observacao')
+  solicitacaoObservacao: document.getElementById('solicitacao-observacao'),
+  solicitacaoSubmit: document.querySelector('#solicitacao-form button[type="submit"]')
 };
 
 const areaInicial = normalizarBusca(new URLSearchParams(window.location.search).get('area'));
@@ -138,7 +140,7 @@ function renderizarSugestoes(termo) {
     }
 
     return normalizarBusca(`${item.codigo} ${item.descricao} ${item.classificacao}`).includes(filtro);
-  }).slice(0, 8);
+  }).sort((a, b) => compararPorPrioridadeCodigo(a, b, filtro)).slice(0, 8);
 
   if (!itens.length) {
     refs.solicitacaoSugestoes.innerHTML = '<div class="autocomplete-empty">Nenhuma peca com saldo disponivel no Almoxarifado.</div>';
@@ -153,6 +155,34 @@ function renderizarSugestoes(termo) {
     </button>
   `).join('');
   refs.solicitacaoSugestoes.classList.remove('hidden');
+}
+
+function compararPorPrioridadeCodigo(a, b, termo) {
+  const rankA = obterPrioridadeCodigo(a, termo);
+  const rankB = obterPrioridadeCodigo(b, termo);
+
+  if (rankA !== rankB) {
+    return rankA - rankB;
+  }
+
+  return String(a?.codigo || '').localeCompare(String(b?.codigo || ''), 'pt-BR', { numeric: true })
+    || String(a?.descricao || '').localeCompare(String(b?.descricao || ''), 'pt-BR', { numeric: true });
+}
+
+function obterPrioridadeCodigo(item, termo) {
+  const busca = normalizarBusca(termo);
+  if (!busca) {
+    return 0;
+  }
+
+  const codigo = normalizarBusca(item?.codigo);
+  const descricao = normalizarBusca(item?.descricao);
+
+  if (codigo === busca) return 0;
+  if (codigo.startsWith(busca)) return 1;
+  if (codigo.includes(busca)) return 2;
+  if (descricao.includes(busca)) return 3;
+  return 4;
 }
 
 function handleSugestaoClick(event) {
@@ -192,6 +222,13 @@ function renderizarResumoItem(item) {
 
 async function handleCreateSolicitacao(event) {
   event.preventDefault();
+
+  if (solicitacaoEmAndamento) {
+    return;
+  }
+
+  solicitacaoEmAndamento = true;
+  atualizarEstadoBotao(refs.solicitacaoSubmit, true, 'Enviando...');
 
   try {
     const area = buildAreaFromStockId(refs.solicitacaoArea.value);
@@ -237,9 +274,12 @@ async function handleCreateSolicitacao(event) {
     renderizarResumoItem(null);
     esconderSugestoes();
     mostrarMensagemSolicitacao('Solicitacao enviada com sucesso.', 'success');
-    await carregarSolicitacoes();
+    atualizarSolicitacoesEmSegundoPlano();
   } catch (error) {
     mostrarMensagemSolicitacao(error.message, 'error');
+  } finally {
+    solicitacaoEmAndamento = false;
+    atualizarEstadoBotao(refs.solicitacaoSubmit, false);
   }
 }
 
@@ -354,6 +394,25 @@ function mostrarMensagemSolicitacao(texto, tipo) {
   refs.solicitacaoMensagem.textContent = texto;
   refs.solicitacaoMensagem.className = `message ${tipo}`;
   refs.solicitacaoMensagem.classList.remove('hidden');
+}
+
+function atualizarEstadoBotao(botao, carregando, textoCarregando = 'Enviando...') {
+  if (!botao) {
+    return;
+  }
+
+  if (!botao.dataset.defaultLabel) {
+    botao.dataset.defaultLabel = botao.textContent.trim();
+  }
+
+  botao.disabled = carregando;
+  botao.textContent = carregando ? textoCarregando : botao.dataset.defaultLabel;
+}
+
+function atualizarSolicitacoesEmSegundoPlano() {
+  carregarSolicitacoes().catch((error) => {
+    console.error('Falha ao atualizar solicitacoes em segundo plano:', error);
+  });
 }
 
 function normalizarBusca(value) {

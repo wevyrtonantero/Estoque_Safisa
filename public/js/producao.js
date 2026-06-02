@@ -487,14 +487,14 @@ function atualizarCardRuptura(item) {
 }
 
 function renderizarSugestoesPeca(termo) {
-  const filtro = termo.toLowerCase();
+  const filtro = normalizarBusca(termo);
   const itens = pecasCache.filter((peca) => {
     if (!filtro) {
       return true;
     }
 
-    return `${peca.codigo} ${peca.descricao}`.toLowerCase().includes(filtro);
-  }).slice(0, 8);
+    return normalizarBusca(`${peca.codigo} ${peca.descricao}`).includes(filtro);
+  }).sort((a, b) => compararPorPrioridadeCodigo(a, b, filtro)).slice(0, 8);
 
   if (itens.length === 0) {
     refs.pecaSugestoes.innerHTML = '<div class="autocomplete-empty">Nenhuma peca produzida encontrada.</div>';
@@ -510,6 +510,34 @@ function renderizarSugestoesPeca(termo) {
     </button>
   `).join('');
   refs.pecaSugestoes.classList.remove('hidden');
+}
+
+function compararPorPrioridadeCodigo(a, b, termo) {
+  const rankA = obterPrioridadeCodigo(a, termo);
+  const rankB = obterPrioridadeCodigo(b, termo);
+
+  if (rankA !== rankB) {
+    return rankA - rankB;
+  }
+
+  return String(a?.codigo || '').localeCompare(String(b?.codigo || ''), 'pt-BR', { numeric: true })
+    || String(a?.descricao || '').localeCompare(String(b?.descricao || ''), 'pt-BR', { numeric: true });
+}
+
+function obterPrioridadeCodigo(item, termo) {
+  const busca = normalizarBusca(termo);
+  if (!busca) {
+    return 0;
+  }
+
+  const codigo = normalizarBusca(item?.codigo);
+  const descricao = normalizarBusca(item?.descricao);
+
+  if (codigo === busca) return 0;
+  if (codigo.startsWith(busca)) return 1;
+  if (codigo.includes(busca)) return 2;
+  if (descricao.includes(busca)) return 3;
+  return 4;
 }
 
 function handleSugestaoPecaClick(event) {

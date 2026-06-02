@@ -168,7 +168,7 @@
 
         <div class="field span-4">
           <label for="pedido-vendedora">Vendedora</label>
-          <input id="pedido-vendedora" type="text" maxlength="120">
+          <input id="pedido-vendedora" type="text" list="pedido-vendedoras-lista" maxlength="120">
         </div>
 
         <div class="field span-4">
@@ -577,84 +577,126 @@
 
       <div id="pedido-relatorio-resumo" class="selected-tags"></div>
 
-      <div class="content-card compact">
-        <div class="card-top">
-          <div>
-            <span class="section-pill">Montagem</span>
-            <h3>Servos para montar / vincular</h3>
-          </div>
-        </div>
+      <div class="pedido-relatorio-tabs" role="tablist" aria-label="Navegacao do relatorio">
+        <button class="pedido-relatorio-tab is-active" type="button" role="tab" aria-selected="true" data-relatorio-tab="montagem">Montagem</button>
+        <button class="pedido-relatorio-tab" type="button" role="tab" aria-selected="false" data-relatorio-tab="kits">Kits</button>
+        <button class="pedido-relatorio-tab" type="button" role="tab" aria-selected="false" data-relatorio-tab="itens">Itens</button>
+        <button class="pedido-relatorio-tab" type="button" role="tab" aria-selected="false" data-relatorio-tab="reparos">Reparos</button>
+      </div>
 
-        <div class="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>Codigo</th>
-                <th>Descricao</th>
-                <th>Quantidade</th>
-                <th>Clientes</th>
-              </tr>
-            </thead>
-            <tbody id="pedido-relatorio-montagem-tbody">
-              <tr>
-                <td colspan="4" class="empty-state">Nenhum servo pendente.</td>
-              </tr>
-            </tbody>
-          </table>
+      <div class="pedido-relatorio-panel is-active" data-relatorio-panel="montagem">
+        <div class="content-card compact">
+          <div class="card-top">
+            <div>
+              <span class="section-pill">Montagem</span>
+              <h3>Servos para montar / vincular</h3>
+            </div>
+          </div>
+
+          <div class="table-wrapper pedido-relatorio-table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Codigo</th>
+                  <th>Descricao</th>
+                  <th>Quantidade</th>
+                  <th>Clientes</th>
+                </tr>
+              </thead>
+              <tbody id="pedido-relatorio-montagem-tbody">
+                <tr>
+                  <td colspan="4" class="empty-state">Nenhum servo pendente.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
-      <div class="content-card compact">
-        <div class="card-top">
-          <div>
-            <span class="section-pill">Kits</span>
-            <h3>Kits para separar</h3>
+      <div class="pedido-relatorio-panel" data-relatorio-panel="kits">
+        <div class="content-card compact">
+          <div class="card-top">
+            <div>
+              <span class="section-pill">Kits</span>
+              <h3>Kits para separar</h3>
+            </div>
           </div>
-        </div>
 
-        <div class="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>Codigo</th>
-                <th>Descricao</th>
-                <th>Quantidade</th>
-                <th>Clientes</th>
-              </tr>
-            </thead>
-            <tbody id="pedido-relatorio-kits-tbody">
-              <tr>
-                <td colspan="4" class="empty-state">Nenhum kit pendente.</td>
-              </tr>
-            </tbody>
-          </table>
+          <div class="table-wrapper pedido-relatorio-table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Codigo</th>
+                  <th>Descricao</th>
+                  <th>Quantidade</th>
+                  <th>Clientes</th>
+                </tr>
+              </thead>
+              <tbody id="pedido-relatorio-kits-tbody">
+                <tr>
+                  <td colspan="4" class="empty-state">Nenhum kit pendente.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
-      <div class="content-card compact">
-        <div class="card-top">
-          <div>
-            <span class="section-pill">Itens</span>
-            <h3>Itens para separar</h3>
+      <div class="pedido-relatorio-panel" data-relatorio-panel="itens">
+        <div class="content-card compact">
+          <div class="card-top">
+            <div>
+              <span class="section-pill">Itens</span>
+              <h3>Itens para separar</h3>
+            </div>
+          </div>
+
+          <div class="table-wrapper pedido-relatorio-table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Codigo</th>
+                  <th>Descricao</th>
+                  <th>Quantidade</th>
+                  <th>Clientes</th>
+                </tr>
+              </thead>
+              <tbody id="pedido-relatorio-itens-tbody">
+                <tr>
+                  <td colspan="4" class="empty-state">Nenhum item pendente.</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
+      </div>
 
-        <div class="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>Codigo</th>
-                <th>Descricao</th>
-                <th>Quantidade</th>
-                <th>Clientes</th>
-              </tr>
-            </thead>
-            <tbody id="pedido-relatorio-itens-tbody">
-              <tr>
-                <td colspan="4" class="empty-state">Nenhum item pendente.</td>
-              </tr>
-            </tbody>
-          </table>
+      <div class="pedido-relatorio-panel" data-relatorio-panel="reparos">
+        <div class="content-card compact">
+          <div class="card-top">
+            <div>
+              <span class="section-pill">Reparos</span>
+              <h3>Jogos de reparo para separar</h3>
+            </div>
+          </div>
+
+          <div class="table-wrapper pedido-relatorio-table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Codigo</th>
+                  <th>Descricao</th>
+                  <th>Quantidade</th>
+                  <th>Clientes</th>
+                </tr>
+              </thead>
+              <tbody id="pedido-relatorio-reparos-tbody">
+                <tr>
+                  <td colspan="4" class="empty-state">Nenhum reparo pendente.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -737,6 +779,12 @@
   </div>
 
   <datalist id="pedido-clientes-lista"></datalist>
+  <datalist id="pedido-vendedoras-lista">
+    <option value="Adriana"></option>
+    <option value="Regiane"></option>
+    <option value="Rebeca"></option>
+    <option value="Marcela"></option>
+  </datalist>
   <datalist id="pedido-transportadoras-lista">
     <option value="Rodonaves"></option>
     <option value="Braspress"></option>

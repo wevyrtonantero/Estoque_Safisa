@@ -885,7 +885,7 @@ function renderizarSugestoesSubmontagem(termo) {
     }
 
     return normalizarBusca(`${item.codigo} ${item.descricao}`).includes(filtro);
-  }).slice(0, 8);
+  }).sort((a, b) => compararPorPrioridadeCodigo(a, b, filtro)).slice(0, 8);
 
   if (!itens.length) {
     refs.simulacaoSugestoes.innerHTML = '<div class="autocomplete-empty">Nenhuma submontagem encontrada.</div>';
@@ -900,6 +900,34 @@ function renderizarSugestoesSubmontagem(termo) {
     </button>
   `).join('');
   refs.simulacaoSugestoes.classList.remove('hidden');
+}
+
+function compararPorPrioridadeCodigo(a, b, termo) {
+  const rankA = obterPrioridadeCodigo(a, termo);
+  const rankB = obterPrioridadeCodigo(b, termo);
+
+  if (rankA !== rankB) {
+    return rankA - rankB;
+  }
+
+  return String(a?.codigo || '').localeCompare(String(b?.codigo || ''), 'pt-BR', { numeric: true })
+    || String(a?.descricao || a?.nome || '').localeCompare(String(b?.descricao || b?.nome || ''), 'pt-BR', { numeric: true });
+}
+
+function obterPrioridadeCodigo(item, termo) {
+  const busca = normalizarBusca(termo);
+  if (!busca) {
+    return 0;
+  }
+
+  const codigo = normalizarBusca(item?.codigo);
+  const descricao = normalizarBusca(item?.descricao || item?.nome);
+
+  if (codigo === busca) return 0;
+  if (codigo.startsWith(busca)) return 1;
+  if (codigo.includes(busca)) return 2;
+  if (descricao.includes(busca)) return 3;
+  return 4;
 }
 
 function handleSugestaoSubmontagemClick(event) {

@@ -281,13 +281,53 @@
       return;
     }
 
-    refs.sugestoes.innerHTML = items.slice(0, 30).map((item) => `
+    const termo = refs.pecaBusca?.value || '';
+    const itensOrdenados = termo
+      ? [...items].sort((a, b) => compararPorPrioridadeCodigo(a, b, termo))
+      : items;
+
+    refs.sugestoes.innerHTML = itensOrdenados.slice(0, 30).map((item) => `
       <button type="button" class="autocomplete-option" data-id="${item.id}">
         <strong>${escapeHtml(item.codigo)} - ${escapeHtml(item.descricao)}</strong>
         <span>${escapeHtml(formatMateriaPrimaLabel(item.materia_prima))} | Saldo ${formatEstoque(item.estoque)}</span>
       </button>
     `).join('');
     refs.sugestoes.classList.remove('hidden');
+  }
+
+  function normalizarBusca(value) {
+    return String(value || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+  }
+
+  function compararPorPrioridadeCodigo(a, b, termo) {
+    const rankA = obterPrioridadeCodigo(a, termo);
+    const rankB = obterPrioridadeCodigo(b, termo);
+
+    if (rankA !== rankB) {
+      return rankA - rankB;
+    }
+
+    return String(a?.codigo || '').localeCompare(String(b?.codigo || ''), 'pt-BR', { numeric: true })
+      || String(a?.descricao || '').localeCompare(String(b?.descricao || ''), 'pt-BR', { numeric: true });
+  }
+
+  function obterPrioridadeCodigo(item, termo) {
+    const busca = normalizarBusca(termo);
+    if (!busca) {
+      return 0;
+    }
+
+    const codigo = normalizarBusca(item?.codigo);
+    const descricao = normalizarBusca(item?.descricao);
+
+    if (codigo === busca) return 0;
+    if (codigo.startsWith(busca)) return 1;
+    if (codigo.includes(busca)) return 2;
+    if (descricao.includes(busca)) return 3;
+    return 4;
   }
 
   function renderResumo() {

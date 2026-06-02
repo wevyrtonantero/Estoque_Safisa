@@ -553,7 +553,7 @@ async function renderizarSugestoes(termo) {
     }
 
     return normalizarBusca(`${item.codigo} ${item.descricao} ${item.classificacao}`).includes(filtro);
-  }).slice(0, 8);
+  }).sort((a, b) => compararPorPrioridadeCodigo(a, b, filtro)).slice(0, 8);
 
   if (!itens.length) {
     refs.itemSugestoes.innerHTML = '<div class="autocomplete-empty">Nenhum item encontrado para venda.</div>';
@@ -885,7 +885,7 @@ function renderizarSugestoesRetorno(termo) {
     }
 
     return normalizarBusca(`${item.codigo} ${item.descricao} ${item.classificacao}`).includes(filtro);
-  }).slice(0, 8);
+  }).sort((a, b) => compararPorPrioridadeCodigo(a, b, filtro)).slice(0, 8);
 
   renderizarPainelAutocomplete(
     refs.retornoSugestoes,
@@ -1083,6 +1083,13 @@ function renderizarSugestoesEfetuarMontagem(termo) {
       return normalizarBusca(`${item.codigo} ${item.descricao}`).includes(filtro);
     })
     .sort((a, b) => {
+      if (filtro) {
+        const prioridade = compararPorPrioridadeCodigo(a, b, filtro);
+        if (prioridade !== 0) {
+          return prioridade;
+        }
+      }
+
       const capacidadeA = Number(a.capacidade_estoque || 0);
       const capacidadeB = Number(b.capacidade_estoque || 0);
 
@@ -1360,6 +1367,9 @@ function renderizarSugestoesSolicitacao(termo) {
 
     semSaldo.push(item);
   });
+
+  comSaldo.sort((a, b) => compararPorPrioridadeCodigo(a, b, filtro));
+  semSaldo.sort((a, b) => compararPorPrioridadeCodigo(a, b, filtro));
 
   const itens = [...comSaldo, ...semSaldo].slice(0, 8);
 
@@ -1687,6 +1697,7 @@ function renderizarSugestoesDesmembrar(termo) {
 
       return normalizarBusca(`${item.codigo} ${item.descricao}`).includes(filtro);
     })
+    .sort((a, b) => compararPorPrioridadeCodigo(a, b, filtro))
     .slice(0, 8);
 
   renderizarPainelAutocomplete(
@@ -1848,7 +1859,7 @@ function renderizarSugestoesSubmontagem(termo) {
     }
 
     return normalizarBusca(`${item.codigo} ${item.descricao}`).includes(filtro);
-  }).slice(0, 8);
+  }).sort((a, b) => compararPorPrioridadeCodigo(a, b, filtro)).slice(0, 8);
 
   if (!itens.length) {
     refs.simulacaoSugestoes.innerHTML = '<div class="autocomplete-empty">Nenhuma submontagem encontrada.</div>';
@@ -3156,6 +3167,34 @@ function normalizarBusca(value) {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase();
+}
+
+function compararPorPrioridadeCodigo(a, b, termo) {
+  const rankA = obterPrioridadeCodigo(a, termo);
+  const rankB = obterPrioridadeCodigo(b, termo);
+
+  if (rankA !== rankB) {
+    return rankA - rankB;
+  }
+
+  return String(a?.codigo || '').localeCompare(String(b?.codigo || ''), 'pt-BR', { numeric: true })
+    || String(a?.descricao || a?.nome || '').localeCompare(String(b?.descricao || b?.nome || ''), 'pt-BR', { numeric: true });
+}
+
+function obterPrioridadeCodigo(item, termo) {
+  const busca = normalizarBusca(termo);
+  if (!busca) {
+    return 0;
+  }
+
+  const codigo = normalizarBusca(item?.codigo);
+  const descricao = normalizarBusca(item?.descricao || item?.nome);
+
+  if (codigo === busca) return 0;
+  if (codigo.startsWith(busca)) return 1;
+  if (codigo.includes(busca)) return 2;
+  if (descricao.includes(busca)) return 3;
+  return 4;
 }
 
 function formatInteger(value) {

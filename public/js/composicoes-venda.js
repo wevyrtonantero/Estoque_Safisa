@@ -164,7 +164,7 @@ function renderizarSugestoes(tipo, search) {
     ? itensCache.filter((item) => (
       normalizarBusca(item.codigo).includes(normalized)
       || normalizarBusca(item.descricao).includes(normalized)
-    ))
+    )).sort((a, b) => compararPorPrioridadeCodigo(a, b, normalized))
     : itensCache.slice(0, 12);
 
   const container = tipo === 'venda' ? refs.itemVendaSugestoes : refs.itemAtendeSugestoes;
@@ -182,6 +182,34 @@ function renderizarSugestoes(tipo, search) {
     </button>
   `).join('');
   container.classList.remove('hidden');
+}
+
+function compararPorPrioridadeCodigo(a, b, termo) {
+  const rankA = obterPrioridadeCodigo(a, termo);
+  const rankB = obterPrioridadeCodigo(b, termo);
+
+  if (rankA !== rankB) {
+    return rankA - rankB;
+  }
+
+  return String(a?.codigo || '').localeCompare(String(b?.codigo || ''), 'pt-BR', { numeric: true })
+    || String(a?.descricao || '').localeCompare(String(b?.descricao || ''), 'pt-BR', { numeric: true });
+}
+
+function obterPrioridadeCodigo(item, termo) {
+  const busca = normalizarBusca(termo);
+  if (!busca) {
+    return 0;
+  }
+
+  const codigo = normalizarBusca(item?.codigo);
+  const descricao = normalizarBusca(item?.descricao);
+
+  if (codigo === busca) return 0;
+  if (codigo.startsWith(busca)) return 1;
+  if (codigo.includes(busca)) return 2;
+  if (descricao.includes(busca)) return 3;
+  return 4;
 }
 
 function handleSugestaoClick(event, tipo) {

@@ -536,7 +536,7 @@ function bindAutocompleteEvents() {
 // Filtra pecas e submontagens por codigo, descricao, tipo e classificacao.
 function renderizarSugestoesItem(tipo, termo) {
   const config = getItemAutocompleteConfig(tipo);
-  const filtro = termo.toLowerCase();
+  const filtro = normalizarBusca(termo);
   const itensFiltrados = itensCache.filter((item) => {
     if (tipo === 'saida' && obterDisponibilidadeConsumoInternoItem(item) <= 0) {
       return false;
@@ -545,12 +545,12 @@ function renderizarSugestoesItem(tipo, termo) {
     if (!filtro) return true;
 
     return (
-      String(item.codigo).toLowerCase().includes(filtro) ||
-      String(item.descricao).toLowerCase().includes(filtro) ||
-      String(item.classificacao).toLowerCase().includes(filtro) ||
-      String(item.maquina_nome || '').toLowerCase().includes(filtro)
+      normalizarBusca(item.codigo).includes(filtro) ||
+      normalizarBusca(item.descricao).includes(filtro) ||
+      normalizarBusca(item.classificacao).includes(filtro) ||
+      normalizarBusca(item.maquina_nome).includes(filtro)
     );
-  }).slice(0, 8);
+  }).sort((a, b) => compararPorPrioridadeCodigo(a, b, filtro)).slice(0, 8);
 
   if (itensFiltrados.length === 0) {
     config.panel.innerHTML = '<div class="autocomplete-empty">Nenhum item encontrado para a busca informada.</div>';
@@ -572,6 +572,34 @@ function renderizarSugestoesItem(tipo, termo) {
     `;
   }).join('');
   config.panel.classList.remove('hidden');
+}
+
+function compararPorPrioridadeCodigo(a, b, termo) {
+  const rankA = obterPrioridadeCodigo(a, termo);
+  const rankB = obterPrioridadeCodigo(b, termo);
+
+  if (rankA !== rankB) {
+    return rankA - rankB;
+  }
+
+  return String(a?.codigo || '').localeCompare(String(b?.codigo || ''), 'pt-BR', { numeric: true })
+    || String(a?.descricao || '').localeCompare(String(b?.descricao || ''), 'pt-BR', { numeric: true });
+}
+
+function obterPrioridadeCodigo(item, termo) {
+  const busca = normalizarBusca(termo);
+  if (!busca) {
+    return 0;
+  }
+
+  const codigo = normalizarBusca(item?.codigo);
+  const descricao = normalizarBusca(item?.descricao);
+
+  if (codigo === busca) return 0;
+  if (codigo.startsWith(busca)) return 1;
+  if (codigo.includes(busca)) return 2;
+  if (descricao.includes(busca)) return 3;
+  return 4;
 }
 
 async function handleSugestaoItemClick(event, tipo) {

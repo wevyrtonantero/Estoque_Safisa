@@ -5,6 +5,7 @@ const AUTO_REFRESH_MS = 15000;
 const KIT_IMAGE_EXTENSIONS = ['.jpg', '.png', '.jpeg', '.webp'];
 const PRINT_HISTORY_ENDPOINT = `${pedidosApiBaseUrl}/etiquetas/historico-impressao`;
 const DEFAULT_PRINTER_NAME = 'IMPRESSORA PADRAO';
+const RELATORIO_REPARO_CODES = new Set(['R064', 'R065', 'R066', 'R067', 'R068']);
 
 let itensCache = [];
 let clientesCache = [];
@@ -128,9 +129,12 @@ const refs = {
   relatorioSubtitulo: document.getElementById('pedido-relatorio-subtitulo'),
   relatorioResumo: document.getElementById('pedido-relatorio-resumo'),
   relatorioImprimir: document.getElementById('pedido-btn-imprimir-relatorio'),
+  relatorioTabs: document.querySelectorAll('[data-relatorio-tab]'),
+  relatorioPaineis: document.querySelectorAll('[data-relatorio-panel]'),
   relatorioMontagemTbody: document.getElementById('pedido-relatorio-montagem-tbody'),
   relatorioKitsTbody: document.getElementById('pedido-relatorio-kits-tbody'),
   relatorioItensTbody: document.getElementById('pedido-relatorio-itens-tbody'),
+  relatorioReparosTbody: document.getElementById('pedido-relatorio-reparos-tbody'),
   kitsModal: document.getElementById('pedido-kits-modal'),
   kitsMensagem: document.getElementById('pedido-kits-mensagem'),
   kitsResumo: document.getElementById('pedido-kits-resumo'),
@@ -280,6 +284,9 @@ function bindEvents() {
   });
   refs.coletaConfirmar?.addEventListener('click', marcarPedidoColetado);
   refs.relatorioImprimir.addEventListener('click', imprimirRelatorioAtual);
+  refs.relatorioTabs.forEach((tab) => {
+    tab.addEventListener('click', () => alternarAbaRelatorio(tab.dataset.relatorioTab));
+  });
 
   document.addEventListener('click', (event) => {
     if (!event.target.closest('.autocomplete')) {
@@ -987,6 +994,7 @@ function abrirModalRelatorio(tipo) {
     <span class="selected-tag">Servos: ${formatInteger(relatorio.totalMontagem)}</span>
     <span class="selected-tag">Kits: ${formatInteger(relatorio.totalKits)}</span>
     <span class="selected-tag">Itens: ${formatInteger(relatorio.totalItens)}</span>
+    <span class="selected-tag">Reparos: ${formatInteger(relatorio.totalReparos)}</span>
   `;
 
   refs.relatorioMontagemTbody.innerHTML = renderizarTabelaRelatorio(
@@ -1001,12 +1009,31 @@ function abrirModalRelatorio(tipo) {
     relatorio.itens,
     'Nenhum item pendente.'
   );
+  refs.relatorioReparosTbody.innerHTML = renderizarTabelaRelatorio(
+    relatorio.reparos,
+    'Nenhum reparo pendente.'
+  );
 
+  alternarAbaRelatorio('montagem');
   openModal(refs.relatorioModal);
 }
 
 function fecharModalRelatorio() {
   closeModal(refs.relatorioModal);
+}
+
+function alternarAbaRelatorio(tabName) {
+  const activeTab = tabName || 'montagem';
+
+  refs.relatorioTabs.forEach((tab) => {
+    const isActive = tab.dataset.relatorioTab === activeTab;
+    tab.classList.toggle('is-active', isActive);
+    tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+  });
+
+  refs.relatorioPaineis.forEach((panel) => {
+    panel.classList.toggle('is-active', panel.dataset.relatorioPanel === activeTab);
+  });
 }
 
 async function abrirModalKits(escopo = 'dia') {
@@ -1074,7 +1101,7 @@ function renderizarResumoKits() {
 
     return `
       <tr>
-        <td class="table-code">${escapeHtml(kit.codigo)}</td>
+        <td class="table-code">${renderizarCodigoKitImagem(kit.codigo, kit.codigos_origem, kit.descricao)}</td>
         <td>${escapeHtml(kit.descricao)}</td>
         <td>${escapeHtml((kit.clientes || []).join(', '))}</td>
         <td>${formatDecimal(kit.quantidade_requerida || 0)}</td>
@@ -1161,6 +1188,7 @@ function construirRelatorioOperacional(pedidos) {
   const montagemMap = new Map();
   const kitsMap = new Map();
   const itensMap = new Map();
+  const reparosMap = new Map();
 
   pedidos.forEach((pedido) => {
     (pedido.itens || []).forEach((item) => {
@@ -1188,9 +1216,14 @@ function construirRelatorioOperacional(pedidos) {
             return;
           }
 
-          const targetMap = String(componente.codigo || '').toUpperCase().startsWith('KT-')
-            ? kitsMap
-            : itensMap;
+          let targetMap = itensMap;
+          const codigoComponente = String(componente.codigo || '').trim().toUpperCase();
+
+          if (codigoComponente.startsWith('KT-')) {
+            targetMap = kitsMap;
+          } else if (isCodigoReparoRelatorio(codigoComponente)) {
+            targetMap = reparosMap;
+          }
 
           acumularRelatorio(
             targetMap,
@@ -1210,10 +1243,16 @@ function construirRelatorioOperacional(pedidos) {
     totalMontagem: somarQuantidadesRelatorio(montagemMap),
     totalKits: somarQuantidadesRelatorio(kitsMap),
     totalItens: somarQuantidadesRelatorio(itensMap),
+    totalReparos: somarQuantidadesRelatorio(reparosMap),
     montagem: ordenarRelatorio(montagemMap),
     kits: ordenarRelatorio(kitsMap),
-    itens: ordenarRelatorio(itensMap)
+    itens: ordenarRelatorio(itensMap),
+    reparos: ordenarRelatorio(reparosMap)
   };
+}
+
+function isCodigoReparoRelatorio(codigo) {
+  return RELATORIO_REPARO_CODES.has(String(codigo || '').trim().toUpperCase());
 }
 
 function acumularRelatorio(targetMap, idPeca, codigo, descricao, quantidade, codigoPedido) {
@@ -1265,6 +1304,7 @@ function imprimirRelatorioAtual() {
   const montarHtml = refs.relatorioMontagemTbody.closest('.content-card').outerHTML;
   const kitsHtml = refs.relatorioKitsTbody.closest('.content-card').outerHTML;
   const itensHtml = refs.relatorioItensTbody.closest('.content-card').outerHTML;
+  const reparosHtml = refs.relatorioReparosTbody.closest('.content-card').outerHTML;
   const printWindow = window.open('', '_blank', 'width=1200,height=900');
 
   if (!printWindow) {
@@ -1295,6 +1335,7 @@ function imprimirRelatorioAtual() {
       ${montarHtml}
       ${kitsHtml}
       ${itensHtml}
+      ${reparosHtml}
     </body>
     </html>
   `);
@@ -1529,7 +1570,7 @@ function renderizarSugestoesItemPedido(search) {
     ? itensCache.filter((item) => (
       normalizarBusca(item.codigo).includes(normalized)
       || normalizarBusca(item.descricao).includes(normalized)
-    ))
+    )).sort((a, b) => compararPorPrioridadeCodigo(a, b, normalized))
     : itensCache.slice(0, 12);
 
   if (!itens.length) {
@@ -1545,6 +1586,34 @@ function renderizarSugestoesItemPedido(search) {
     </button>
   `).join('');
   refs.itemSugestoes.classList.remove('hidden');
+}
+
+function compararPorPrioridadeCodigo(a, b, termo) {
+  const rankA = obterPrioridadeCodigo(a, termo);
+  const rankB = obterPrioridadeCodigo(b, termo);
+
+  if (rankA !== rankB) {
+    return rankA - rankB;
+  }
+
+  return String(a?.codigo || '').localeCompare(String(b?.codigo || ''), 'pt-BR', { numeric: true })
+    || String(a?.descricao || '').localeCompare(String(b?.descricao || ''), 'pt-BR', { numeric: true });
+}
+
+function obterPrioridadeCodigo(item, termo) {
+  const busca = normalizarBusca(termo);
+  if (!busca) {
+    return 0;
+  }
+
+  const codigo = normalizarBusca(item?.codigo);
+  const descricao = normalizarBusca(item?.descricao);
+
+  if (codigo === busca) return 0;
+  if (codigo.startsWith(busca)) return 1;
+  if (codigo.includes(busca)) return 2;
+  if (descricao.includes(busca)) return 3;
+  return 4;
 }
 
 function handleSugestaoItemPedidoClick(event) {
@@ -1751,26 +1820,6 @@ function renderizarItensPedidoDetalhe(pedido) {
     return;
   }
 
-  const renderizarCodigoItem = (item) => {
-    const kitImageUrl = obterKitImageUrl(item.codigo);
-    if (!kitImageUrl) {
-      return escapeHtml(item.codigo);
-    }
-
-    return `
-      <a
-        class="pedido-kit-link"
-        href="${escapeHtml(kitImageUrl)}"
-        target="_blank"
-        rel="noopener noreferrer"
-        style="padding:0;border:0;background:none;color:#14528b;font:inherit;font-weight:800;text-decoration:underline;cursor:pointer;"
-        title="Abrir imagem do kit em nova aba"
-      >
-        ${escapeHtml(item.codigo)}
-      </a>
-    `;
-  };
-
   refs.detalheItensTbody.innerHTML = pedido.itens.map((item) => {
     const vinculos = item.seriais_vinculados || [];
     const diagnostico = item.diagnostico || {};
@@ -1820,7 +1869,7 @@ function renderizarItensPedidoDetalhe(pedido) {
 
     return `
       <tr class="${item.concluido ? 'pedido-item-row-complete' : ''}">
-        <td class="table-code">${renderizarCodigoItem(item)}</td>
+        <td class="table-code">${renderizarCodigoKitImagem(item.codigo)}</td>
         <td>
           <div class="pedido-item-cell">
             <strong>${escapeHtml(item.descricao)}</strong>
@@ -2653,6 +2702,11 @@ function normalizeDateInput(value) {
     return '';
   }
 
+  const text = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) {
+    return text.slice(0, 10);
+  }
+
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
     return '';
@@ -2696,6 +2750,45 @@ function obterKitImageUrl(codigo) {
   }
 
   return `/kits/${normalized}.jpg`;
+}
+
+function renderizarCodigoKitImagem(codigo, codigosAlternativos = [], textoReferencia = '') {
+  const codigoImagem = resolverCodigoImagemKit(codigo, codigosAlternativos, textoReferencia);
+  const kitImageUrl = obterKitImageUrl(codigoImagem);
+  if (!kitImageUrl) {
+    return escapeHtml(codigo || '-');
+  }
+
+  return `
+    <a
+      class="pedido-kit-link"
+      href="${escapeHtml(kitImageUrl)}"
+      target="_blank"
+      rel="noopener noreferrer"
+      style="padding:0;border:0;background:none;color:#14528b;font:inherit;font-weight:800;text-decoration:underline;cursor:pointer;"
+      title="${escapeHtml(codigoImagem === codigo ? 'Abrir imagem do kit em nova aba' : `Abrir imagem de referencia ${codigoImagem}`)}"
+    >
+      ${escapeHtml(codigo)}
+    </a>
+  `;
+}
+
+function resolverCodigoImagemKit(codigo, codigosAlternativos = [], textoReferencia = '') {
+  if (obterKitImageUrl(codigo)) {
+    return codigo;
+  }
+
+  const alternativas = [
+    ...(Array.isArray(codigosAlternativos) ? codigosAlternativos : []),
+    ...extrairCodigosImagemKit(textoReferencia)
+  ];
+
+  return alternativas.find((codigoAlternativo) => obterKitImageUrl(codigoAlternativo)) || codigo;
+}
+
+function extrairCodigosImagemKit(texto) {
+  const encontrados = String(texto || '').toUpperCase().match(/\b(?:VF-040|\d+[A-Z]+)\b/g) || [];
+  return [...new Set(encontrados)];
 }
 
 async function fetchJson(url, options = {}) {

@@ -403,11 +403,15 @@ function handleKeyboardShortcuts(event) {
 // Filtra os relacionamentos digitando, sem select gigante.
 function renderizarSugestoes(tipo, termo) {
   const config = getAutocompleteConfig(tipo);
-  const filtro = termo.toLowerCase();
+  const filtro = normalizarBusca(termo);
   const itens = config.lista.filter((item) => {
     if (!filtro) return true;
     return config.search(item).includes(filtro);
-  }).slice(0, 8);
+  }).sort((a, b) => (
+    config.priorizarCodigo
+      ? compararPorPrioridadeCodigo(a, b, filtro)
+      : 0
+  )).slice(0, 8);
 
   if (itens.length === 0) {
     config.panel.innerHTML = '<div class="autocomplete-empty">Nenhum registro encontrado para a busca informada.</div>';
@@ -456,7 +460,8 @@ function getAutocompleteConfig(tipo) {
       panel: sugestoesMateriaPrima,
       label: (item) => `${item.codigo} - ${item.nome}`,
       secondary: (item) => `${item.geometria} | ${item.bitola}`,
-      search: (item) => `${item.codigo || ''} ${item.nome} ${item.geometria} ${item.bitola}`.toLowerCase()
+      search: (item) => normalizarBusca(`${item.codigo || ''} ${item.nome} ${item.geometria} ${item.bitola}`),
+      priorizarCodigo: true
     };
   }
 
@@ -467,7 +472,8 @@ function getAutocompleteConfig(tipo) {
     panel: sugestoesMaquina,
     label: (item) => item.nome,
     secondary: (item) => item.tipo,
-    search: (item) => `${item.nome} ${item.tipo}`.toLowerCase()
+    search: (item) => normalizarBusca(`${item.nome} ${item.tipo}`),
+    priorizarCodigo: false
   };
 }
 
@@ -627,6 +633,41 @@ function formatMetricValue(value) {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2
   });
+}
+
+function normalizarBusca(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+function compararPorPrioridadeCodigo(a, b, termo) {
+  const rankA = obterPrioridadeCodigo(a, termo);
+  const rankB = obterPrioridadeCodigo(b, termo);
+
+  if (rankA !== rankB) {
+    return rankA - rankB;
+  }
+
+  return String(a?.codigo || '').localeCompare(String(b?.codigo || ''), 'pt-BR', { numeric: true })
+    || String(a?.descricao || a?.nome || '').localeCompare(String(b?.descricao || b?.nome || ''), 'pt-BR', { numeric: true });
+}
+
+function obterPrioridadeCodigo(item, termo) {
+  const busca = normalizarBusca(termo);
+  if (!busca) {
+    return 0;
+  }
+
+  const codigo = normalizarBusca(item?.codigo);
+  const descricao = normalizarBusca(item?.descricao || item?.nome);
+
+  if (codigo === busca) return 0;
+  if (codigo.startsWith(busca)) return 1;
+  if (codigo.includes(busca)) return 2;
+  if (descricao.includes(busca)) return 3;
+  return 4;
 }
 
 function escapeHtml(value) {
