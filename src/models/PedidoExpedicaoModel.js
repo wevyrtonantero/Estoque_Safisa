@@ -12,7 +12,7 @@ const STATUS = Object.freeze({
   PEDIDO_COLETADO: 'PEDIDO COLETADO'
 });
 
-const BUSINESS_TIME_ZONE = process.env.APP_TIME_ZONE || process.env.TZ || 'America/Sao_Paulo';
+const BUSINESS_TIME_ZONE = process.env.APP_TIME_ZONE || 'America/Sao_Paulo';
 
 function normalizeOptionalInteger(value) {
   if (value === undefined || value === null || value === '') {
@@ -1078,7 +1078,7 @@ class PedidoExpedicaoModel {
       codigo_pedido: row.codigo_pedido,
       cliente_nome: row.cliente_nome,
       cidade: row.cidade,
-      data_pedido: row.data_pedido || null,
+      data_pedido: normalizeDateOnly(row.data_pedido) || null,
       observacao: row.observacao || '',
       possui_nota_fiscal: Number(row.possui_nota_fiscal || 0) === 1,
       numero_nota_fiscal: row.numero_nota_fiscal || '',
@@ -1086,7 +1086,7 @@ class PedidoExpedicaoModel {
       vendedora: row.vendedora || '',
       peso_total_override_kg: row.peso_total_override_kg === null ? null : Number(row.peso_total_override_kg),
       quantidade_volumes: row.quantidade_volumes === null ? null : Number(row.quantidade_volumes),
-      data_programacao_saida: row.data_programacao_saida || null,
+      data_programacao_saida: normalizeDateOnly(row.data_programacao_saida) || null,
       status: row.status,
       prioridade_ordem: Number(row.prioridade_ordem || 0),
       data_coleta: row.data_coleta || null,

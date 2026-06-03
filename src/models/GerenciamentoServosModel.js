@@ -26,6 +26,8 @@ const SERVO_MODELOS = Object.freeze([
   { key: 'SAF040_NORMAL', label: 'SAF-040 NORMAL', estoqueCodigo: 'SAF040', corpoCodigo: '600' }
 ]);
 
+const BUSINESS_TIME_ZONE = process.env.APP_TIME_ZONE || 'America/Sao_Paulo';
+
 function normalizeScope(value) {
   return String(value || 'global').trim().toLowerCase() === 'dia' ? 'dia' : 'global';
 }
@@ -47,6 +49,22 @@ function normalizeDateOnly(value) {
 }
 
 function getTodayDateOnly() {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: BUSINESS_TIME_ZONE,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).formatToParts(new Date());
+    const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+
+    if (values.year && values.month && values.day) {
+      return `${values.year}-${values.month}-${values.day}`;
+    }
+  } catch (_) {
+    // Mantem fallback local do servidor se o timezone configurado nao estiver disponivel.
+  }
+
   const now = new Date();
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -69,6 +87,17 @@ function roundDisplay(value) {
 }
 
 function formatTitleDate() {
+  try {
+    return new Intl.DateTimeFormat('pt-BR', {
+      timeZone: BUSINESS_TIME_ZONE,
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    }).format(new Date());
+  } catch (_) {
+    // Mantem fallback local do servidor se o timezone configurado nao estiver disponivel.
+  }
+
   const now = new Date();
   const day = String(now.getDate()).padStart(2, '0');
   const month = String(now.getMonth() + 1).padStart(2, '0');
