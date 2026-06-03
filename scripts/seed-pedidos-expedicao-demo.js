@@ -15,6 +15,16 @@ const CLIENTES = [
   { cliente: 'Auto Parts Interior', cidade: 'Limeira/SP', vendedora: 'Regiane' }
 ];
 
+function ensureTestSeedAllowed() {
+  if (String(process.env.NODE_ENV || '').toLowerCase() === 'production') {
+    throw new Error('Script demo bloqueado em NODE_ENV=production.');
+  }
+
+  if (process.env.SAFISA_ALLOW_TEST_SEED !== '1') {
+    throw new Error('Script demo bloqueado. Defina SAFISA_ALLOW_TEST_SEED=1 para executar em ambiente local de teste.');
+  }
+}
+
 const PEDIDO_TEMPLATES = [
   [{ codigo: '1A', quantidade: 2 }, { codigo: '10A', quantidade: 1 }, { codigo: 'R064', quantidade: 2 }, { codigo: 'KT-48', quantidade: 1 }],
   [{ codigo: '1B', quantidade: 2 }, { codigo: '3A', quantidade: 1 }, { codigo: 'R064', quantidade: 1 }, { codigo: 'KT-14', quantidade: 1 }, { codigo: 'KT-02', quantidade: 1 }],
@@ -362,6 +372,8 @@ async function createPedidos(prefix, templates, pecasByCode) {
 }
 
 async function main() {
+  ensureTestSeedAllowed();
+
   const connection = await pool.getConnection();
 
   try {

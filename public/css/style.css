@@ -248,7 +248,7 @@ textarea {
 .servo-sheet-wrapper {
   overflow-x: auto;
   overflow-y: visible;
-  border: 1px solid #000;
+  border: 1px solid #6f86a0;
   border-radius: 16px;
   background: #fbfdff;
 }
@@ -263,8 +263,8 @@ textarea {
 
 .servo-sheet-table th,
 .servo-sheet-table td {
-  border-right: 1px solid #000;
-  border-bottom: 1px solid #000;
+  border-right: 1px solid #8599b1;
+  border-bottom: 1px solid #667d99;
   padding: 0;
 }
 
@@ -272,21 +272,22 @@ textarea {
   position: sticky;
   top: 0;
   z-index: 4;
-  background: #edf5ff;
+  background: #c9d8e8;
+  border-bottom-color: #526b88;
 }
 
 .servo-sheet-model-col,
 .servo-sheet-model-cell {
-  width: 158px;
-  min-width: 158px;
-  max-width: 158px;
+  width: 220px;
+  min-width: 220px;
+  max-width: 220px;
 }
 
 .sticky-col {
   position: sticky;
   left: 0;
   z-index: 3;
-  background: #f7fbff;
+  background: #eaf1f8;
 }
 
 .servo-sheet-total-col,
@@ -953,9 +954,9 @@ textarea {
 }
 
 .servo-sheet-resource-col {
-  width: 52px;
-  min-width: 52px;
-  max-width: 52px;
+  width: 44px;
+  min-width: 44px;
+  max-width: 44px;
   height: 116px;
   text-align: center;
   vertical-align: bottom;
@@ -969,20 +970,31 @@ textarea {
   display: inline-flex;
   align-items: flex-end;
   justify-content: center;
-  min-height: 100px;
+  min-height: 106px;
   padding: 4px 0;
   writing-mode: vertical-rl;
   transform: rotate(180deg);
+  white-space: nowrap;
   text-transform: uppercase;
 }
 
 .servo-sheet-divider-left {
-  border-left: 1px solid #000 !important;
+  border-left: 2px solid #405a78 !important;
+}
+
+.servo-sheet-row:nth-child(odd) td,
+.servo-sheet-row:nth-child(odd) th {
+  background: #f4f8fc;
+}
+
+.servo-sheet-row:nth-child(even) td,
+.servo-sheet-row:nth-child(even) th {
+  background: #d6e2ee;
 }
 
 .servo-sheet-row:hover td,
 .servo-sheet-row:hover th {
-  background: #eef6ff;
+  background: #bdcede;
 }
 
 .servo-sheet-model-cell {
@@ -999,6 +1011,7 @@ textarea {
   letter-spacing: 0.01em;
   text-transform: uppercase;
   line-height: 1.2;
+  white-space: nowrap;
 }
 
 .servo-sheet-body-marker {
@@ -1018,12 +1031,13 @@ textarea {
 
 .servo-sheet-total-cell {
   font-size: 0.86rem;
-  background: #fbfdff;
+  background: #f4f8fc;
 }
 
 .servo-sheet-total-row th,
 .servo-sheet-total-row td {
-  background: #edf5ff;
+  background: #c9d8e8;
+  border-top: 1px solid #526b88;
   font-weight: 800;
 }
 
@@ -1072,9 +1086,9 @@ textarea {
 
   .servo-sheet-model-col,
   .servo-sheet-model-cell {
-    width: 138px;
-    min-width: 138px;
-    max-width: 138px;
+    width: 206px;
+    min-width: 206px;
+    max-width: 206px;
   }
 
   .servo-sheet-model-title {

@@ -4,6 +4,16 @@ const EstoqueModel = require('../src/models/EstoqueModel');
 const QUANTIDADE_TESTE_POR_MODELO = 10;
 const KEYWORDS = ['VF', 'MC', 'AL', 'BR', 'SAF', 'CJ', 'MBF'];
 
+function ensureTestSeedAllowed() {
+  if (String(process.env.NODE_ENV || '').toLowerCase() === 'production') {
+    throw new Error('Script de carga de teste bloqueado em NODE_ENV=production.');
+  }
+
+  if (process.env.SAFISA_ALLOW_TEST_SEED !== '1') {
+    throw new Error('Script de carga de teste bloqueado. Defina SAFISA_ALLOW_TEST_SEED=1 para executar em ambiente local de teste.');
+  }
+}
+
 function isEligibleModel(codigo, descricao) {
   const normalizedCode = String(codigo || '').trim().toUpperCase();
   const normalizedDescription = String(descricao || '').trim().toUpperCase();
@@ -12,6 +22,8 @@ function isEligibleModel(codigo, descricao) {
 }
 
 async function main() {
+  ensureTestSeedAllowed();
+
   const connection = await pool.getConnection();
 
   try {

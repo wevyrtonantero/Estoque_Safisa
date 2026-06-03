@@ -10,7 +10,8 @@
     "db:processos": "node scripts/apply-process-infra.js",
     "db:intermediarias": "node scripts/ensure-intermediate-mps.js",
     "suppliers:sync": "node scripts/sync-supplier-catalog.js",
-    "suppliers:contacts": "node scripts/update-supplier-contacts.js"
+    "suppliers:contacts": "node scripts/update-supplier-contacts.js",
+    "audit:test-stock": "node scripts/audit-test-stock-loads.js"
   },
   "dependencies": {
     "dotenv": "^17.4.0",
