@@ -443,7 +443,10 @@ async function atualizarDiagnosticoImpressora(options = {}) {
   JSPM.JSPrintManager.auto_reconnect = true;
 
   try {
-    await Promise.resolve(JSPM.JSPrintManager.start());
+    if (!window.SafisaJspmClient?.start) {
+      throw new Error('Cliente local de impressao nao carregado nesta pagina.');
+    }
+    await window.SafisaJspmClient.start({ jspm: JSPM });
   } catch (error) {
     printDiagnosticsState.statusCode = JSPM.JSPrintManager.websocket_status;
     printDiagnosticsState.statusLabel = mapearStatusJspm(printDiagnosticsState.statusCode);

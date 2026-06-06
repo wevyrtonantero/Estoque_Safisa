@@ -6,15 +6,28 @@ const ETIQUETA_CATEGORIAS = Object.freeze({
   ITEM_AVULSO: 'ITEM_AVULSO',
   CAIXA: 'CAIXA'
 });
+const BUSINESS_TIME_ZONE = 'America/Sao_Paulo';
 
 function formatDateTime(date = new Date()) {
-  const dia = String(date.getDate()).padStart(2, '0');
-  const mes = String(date.getMonth() + 1).padStart(2, '0');
-  const ano = String(date.getFullYear());
-  const hora = String(date.getHours()).padStart(2, '0');
-  const minuto = String(date.getMinutes()).padStart(2, '0');
-  const segundo = String(date.getSeconds()).padStart(2, '0');
-  const miliSeg = String(date.getMilliseconds()).padStart(3, '0');
+  const normalizedDate = date instanceof Date ? date : new Date(date);
+  const parts = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: BUSINESS_TIME_ZONE,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23'
+  }).formatToParts(normalizedDate);
+  const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const dia = byType.day;
+  const mes = byType.month;
+  const ano = byType.year;
+  const hora = byType.hour;
+  const minuto = byType.minute;
+  const segundo = byType.second;
+  const miliSeg = String(normalizedDate.getMilliseconds()).padStart(3, '0');
   return `${dia}/${mes}/${ano} - ${hora}:${minuto}:${segundo}.${miliSeg}`;
 }
 
@@ -265,7 +278,9 @@ function appendText(lines, fontPrefix, layoutNode, text, options = {}) {
 
   lines.push(`^${fontPrefix},${fontValue}`);
   if (options.centerWidth && Number.isInteger(options.centerWidth) && options.centerWidth > 0) {
-    lines.push(`^FO${x},${y}^FB${options.centerWidth},1,0,C,0^FD${safeText}^FS`);
+    const fieldWidth = clamp(options.centerWidth, 1, 800);
+    const fieldX = clamp(x - Math.round(fieldWidth / 2), 0, 800 - fieldWidth);
+    lines.push(`^FO${fieldX},${y}^FB${fieldWidth},1,0,C,0^FD${safeText}^FS`);
     return;
   }
 
@@ -299,8 +314,8 @@ function gerarZplServo(etiqueta, dadosImpressao = {}) {
   appendText(lines, 'CFA', layout.aplicacao_linha_2, aplicacaoLinha2);
   appendText(lines, 'CFA', layout.aplicacao_linha_3, aplicacaoLinha3);
   appendDivider(lines, layout.divisor_inferior);
-  appendText(lines, 'CFA', layout.label_numero_serie, 'Numero de Serie', { centerWidth: 240 });
-  appendText(lines, 'CFB', layout.numero_serie, numeroSerie, { centerWidth: 240 });
+  appendText(lines, 'CFA', layout.label_numero_serie, 'Numero de Serie', { centerWidth: 420 });
+  appendText(lines, 'CFB', layout.numero_serie, numeroSerie, { centerWidth: 420 });
 
   if (layout.codigo_barras.visible) {
     lines.push(`^BY${layout.codigo_barras.largura},${layout.codigo_barras.proporcao},${layout.codigo_barras.altura}`);
