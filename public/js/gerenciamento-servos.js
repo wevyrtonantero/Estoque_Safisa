@@ -183,11 +183,11 @@ function renderizarTabela() {
       <th class="sticky-col servo-sheet-model-cell">TOTAL GERAL</th>
       <td class="servo-sheet-total-cell">${formatNumberOrEmpty(rows.reduce((sum, row) => sum + Number(row.total || 0), 0))}</td>
       ${pedidos.map((pedido) => `<td class="servo-sheet-cell servo-sheet-total-inline">${formatNumberOrEmpty(totalPedidos[String(pedido.id)] || 0)}</td>`).join('')}
-      <td class="servo-sheet-cell servo-sheet-divider-left servo-sheet-total-muted">-</td>
-      <td class="servo-sheet-cell servo-sheet-total-muted">-</td>
-      <td class="servo-sheet-cell servo-sheet-total-muted">-</td>
-      <td class="servo-sheet-cell servo-sheet-total-muted">-</td>
-      <td class="servo-sheet-cell servo-sheet-total-muted">-</td>
+      <td class="servo-sheet-cell servo-sheet-divider-left servo-sheet-total-inline">${formatNumberOrEmpty(matrizAtual?.resumo?.estoque_total || 0)}</td>
+      <td class="servo-sheet-cell servo-sheet-total-inline">${formatNumberOrEmpty(matrizAtual?.resumo?.corpos_total || 0)}</td>
+      <td class="servo-sheet-cell servo-sheet-total-inline">${formatNumberOrEmpty(matrizAtual?.resumo?.zinco_total || 0)}</td>
+      <td class="servo-sheet-cell servo-sheet-total-inline">${formatNumberOrEmpty(matrizAtual?.resumo?.usinagem_total || 0)}</td>
+      <td class="servo-sheet-cell servo-sheet-total-inline">${formatNumberOrEmpty(sumMateriaPrima(rows))}</td>
     </tr>
   `;
 }
@@ -209,6 +209,10 @@ function renderMateriaPrimaCell(materiaPrima) {
       ${formatNumber(quantidade)}
     </td>
   `;
+}
+
+function sumMateriaPrima(rows) {
+  return rows.reduce((sum, row) => sum + Number(row?.materia_prima?.quantidade || 0), 0);
 }
 
 function formatNumber(value) {
