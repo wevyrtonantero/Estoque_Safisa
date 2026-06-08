@@ -422,13 +422,25 @@ class GerenciamentoServosModel {
     return counts;
   }
 
-  static isPrimaryBodyRow(model, bodyShareMap) {
-    const sharedCount = Number(bodyShareMap.get(model.corpoCodigo) || 0);
+  static buildSharedServoStats() {
+    const counts = new Map();
+    this.MODEL_DEFINITIONS.forEach((model) => {
+      counts.set(model.estoqueCodigo, (counts.get(model.estoqueCodigo) || 0) + 1);
+    });
+    return counts;
+  }
+
+  static isPrimarySharedRow(sharedKey, model, sharedMap) {
+    const sharedCount = Number(sharedMap.get(sharedKey) || 0);
     if (sharedCount <= 1) {
       return true;
     }
 
     return String(model.key || '').endsWith('_NORMAL');
+  }
+
+  static isPrimaryBodyRow(model, bodyShareMap) {
+    return this.isPrimarySharedRow(model.corpoCodigo, model, bodyShareMap);
   }
 
   static async getMatrix(scope = 'global', connection = pool) {
@@ -505,17 +517,19 @@ class GerenciamentoServosModel {
     ]);
 
     const bodyShareMap = this.buildSharedBodyStats();
+    const servoShareMap = this.buildSharedServoStats();
     const rows = this.MODEL_DEFINITIONS.map((model) => {
       const current = rowMap.get(model.key);
+      const isPrimaryStockRow = this.isPrimarySharedRow(model.estoqueCodigo, model, servoShareMap);
       const isPrimaryBodyRow = this.isPrimaryBodyRow(model, bodyShareMap);
-      const estoque = roundDisplay(servoStockMap.get(model.estoqueCodigo) || 0);
+      const estoque = isPrimaryStockRow ? roundDisplay(servoStockMap.get(model.estoqueCodigo) || 0) : null;
       const corpos = isPrimaryBodyRow ? roundDisplay(corpoStockMap.get(model.corpoCodigo) || 0) : null;
       const zinco = isPrimaryBodyRow ? roundDisplay(zincoMap.get(model.corpoCodigo) || 0) : null;
       const usinagem = isPrimaryBodyRow ? roundDisplay(usinagemMap.get(model.corpoCodigo) || 0) : null;
       const materiaPrima = isPrimaryBodyRow
         ? (materiaPrimaMap.get(model.corpoCodigo) || { codigo: '-', unidade: '', quantidade: 0 })
         : null;
-      const infProducao = isPrimaryBodyRow
+      const infProducao = isPrimaryStockRow && isPrimaryBodyRow
         ? roundDisplay((estoque + toNumber(corpos) + toNumber(zinco) + toNumber(usinagem)) - current.total)
         : null;
 
@@ -527,7 +541,9 @@ class GerenciamentoServosModel {
         usinagem,
         materia_prima: materiaPrima,
         inf_producao: infProducao,
+        estoque_compartilhado: Number(servoShareMap.get(model.estoqueCodigo) || 0) > 1,
         corpo_compartilhado: Number(bodyShareMap.get(model.corpoCodigo) || 0) > 1,
+        exibe_estoque_compartilhado: isPrimaryStockRow,
         exibe_recursos_corpo: isPrimaryBodyRow
       };
     });
