@@ -236,6 +236,9 @@ class GerenciamentoServosModel {
     const getByKeyword = (keyword) => stocks.find((stock) => String(stock.nome || '').toUpperCase().includes(keyword));
 
     return {
+      todos: stocks
+        .map((stock) => Number(stock.id))
+        .filter((id) => Number.isInteger(id) && id > 0),
       montagem: Number(getByKeyword('MONT')?.id || 0),
       almoxarifado: Number(getByKeyword('ALMOX')?.id || 0),
       expedicao: Number(getByKeyword('EXPED')?.id || 0)
@@ -280,14 +283,34 @@ class GerenciamentoServosModel {
     const [rows] = await connection.query(
       `
         SELECT
-          p.codigo,
-          SUM(COALESCE(t.quantidade, 0)) AS quantidade
-        FROM tratamento_externo_saldos t
-        INNER JOIN pecas p ON p.id = t.id_peca
-        WHERE p.codigo IN (${uniqueCodes.map(() => '?').join(', ')})
-        GROUP BY p.codigo
+          saldos.codigo,
+          SUM(saldos.quantidade) AS quantidade
+        FROM (
+          SELECT
+            p.codigo,
+            SUM(COALESCE(t.quantidade, 0)) AS quantidade
+          FROM tratamento_externo_saldos t
+          INNER JOIN pecas p ON p.id = t.id_peca
+          WHERE p.codigo IN (${uniqueCodes.map(() => '?').join(', ')})
+          GROUP BY p.codigo
+
+          UNION ALL
+
+          SELECT
+            p.codigo,
+            SUM(GREATEST(COALESCE(ri.quantidade_enviada, 0) - COALESCE(ri.quantidade_retorno, 0), 0)) AS quantidade
+          FROM terceirizacao_remessa_itens ri
+          INNER JOIN terceirizacao_remessas r ON r.id = ri.id_remessa
+          INNER JOIN pecas p ON p.id = ri.id_peca
+          WHERE p.codigo IN (${uniqueCodes.map(() => '?').join(', ')})
+            AND r.status IN ('ENVIADA', 'RETORNO_PARCIAL')
+            AND COALESCE(ri.encerrado_manualmente, 0) = 0
+            AND COALESCE(ri.quantidade_enviada, 0) > COALESCE(ri.quantidade_retorno, 0)
+          GROUP BY p.codigo
+        ) saldos
+        GROUP BY saldos.codigo
       `,
-      uniqueCodes
+      [...uniqueCodes, ...uniqueCodes]
     );
 
     return new Map(rows.map((row) => [String(row.codigo), roundDisplay(row.quantidade)]));
@@ -399,6 +422,15 @@ class GerenciamentoServosModel {
     return counts;
   }
 
+  static isPrimaryBodyRow(model, bodyShareMap) {
+    const sharedCount = Number(bodyShareMap.get(model.corpoCodigo) || 0);
+    if (sharedCount <= 1) {
+      return true;
+    }
+
+    return String(model.key || '').endsWith('_NORMAL');
+  }
+
   static async getMatrix(scope = 'global', connection = pool) {
     const normalizedScope = normalizeScope(scope);
     const pedidosBase = await this.findRelevantOrders(normalizedScope, connection);
@@ -461,12 +493,12 @@ class GerenciamentoServosModel {
 
     const servoStockMap = await this.queryPieceStockByCodes(
       this.MODEL_DEFINITIONS.map((model) => model.estoqueCodigo),
-      [stockIds.expedicao],
+      stockIds.todos,
       connection
     );
     const bodyCodes = this.MODEL_DEFINITIONS.map((model) => model.corpoCodigo);
     const [corpoStockMap, zincoMap, usinagemMap, materiaPrimaMap] = await Promise.all([
-      this.queryPieceStockByCodes(bodyCodes, [stockIds.montagem, stockIds.almoxarifado], connection),
+      this.queryPieceStockByCodes(bodyCodes, stockIds.todos, connection),
       this.queryTratamentoByBodyCodes(bodyCodes, connection),
       this.queryUsinagemByBodyCodes(bodyCodes, connection),
       this.queryMateriaPrimaByBodyCodes(bodyCodes, connection)
@@ -475,12 +507,17 @@ class GerenciamentoServosModel {
     const bodyShareMap = this.buildSharedBodyStats();
     const rows = this.MODEL_DEFINITIONS.map((model) => {
       const current = rowMap.get(model.key);
+      const isPrimaryBodyRow = this.isPrimaryBodyRow(model, bodyShareMap);
       const estoque = roundDisplay(servoStockMap.get(model.estoqueCodigo) || 0);
-      const corpos = roundDisplay(corpoStockMap.get(model.corpoCodigo) || 0);
-      const zinco = roundDisplay(zincoMap.get(model.corpoCodigo) || 0);
-      const usinagem = roundDisplay(usinagemMap.get(model.corpoCodigo) || 0);
-      const materiaPrima = materiaPrimaMap.get(model.corpoCodigo) || { codigo: '-', unidade: '', quantidade: 0 };
-      const infProducao = roundDisplay((estoque + corpos + zinco + usinagem) - current.total);
+      const corpos = isPrimaryBodyRow ? roundDisplay(corpoStockMap.get(model.corpoCodigo) || 0) : null;
+      const zinco = isPrimaryBodyRow ? roundDisplay(zincoMap.get(model.corpoCodigo) || 0) : null;
+      const usinagem = isPrimaryBodyRow ? roundDisplay(usinagemMap.get(model.corpoCodigo) || 0) : null;
+      const materiaPrima = isPrimaryBodyRow
+        ? (materiaPrimaMap.get(model.corpoCodigo) || { codigo: '-', unidade: '', quantidade: 0 })
+        : null;
+      const infProducao = isPrimaryBodyRow
+        ? roundDisplay((estoque + toNumber(corpos) + toNumber(zinco) + toNumber(usinagem)) - current.total)
+        : null;
 
       return {
         ...current,
@@ -490,7 +527,8 @@ class GerenciamentoServosModel {
         usinagem,
         materia_prima: materiaPrima,
         inf_producao: infProducao,
-        corpo_compartilhado: Number(bodyShareMap.get(model.corpoCodigo) || 0) > 1
+        corpo_compartilhado: Number(bodyShareMap.get(model.corpoCodigo) || 0) > 1,
+        exibe_recursos_corpo: isPrimaryBodyRow
       };
     });
 
