@@ -33,6 +33,18 @@ function buildAjustePayload(body) {
   };
 }
 
+function buildEntradaBatchPayload(body) {
+  return {
+    itens: Array.isArray(body?.itens)
+      ? body.itens.map((item) => ({
+        id_materia_prima: normalizeOptionalInteger(item?.id_materia_prima),
+        quantidade: normalizeDecimal(item?.quantidade),
+        observacao: item?.observacao ? String(item.observacao).trim() : null
+      }))
+      : []
+  };
+}
+
 function normalizeCategoria(value) {
   const categoria = String(value || '').trim().toUpperCase();
   return categoria === 'LAMINADO' ? 'TREFILADO' : categoria;
@@ -62,6 +74,27 @@ function validateAjustePayload(payload) {
   if (!Number.isFinite(payload.novo_saldo) || payload.novo_saldo < 0) {
     errors.push('O novo saldo deve ser maior ou igual a zero.');
   }
+
+  return errors;
+}
+
+function validateEntradaBatchPayload(payload) {
+  const errors = [];
+
+  if (!Array.isArray(payload.itens) || payload.itens.length === 0) {
+    errors.push('Adicione pelo menos uma materia-prima para confirmar a entrada em lote.');
+    return errors;
+  }
+
+  payload.itens.forEach((item, index) => {
+    if (!Number.isInteger(item.id_materia_prima)) {
+      errors.push(`Item ${index + 1}: a materia-prima informada deve ser valida.`);
+    }
+
+    if (!Number.isFinite(item.quantidade) || item.quantidade <= 0) {
+      errors.push(`Item ${index + 1}: a quantidade deve ser maior que zero.`);
+    }
+  });
 
   return errors;
 }
@@ -142,6 +175,23 @@ const EstoqueMateriaPrimaController = {
       return res.status(201).json(result);
     } catch (error) {
       const response = extractErrorResponse(error, 'Erro ao registrar entrada de materia-prima.');
+      return res.status(response.status).json(response.body);
+    }
+  },
+
+  async createEntradaBatch(req, res) {
+    try {
+      const payload = buildEntradaBatchPayload(req.body);
+      const errors = validateEntradaBatchPayload(payload);
+
+      if (errors.length > 0) {
+        return res.status(400).json({ message: 'Dados invalidos.', errors });
+      }
+
+      const result = await EstoqueMateriaPrimaModel.processEntradaBatch(payload.itens);
+      return res.status(201).json(result);
+    } catch (error) {
+      const response = extractErrorResponse(error, 'Erro ao registrar entradas em lote de materia-prima.');
       return res.status(response.status).json(response.body);
     }
   },

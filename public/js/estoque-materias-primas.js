@@ -8,6 +8,7 @@ let movimentacoesCache = [];
 let materiasPrimasCache = [];
 let filtroDebounceTimer = null;
 let historicoMateriaPrimaIdAtual = null;
+let entradasLoteCache = [];
 
 const refs = {
   mensagem: document.getElementById('estoque-mp-mensagem'),
@@ -31,6 +32,11 @@ const refs = {
   modalQuantidade: document.getElementById('movimentacao-mp-quantidade'),
   modalQuantidadeLabel: document.getElementById('movimentacao-mp-quantidade-label'),
   modalObservacao: document.getElementById('movimentacao-mp-observacao'),
+  modalLoteBloco: document.getElementById('movimentacao-mp-lote-bloco'),
+  modalLoteTotal: document.getElementById('movimentacao-mp-lote-total'),
+  modalLoteTbody: document.getElementById('movimentacao-mp-lote-tbody'),
+  btnSalvarModal: document.getElementById('btn-salvar-modal-mp-estoque'),
+  btnConfirmarLote: document.getElementById('btn-confirmar-lote-mp-estoque'),
   historicoModal: document.getElementById('historico-mp-modal'),
   historicoModalTitulo: document.getElementById('historico-mp-modal-title'),
   historicoMensagem: document.getElementById('historico-mp-mensagem'),
@@ -53,6 +59,7 @@ function bindEvents() {
   document.getElementById('btn-historico-mp').addEventListener('click', () => abrirModalHistorico());
   document.getElementById('btn-fechar-modal-mp-estoque').addEventListener('click', fecharModalMovimentacao);
   document.getElementById('btn-cancelar-modal-mp-estoque').addEventListener('click', fecharModalMovimentacao);
+  refs.btnConfirmarLote.addEventListener('click', handleConfirmarLoteMovimentacao);
   document.getElementById('btn-fechar-modal-mp-historico').addEventListener('click', fecharModalHistorico);
   document.getElementById('movimentacao-mp-form').addEventListener('submit', handleSalvarMovimentacao);
   document.getElementById('btn-limpar-filtros-estoque-mp').addEventListener('click', limparFiltros);
@@ -67,6 +74,7 @@ function bindEvents() {
   refs.modal.addEventListener('click', handleBackdrop);
   refs.historicoModal.addEventListener('click', handleBackdrop);
   refs.tabela.addEventListener('click', handleTabelaActions);
+  refs.modalLoteTbody.addEventListener('click', handleLoteActions);
   refs.modalBusca.addEventListener('input', () => {
     refs.modalMateriaPrimaId.value = '';
     renderizarSugestoes(refs.modalBusca.value.trim());
@@ -239,9 +247,11 @@ function abrirModalMovimentacao(tipo, materiaPrimaId = null) {
   refs.modalTitulo.textContent = isAjuste ? 'Ajuste de Saldo' : 'Nova Entrada';
   refs.modalSubtitulo.textContent = isAjuste
     ? 'Defina o novo saldo final na unidade base da materia-prima.'
-    : 'Informe a entrada na unidade base da materia-prima.';
+    : 'Monte uma lista de entradas e confirme tudo de uma vez.';
   refs.modalQuantidadeLabel.textContent = isAjuste ? 'Novo saldo' : 'Quantidade de entrada';
-  document.getElementById('btn-salvar-modal-mp-estoque').textContent = isAjuste ? 'Salvar Ajuste' : 'Salvar Entrada';
+  refs.btnSalvarModal.textContent = isAjuste ? 'Salvar Ajuste' : 'Adicionar a Lista';
+  refs.btnConfirmarLote.classList.toggle('hidden', isAjuste);
+  refs.modalLoteBloco.classList.toggle('hidden', isAjuste);
 
   if (materiaPrimaId) {
     selecionarMateriaPrimaPorId(materiaPrimaId);
@@ -294,6 +304,8 @@ function resetModalMovimentacao() {
   refs.modalMensagem.textContent = '';
   refs.modalSugestoes.classList.add('hidden');
   refs.modalSugestoes.innerHTML = '';
+  entradasLoteCache = [];
+  renderizarLoteMovimentacao();
 }
 
 function renderizarSugestoes(termo) {
@@ -354,6 +366,11 @@ async function handleSalvarMovimentacao(event) {
   event.preventDefault();
 
   const isAjuste = refs.modalTipo.value === 'AJUSTE';
+  if (!isAjuste) {
+    adicionarEntradaAoLote();
+    return;
+  }
+
   const endpoint = isAjuste
     ? `${estoqueMateriaPrimaApiBaseUrl}/ajuste`
     : `${estoqueMateriaPrimaApiBaseUrl}/entrada`;
@@ -389,6 +406,128 @@ async function handleSalvarMovimentacao(event) {
     refs.modalMensagem.className = 'message error';
     refs.modalMensagem.classList.remove('hidden');
   }
+}
+
+function adicionarEntradaAoLote() {
+  const materiaPrimaId = Number.parseInt(refs.modalMateriaPrimaId.value, 10);
+  const quantidade = Number.parseFloat(String(refs.modalQuantidade.value || '').replace(',', '.'));
+  const observacao = refs.modalObservacao.value.trim();
+  const materiaPrima = encontrarMateriaPrima(materiaPrimaId);
+
+  if (!Number.isInteger(materiaPrimaId) || !materiaPrima) {
+    throwErroLoteMovimentacao('Selecione uma materia-prima valida antes de adicionar.');
+    return;
+  }
+
+  if (!Number.isFinite(quantidade) || quantidade <= 0) {
+    throwErroLoteMovimentacao('Informe uma quantidade maior que zero para adicionar.');
+    return;
+  }
+
+  entradasLoteCache.push({
+    id_materia_prima: materiaPrimaId,
+    codigo: materiaPrima.codigo,
+    nome: materiaPrima.nome,
+    quantidade,
+    unidade_estoque: materiaPrima.unidade_estoque,
+    observacao
+  });
+
+  limparCamposEntradaMovimentacao();
+  renderizarLoteMovimentacao();
+  refs.modalMensagem.textContent = 'Entrada adicionada a lista.';
+  refs.modalMensagem.className = 'message success';
+  refs.modalMensagem.classList.remove('hidden');
+}
+
+async function handleConfirmarLoteMovimentacao() {
+  if (refs.modalTipo.value === 'AJUSTE') {
+    return;
+  }
+
+  if (!entradasLoteCache.length) {
+    throwErroLoteMovimentacao('Adicione pelo menos uma entrada antes de confirmar.');
+    return;
+  }
+
+  try {
+    const response = await fetch(`${estoqueMateriaPrimaApiBaseUrl}/entrada-lote`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        itens: entradasLoteCache.map((item) => ({
+          id_materia_prima: item.id_materia_prima,
+          quantidade: item.quantidade,
+          observacao: item.observacao
+        }))
+      })
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(extractErrorMessage(result));
+    }
+
+    fecharModalMovimentacao();
+    mostrarMensagem(`${result.total_itens || entradasLoteCache.length} entrada(s) de materia-prima registrada(s) com sucesso.`, 'success');
+    await Promise.all([carregarSaldos(), carregarMovimentacoesSeHistoricoAberto()]);
+  } catch (error) {
+    throwErroLoteMovimentacao(error.message);
+  }
+}
+
+function handleLoteActions(event) {
+  const button = event.target.closest('button[data-lote-index]');
+  if (!button) {
+    return;
+  }
+
+  const index = Number.parseInt(button.dataset.loteIndex, 10);
+  if (!Number.isInteger(index) || index < 0 || index >= entradasLoteCache.length) {
+    return;
+  }
+
+  entradasLoteCache.splice(index, 1);
+  renderizarLoteMovimentacao();
+}
+
+function renderizarLoteMovimentacao() {
+  refs.modalLoteTotal.textContent = `${entradasLoteCache.length} item(ns) na lista`;
+  refs.btnConfirmarLote.disabled = entradasLoteCache.length === 0;
+
+  if (!entradasLoteCache.length) {
+    refs.modalLoteTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhuma entrada adicionada.</td></tr>';
+    return;
+  }
+
+  refs.modalLoteTbody.innerHTML = entradasLoteCache.map((item, index) => `
+    <tr>
+      <td class="table-code">${escapeHtml(item.codigo)}</td>
+      <td class="table-description">${escapeHtml(item.nome)}</td>
+      <td class="table-quantity">${formatQuantity(item.quantidade)} ${escapeHtml(item.unidade_estoque || '')}</td>
+      <td>${escapeHtml(item.observacao || '-')}</td>
+      <td class="table-actions-cell">
+        <button type="button" class="btn btn-danger" data-lote-index="${index}">Remover</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function limparCamposEntradaMovimentacao() {
+  refs.modalMateriaPrimaId.value = '';
+  refs.modalBusca.value = '';
+  refs.modalQuantidade.value = '';
+  refs.modalObservacao.value = '';
+  refs.modalResumo.classList.add('selected-tags', 'empty');
+  refs.modalResumo.textContent = 'Selecione uma materia-prima para continuar.';
+  refs.modalSugestoes.classList.add('hidden');
+  refs.modalSugestoes.innerHTML = '';
+}
+
+function throwErroLoteMovimentacao(message) {
+  refs.modalMensagem.textContent = message;
+  refs.modalMensagem.className = 'message error';
+  refs.modalMensagem.classList.remove('hidden');
 }
 
 function handleTabelaActions(event) {

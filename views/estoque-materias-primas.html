@@ -202,9 +202,36 @@
           <input id="movimentacao-mp-observacao" type="text" maxlength="255" placeholder="Opcional">
         </div>
 
+        <div id="movimentacao-mp-lote-bloco" class="span-12">
+          <div class="subtle-divider"></div>
+          <span class="section-pill">Lista de entradas</span>
+          <h3 id="movimentacao-mp-lote-titulo">Itens para confirmar</h3>
+          <p id="movimentacao-mp-lote-total">0 item(ns) na lista</p>
+
+          <div class="table-wrapper">
+            <table class="history-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Descricao</th>
+                  <th>Quantidade</th>
+                  <th>Observacao</th>
+                  <th>Acoes</th>
+                </tr>
+              </thead>
+              <tbody id="movimentacao-mp-lote-tbody">
+                <tr>
+                  <td colspan="5" class="empty-state">Nenhuma entrada adicionada.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         <div class="span-12 modal-actions">
           <button id="btn-cancelar-modal-mp-estoque" class="btn btn-neutral" type="button">Cancelar</button>
-          <button id="btn-salvar-modal-mp-estoque" class="btn btn-primary" type="submit">Salvar</button>
+          <button id="btn-confirmar-lote-mp-estoque" class="btn btn-success" type="button">Confirmar Entradas</button>
+          <button id="btn-salvar-modal-mp-estoque" class="btn btn-primary" type="submit">Adicionar a Lista</button>
         </div>
       </form>
     </div>

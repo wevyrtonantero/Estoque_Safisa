@@ -360,6 +360,58 @@ class EstoqueMateriaPrimaModel {
     }
   }
 
+  static async processEntradaBatch(items = []) {
+    const connection = await pool.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      const resultados = [];
+
+      for (const item of items) {
+        const materiaPrima = await this.findMateriaPrimaById(item.id_materia_prima, connection);
+        if (!materiaPrima) {
+          throw this.createBusinessError('Materia-prima nao encontrada.');
+        }
+
+        const saldoAtual = await this.findSaldoForUpdate(connection, item.id_materia_prima);
+        const quantidadeAtual = saldoAtual ? Number(saldoAtual.quantidade) : 0;
+        const novoSaldo = Number((quantidadeAtual + Number(item.quantidade)).toFixed(4));
+
+        await this.persistSaldo(connection, item.id_materia_prima, novoSaldo, saldoAtual);
+        await this.createMovimentacao(connection, {
+          id_materia_prima: item.id_materia_prima,
+          tipo_movimentacao: 'ENTRADA',
+          quantidade: Number(item.quantidade),
+          unidade: materiaPrima.unidade_estoque,
+          saldo_resultante: novoSaldo,
+          observacao: item.observacao || 'Entrada manual no estoque de materia-prima.'
+        });
+
+        resultados.push({
+          id_materia_prima: item.id_materia_prima,
+          codigo: materiaPrima.codigo,
+          nome: materiaPrima.nome,
+          quantidade: Number(item.quantidade),
+          unidade_estoque: materiaPrima.unidade_estoque,
+          saldo_resultante: novoSaldo
+        });
+      }
+
+      await connection.commit();
+
+      return {
+        total_itens: resultados.length,
+        itens: resultados
+      };
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }
+
   static async processAjuste(data) {
     const connection = await pool.getConnection();
 

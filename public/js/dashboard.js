@@ -25,6 +25,7 @@ let producaoCache = [];
 let materiasPrimasCache = [];
 let itensEstoqueCache = [];
 let fornecedoresCache = [];
+let mpEntradaLoteCache = [];
 let autoRefreshHandle = null;
 const ACTIVE_REQUEST_STATUSES = ['PENDENTE', 'EM_SEPARACAO', 'ATENDIDA_PARCIAL'];
 const CLOSED_REQUEST_STATUSES = ['ATENDIDA', 'CANCELADA'];
@@ -120,6 +121,11 @@ const refs = {
   mpResumo: document.getElementById('almox-mp-resumo'),
   mpQuantidade: document.getElementById('almox-mp-quantidade'),
   mpObservacao: document.getElementById('almox-mp-observacao'),
+  mpLoteBloco: document.getElementById('almox-mp-lote-bloco'),
+  mpLoteTotal: document.getElementById('almox-mp-lote-total'),
+  mpLoteTbody: document.getElementById('almox-mp-lote-tbody'),
+  mpBtnSalvar: document.getElementById('btn-salvar-modal-almox-mp'),
+  mpBtnConfirmarLote: document.getElementById('btn-confirmar-lote-almox-mp'),
   historicoModal: document.getElementById('almox-historico-modal'),
   historicoTotal: document.getElementById('almox-historico-total'),
   historicoTbody: document.getElementById('almox-historico-tbody'),
@@ -222,6 +228,7 @@ function bindEvents() {
   document.getElementById('btn-fechar-modal-almox-mp').addEventListener('click', fecharModalMateriaPrima);
   document.getElementById('btn-cancelar-modal-almox-mp').addEventListener('click', fecharModalMateriaPrima);
   document.getElementById('almox-mp-form').addEventListener('submit', handleSalvarEntradaMp);
+  refs.mpBtnConfirmarLote.addEventListener('click', handleConfirmarEntradaMpLote);
   refs.mpBusca.addEventListener('input', () => {
     refs.mpId.value = '';
     renderizarResumoMateriaPrima(null);
@@ -229,6 +236,7 @@ function bindEvents() {
   });
   refs.mpBusca.addEventListener('focus', () => renderizarSugestoesMateriaPrima(refs.mpBusca.value.trim()));
   refs.mpSugestoes.addEventListener('click', handleSugestaoMateriaPrimaClick);
+  refs.mpLoteTbody.addEventListener('click', handleRemoverEntradaMpLote);
 
   document.getElementById('btn-fechar-modal-almox-historico').addEventListener('click', fecharModalHistorico);
   document.getElementById('btn-fechar-modal-almox-producao').addEventListener('click', fecharModalProducao);
@@ -1637,14 +1645,53 @@ function renderizarResumoMateriaPrima(item) {
 async function handleSalvarEntradaMp(event) {
   event.preventDefault();
 
+  const materiaPrimaId = Number.parseInt(refs.mpId.value, 10);
+  const quantidade = Number.parseFloat(String(refs.mpQuantidade.value || '').replace(',', '.'));
+  const observacao = refs.mpObservacao.value.trim();
+  const materiaPrima = materiasPrimasCache.find((item) => Number(item.id) === materiaPrimaId);
+
+  if (!Number.isInteger(materiaPrimaId) || !materiaPrima) {
+    mostrarErroEntradaMp('Selecione uma materia-prima valida antes de adicionar.');
+    return;
+  }
+
+  if (!Number.isFinite(quantidade) || quantidade <= 0) {
+    mostrarErroEntradaMp('Informe uma quantidade maior que zero para adicionar.');
+    return;
+  }
+
+  mpEntradaLoteCache.push({
+    id_materia_prima: materiaPrimaId,
+    codigo: materiaPrima.codigo,
+    nome: materiaPrima.nome,
+    unidade_estoque: materiaPrima.unidade_estoque,
+    quantidade,
+    observacao
+  });
+
+  refs.mpMensagem.textContent = 'Entrada adicionada a lista.';
+  refs.mpMensagem.className = 'message success';
+  refs.mpMensagem.classList.remove('hidden');
+  limparCamposEntradaMpAtual();
+  renderizarEntradaMpLote();
+}
+
+async function handleConfirmarEntradaMpLote() {
+  if (!mpEntradaLoteCache.length) {
+    mostrarErroEntradaMp('Adicione pelo menos uma entrada antes de confirmar.');
+    return;
+  }
+
   try {
-    const response = await fetch(`${estoqueMateriaPrimaApiBaseUrl}/entrada`, {
+    const response = await fetch(`${estoqueMateriaPrimaApiBaseUrl}/entrada-lote`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        id_materia_prima: refs.mpId.value,
-        quantidade: refs.mpQuantidade.value,
-        observacao: refs.mpObservacao.value.trim()
+        itens: mpEntradaLoteCache.map((item) => ({
+          id_materia_prima: item.id_materia_prima,
+          quantidade: item.quantidade,
+          observacao: item.observacao
+        }))
       })
     });
     const result = await response.json();
@@ -1654,11 +1701,10 @@ async function handleSalvarEntradaMp(event) {
     }
 
     fecharModalMateriaPrima();
-    mostrarMensagem('Entrada de materia-prima registrada com sucesso.', 'success');
+    mostrarMensagem(`${result.total_itens || mpEntradaLoteCache.length} entrada(s) de materia-prima registrada(s) com sucesso.`, 'success');
+    await Promise.all([carregarEstoqueAlmox(), carregarHistoricoSeAberto()]);
   } catch (error) {
-    refs.mpMensagem.textContent = error.message;
-    refs.mpMensagem.className = 'message error';
-    refs.mpMensagem.classList.remove('hidden');
+    mostrarErroEntradaMp(error.message);
   }
 }
 
@@ -1735,6 +1781,60 @@ function resetModalMateriaPrima() {
   refs.mpMensagem.textContent = '';
   refs.mpSugestoes.classList.add('hidden');
   refs.mpSugestoes.innerHTML = '';
+  mpEntradaLoteCache = [];
+  renderizarEntradaMpLote();
+}
+
+function limparCamposEntradaMpAtual() {
+  refs.mpId.value = '';
+  refs.mpBusca.value = '';
+  refs.mpQuantidade.value = '';
+  refs.mpObservacao.value = '';
+  refs.mpResumo.classList.add('selected-tags', 'empty');
+  refs.mpResumo.textContent = 'Selecione uma materia-prima para continuar.';
+  refs.mpSugestoes.classList.add('hidden');
+  refs.mpSugestoes.innerHTML = '';
+}
+
+function renderizarEntradaMpLote() {
+  refs.mpLoteTotal.textContent = `${mpEntradaLoteCache.length} item(ns) na lista`;
+  refs.mpBtnConfirmarLote.disabled = mpEntradaLoteCache.length === 0;
+
+  if (!mpEntradaLoteCache.length) {
+    refs.mpLoteTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhuma entrada adicionada.</td></tr>';
+    return;
+  }
+
+  refs.mpLoteTbody.innerHTML = mpEntradaLoteCache.map((item, index) => `
+    <tr>
+      <td class="table-code">${escapeHtml(item.codigo)}</td>
+      <td class="table-description">${escapeHtml(item.nome)}</td>
+      <td class="table-quantity">${formatDecimal(item.quantidade)} ${escapeHtml(item.unidade_estoque || '')}</td>
+      <td>${escapeHtml(item.observacao || '-')}</td>
+      <td class="table-actions-cell"><button type="button" class="btn btn-danger" data-mp-lote-index="${index}">Remover</button></td>
+    </tr>
+  `).join('');
+}
+
+function handleRemoverEntradaMpLote(event) {
+  const button = event.target.closest('button[data-mp-lote-index]');
+  if (!button) {
+    return;
+  }
+
+  const index = Number.parseInt(button.dataset.mpLoteIndex, 10);
+  if (!Number.isInteger(index) || index < 0 || index >= mpEntradaLoteCache.length) {
+    return;
+  }
+
+  mpEntradaLoteCache.splice(index, 1);
+  renderizarEntradaMpLote();
+}
+
+function mostrarErroEntradaMp(message) {
+  refs.mpMensagem.textContent = message;
+  refs.mpMensagem.className = 'message error';
+  refs.mpMensagem.classList.remove('hidden');
 }
 
 async function carregarHistoricoSeAberto() {
