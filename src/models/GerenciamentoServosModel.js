@@ -14,8 +14,8 @@ const SERVO_MODELOS = Object.freeze([
   { key: 'BR040_NORMAL', label: 'BR-040 NORMAL', estoqueCodigo: 'BR040', corpoCodigo: '350' },
   { key: 'BR040_INV_015VF', label: 'BR-040 INVERTIDO 015/VF', estoqueCodigo: 'BR040INV', corpoCodigo: '350' },
   { key: 'BR040_INV_028', label: 'BR-040 INVERTIDO 028', estoqueCodigo: 'BR040INV028', corpoCodigo: '350' },
-  { key: 'MBF025_NORMAL', label: 'MBF-025 NORMAL', estoqueCodigo: 'MBF028', corpoCodigo: '300' },
-  { key: 'MBF025_INV_015VF', label: 'MBF-025 INVERTIDO 015/VF', estoqueCodigo: 'MBF028INV015', corpoCodigo: '300' },
+  { key: 'MBF025_NORMAL', label: 'MBF-025 NORMAL', estoqueCodigo: 'MBF025', estoqueCodigos: ['MBF025', 'MBF028'], corpoCodigo: '300' },
+  { key: 'MBF025_INV_015VF', label: 'MBF-025 INVERTIDO 015/VF', estoqueCodigo: 'MBF025INV015', estoqueCodigos: ['MBF025INV015', 'MBF028INV015'], corpoCodigo: '300' },
   { key: 'MBF032_NORMAL', label: 'MBF-032 NORMAL', estoqueCodigo: 'MBF032', corpoCodigo: '450' },
   { key: 'MBF032_INV_028', label: 'MBF-032 INVERTIDO 028', estoqueCodigo: 'MBF032INV', corpoCodigo: '450' },
   { key: 'CJ015_NORMAL', label: 'CJ-015 NORMAL', estoqueCodigo: 'CJ015', corpoCodigo: '250' },
@@ -150,7 +150,11 @@ function classifyModelRow(context) {
     return 'BR040_NORMAL';
   }
 
-  if (servoCode === 'MBF028') {
+  if (servoCode === 'MBF025INV015' || servoCode === 'MBF028INV015') {
+    return 'MBF025_INV_015VF';
+  }
+
+  if (servoCode === 'MBF025' || servoCode === 'MBF028') {
     if (['2F', '2H'].includes(saleCode) || saleDescription.includes('INVERTIDO')) {
       return 'MBF025_INV_015VF';
     }
@@ -430,6 +434,25 @@ class GerenciamentoServosModel {
     return counts;
   }
 
+  static getModelStockCodes(model) {
+    const aliases = Array.isArray(model?.estoqueCodigos) && model.estoqueCodigos.length > 0
+      ? model.estoqueCodigos
+      : [model?.estoqueCodigo];
+
+    return [...new Set(
+      aliases
+        .map((code) => String(code || '').trim().toUpperCase())
+        .filter(Boolean)
+    )];
+  }
+
+  static getStockQuantityForModel(stockMap, model) {
+    return this.getModelStockCodes(model).reduce(
+      (sum, code) => sum + toNumber(stockMap.get(code)),
+      0
+    );
+  }
+
   static buildSharedMateriaPrimaStats(materiaPrimaMap) {
     const counts = new Map();
     const primaryModelByCodigo = new Map();
@@ -528,7 +551,7 @@ class GerenciamentoServosModel {
     });
 
     const servoStockMap = await this.queryPieceStockByCodes(
-      this.MODEL_DEFINITIONS.map((model) => model.estoqueCodigo),
+      this.MODEL_DEFINITIONS.flatMap((model) => this.getModelStockCodes(model)),
       stockIds.todos,
       connection
     );
@@ -554,7 +577,7 @@ class GerenciamentoServosModel {
       const isPrimaryMateriaPrimaRow = !materiaPrimaCodigo
         || materiaPrimaCodigo === '-'
         || materiaPrimaShareStats.primaryModelByCodigo.get(materiaPrimaCodigo) === model.key;
-      const estoque = isPrimaryStockRow ? roundDisplay(servoStockMap.get(model.estoqueCodigo) || 0) : null;
+      const estoque = isPrimaryStockRow ? roundDisplay(this.getStockQuantityForModel(servoStockMap, model)) : null;
       const corpos = isPrimaryBodyRow ? roundDisplay(corpoStockMap.get(model.corpoCodigo) || 0) : null;
       const zinco = isPrimaryBodyRow ? roundDisplay(zincoMap.get(model.corpoCodigo) || 0) : null;
       const usinagem = isPrimaryBodyRow ? roundDisplay(usinagemMap.get(model.corpoCodigo) || 0) : null;
