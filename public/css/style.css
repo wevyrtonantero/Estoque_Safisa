@@ -137,37 +137,37 @@ textarea {
   gap: 8px;
   min-height: 34px;
   padding: 0 11px;
-  border: 1px solid #bdbdbd;
-  border-radius: 0;
-  background: #ffffff;
-  color: #111111;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: #eef4fb;
+  color: #163a67;
   font-size: 0.85rem;
   font-weight: 700;
   text-decoration: none;
   cursor: pointer;
-  transition: none;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease, border-color 0.16s ease;
 }
 
 .servo-sheet-action-btn:hover {
-  transform: none;
-  box-shadow: none;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(17, 62, 117, 0.12);
 }
 
 .servo-sheet-action-btn.is-neutral {
-  border-color: #bdbdbd;
-  background: #ffffff;
+  border-color: #d9e5f2;
+  background: #f8fbff;
 }
 
 .servo-sheet-action-btn.is-blue {
-  background: #ffffff;
-  color: #111111;
-  box-shadow: none;
+  background: #1f5d9f;
+  color: #fff;
+  box-shadow: 0 10px 20px rgba(31, 93, 159, 0.22);
 }
 
 .servo-sheet-action-btn.is-orange {
-  background: #ffffff;
-  color: #111111;
-  box-shadow: none;
+  background: #ff9d2f;
+  color: #fff;
+  box-shadow: 0 10px 20px rgba(255, 157, 47, 0.24);
 }
 
 .servo-sheet-action-btn:disabled {
@@ -249,7 +249,7 @@ textarea {
 .servo-sheet-wrapper {
   overflow-x: auto;
   overflow-y: visible;
-  border: 1px solid #bdbdbd;
+  border: 1px solid #000000;
   border-radius: 0;
   background: #ffffff;
 }
@@ -264,8 +264,8 @@ textarea {
 
 .servo-sheet-table th,
 .servo-sheet-table td {
-  border-right: 1px solid #bdbdbd;
-  border-bottom: 1px solid #bdbdbd;
+  border-right: 1px solid #000000;
+  border-bottom: 1px solid #000000;
   padding: 0;
 }
 
@@ -274,7 +274,7 @@ textarea {
   top: 0;
   z-index: 4;
   background: #ffffff;
-  border-bottom-color: #bdbdbd;
+  border-bottom-color: #000000;
 }
 
 .servo-sheet-model-col,
@@ -980,7 +980,7 @@ textarea {
 }
 
 .servo-sheet-divider-left {
-  border-left: 1px solid #111111 !important;
+  border-left: 1px solid #000000 !important;
 }
 
 .servo-sheet-row:nth-child(odd) td,
@@ -1038,7 +1038,7 @@ textarea {
 .servo-sheet-total-row th,
 .servo-sheet-total-row td {
   background: #ffffff;
-  border-top: 1px solid #111111;
+  border-top: 1px solid #000000;
   font-weight: 800;
 }
 
