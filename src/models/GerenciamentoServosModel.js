@@ -430,6 +430,30 @@ class GerenciamentoServosModel {
     return counts;
   }
 
+  static buildSharedMateriaPrimaStats(materiaPrimaMap) {
+    const counts = new Map();
+    const primaryModelByCodigo = new Map();
+
+    this.MODEL_DEFINITIONS.forEach((model) => {
+      const materiaPrima = materiaPrimaMap.get(model.corpoCodigo);
+      const codigo = String(materiaPrima?.codigo || '').trim();
+      if (!codigo || codigo === '-') {
+        return;
+      }
+
+      counts.set(codigo, (counts.get(codigo) || 0) + 1);
+
+      if (!primaryModelByCodigo.has(codigo)) {
+        primaryModelByCodigo.set(codigo, model.key);
+      }
+    });
+
+    return {
+      counts,
+      primaryModelByCodigo
+    };
+  }
+
   static isPrimarySharedRow(sharedKey, model, sharedMap) {
     const sharedCount = Number(sharedMap.get(sharedKey) || 0);
     if (sharedCount <= 1) {
@@ -518,17 +542,23 @@ class GerenciamentoServosModel {
 
     const bodyShareMap = this.buildSharedBodyStats();
     const servoShareMap = this.buildSharedServoStats();
+    const materiaPrimaShareStats = this.buildSharedMateriaPrimaStats(materiaPrimaMap);
     const rows = this.MODEL_DEFINITIONS.map((model) => {
       const current = rowMap.get(model.key);
       const isPrimaryStockRow = this.isPrimarySharedRow(model.estoqueCodigo, model, servoShareMap);
       const isPrimaryBodyRow = this.isPrimaryBodyRow(model, bodyShareMap);
+      const materiaPrimaBase = isPrimaryBodyRow
+        ? (materiaPrimaMap.get(model.corpoCodigo) || { codigo: '-', unidade: '', quantidade: 0 })
+        : null;
+      const materiaPrimaCodigo = String(materiaPrimaBase?.codigo || '').trim();
+      const isPrimaryMateriaPrimaRow = !materiaPrimaCodigo
+        || materiaPrimaCodigo === '-'
+        || materiaPrimaShareStats.primaryModelByCodigo.get(materiaPrimaCodigo) === model.key;
       const estoque = isPrimaryStockRow ? roundDisplay(servoStockMap.get(model.estoqueCodigo) || 0) : null;
       const corpos = isPrimaryBodyRow ? roundDisplay(corpoStockMap.get(model.corpoCodigo) || 0) : null;
       const zinco = isPrimaryBodyRow ? roundDisplay(zincoMap.get(model.corpoCodigo) || 0) : null;
       const usinagem = isPrimaryBodyRow ? roundDisplay(usinagemMap.get(model.corpoCodigo) || 0) : null;
-      const materiaPrima = isPrimaryBodyRow
-        ? (materiaPrimaMap.get(model.corpoCodigo) || { codigo: '-', unidade: '', quantidade: 0 })
-        : null;
+      const materiaPrima = isPrimaryBodyRow && isPrimaryMateriaPrimaRow ? materiaPrimaBase : null;
       const infProducao = isPrimaryStockRow && isPrimaryBodyRow
         ? roundDisplay((estoque + toNumber(corpos) + toNumber(zinco) + toNumber(usinagem)) - current.total)
         : null;
@@ -543,8 +573,10 @@ class GerenciamentoServosModel {
         inf_producao: infProducao,
         estoque_compartilhado: Number(servoShareMap.get(model.estoqueCodigo) || 0) > 1,
         corpo_compartilhado: Number(bodyShareMap.get(model.corpoCodigo) || 0) > 1,
+        materia_prima_compartilhada: Number(materiaPrimaShareStats.counts.get(materiaPrimaCodigo) || 0) > 1,
         exibe_estoque_compartilhado: isPrimaryStockRow,
-        exibe_recursos_corpo: isPrimaryBodyRow
+        exibe_recursos_corpo: isPrimaryBodyRow,
+        exibe_materia_prima_compartilhada: isPrimaryMateriaPrimaRow
       };
     });
 
