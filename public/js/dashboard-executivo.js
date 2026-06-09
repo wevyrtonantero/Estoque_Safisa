@@ -1414,6 +1414,10 @@ function formatarDataCurta(value) {
     return '-';
   }
 
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value.trim())) {
+    return formatDateOnlyText(value);
+  }
+
   const data = new Date(value);
   if (Number.isNaN(data.getTime())) {
     return '-';
@@ -1625,6 +1629,20 @@ function normalizeDateInput(value) {
 
   const data = new Date(text);
   return Number.isNaN(data.getTime()) ? '' : data.toISOString().slice(0, 10);
+}
+
+function formatDateOnlyText(value) {
+  const normalized = normalizeDateInput(value);
+  if (!normalized) {
+    return '-';
+  }
+
+  const [year, month, day] = normalized.split('-');
+  if (!year || !month || !day) {
+    return '-';
+  }
+
+  return `${day}/${month}/${year}`;
 }
 
 function renderizarStatusPedidoDashboard(pedido) {
@@ -1867,7 +1885,16 @@ function formatInteger(value) {
 }
 
 function formatarDataHora(value) {
-  return value ? new Date(value).toLocaleString('pt-BR') : '-';
+  if (!value) {
+    return '-';
+  }
+
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value.trim())) {
+    return formatDateOnlyText(value);
+  }
+
+  const data = new Date(value);
+  return Number.isNaN(data.getTime()) ? '-' : data.toLocaleString('pt-BR');
 }
 
 function escapeHtml(value) {

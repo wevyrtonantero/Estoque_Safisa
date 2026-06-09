@@ -2528,6 +2528,13 @@ function normalizeDateInput(value) {
     return '';
   }
 
+  if (value instanceof Date) {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const day = String(value.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
   const text = String(value).trim();
   if (/^\d{4}-\d{2}-\d{2}/.test(text)) {
     return text.slice(0, 10);
@@ -2648,9 +2655,27 @@ function formatDecimalInput(value, decimals = 3) {
   return Number.isFinite(number) ? number.toFixed(decimals) : '';
 }
 
+function formatDateOnlyText(value) {
+  const normalized = normalizeDateInput(value);
+  if (!normalized) {
+    return '-';
+  }
+
+  const [year, month, day] = normalized.split('-');
+  if (!year || !month || !day) {
+    return '-';
+  }
+
+  return `${day}/${month}/${year}`;
+}
+
 function formatDate(value) {
   if (!value) {
     return '-';
+  }
+
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value.trim())) {
+    return formatDateOnlyText(value);
   }
 
   const date = new Date(value);
@@ -2660,6 +2685,10 @@ function formatDate(value) {
 function formatarDataCurta(value) {
   if (!value) {
     return '-';
+  }
+
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value.trim())) {
+    return formatDateOnlyText(value);
   }
 
   const date = new Date(value);
