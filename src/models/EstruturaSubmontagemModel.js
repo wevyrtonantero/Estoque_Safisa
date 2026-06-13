@@ -62,6 +62,7 @@ class EstruturaSubmontagemModel {
           p.codigo AS codigo_componente,
           p.descricao AS descricao_componente,
           p.tipo AS tipo_componente,
+          p.ativo AS componente_ativo,
           ${stockSelect}
           p.comprimento_mm,
           p.massa_kg
@@ -99,7 +100,7 @@ class EstruturaSubmontagemModel {
   // Verifica se o ID realmente aponta para uma submontagem valida.
   static async submontagemExists(submontagemId) {
     const [rows] = await pool.query(
-      "SELECT id, codigo, descricao FROM pecas WHERE id = ? AND classificacao = 'SUBMONTAGEM'",
+      "SELECT id, codigo, descricao FROM pecas WHERE id = ? AND classificacao = 'SUBMONTAGEM' AND ativo = 1",
       [submontagemId]
     );
 
@@ -109,7 +110,7 @@ class EstruturaSubmontagemModel {
   // Verifica se o item escolhido pode ser usado como componente.
   static async simpleItemExists(itemId) {
     const [rows] = await pool.query(
-      "SELECT id, codigo, descricao FROM pecas WHERE id = ? AND classificacao = 'ITEM'",
+      "SELECT id, codigo, descricao FROM pecas WHERE id = ? AND classificacao = 'ITEM' AND ativo = 1",
       [itemId]
     );
 

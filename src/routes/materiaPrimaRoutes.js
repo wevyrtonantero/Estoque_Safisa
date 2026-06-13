@@ -28,6 +28,7 @@ router.post('/materias-primas/:id/fornecedores', requireApiRoles(ADMIN_WRITE_ROL
 
 // Rota para atualizar materia-prima.
 router.put('/materias-primas/:id', requireApiRoles(ADMIN_WRITE_ROLES), MateriaPrimaController.update);
+router.patch('/materias-primas/:id/status', requireApiRoles(ADMIN_WRITE_ROLES), MateriaPrimaController.setActive);
 
 // Rota para atualizar um vinculo de fornecedor da materia-prima.
 router.put(

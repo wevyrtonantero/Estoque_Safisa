@@ -28,6 +28,7 @@ router.post('/submontagens', requireApiRoles(ADMIN_WRITE_ROLES), SubmontagemCont
 
 // Rota para atualizar submontagens.
 router.put('/submontagens/:id', requireApiRoles(ADMIN_WRITE_ROLES), SubmontagemController.update);
+router.patch('/submontagens/:id/status', requireApiRoles(ADMIN_WRITE_ROLES), SubmontagemController.setActive);
 
 // Rota para excluir submontagens.
 router.delete('/submontagens/:id', requireApiRoles(ADMIN_DELETE_ROLES), SubmontagemController.delete);

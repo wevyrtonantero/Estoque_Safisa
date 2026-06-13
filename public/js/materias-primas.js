@@ -206,11 +206,13 @@ async function carregarMateriasPrimas() {
   const nome = document.getElementById('filtro-mp-nome').value.trim();
   const geometria = refs.filtroGeometria.value;
   const bitola = refs.filtroBitola.value.trim();
+  const status = document.getElementById('filtro-mp-status').value;
 
   if (codigo) params.append('codigo', codigo);
   if (nome) params.append('nome', nome);
   if (geometria) params.append('geometria', geometria);
   if (bitola) params.append('bitola', bitola);
+  params.append('status', status);
 
   try {
     const endpoint = params.toString() ? `${materiasPrimasApiBaseUrl}?${params.toString()}` : materiasPrimasApiBaseUrl;
@@ -246,9 +248,9 @@ function renderizarTabelaMateriasPrimas(materiasPrimas) {
   }
 
   refs.tabela.innerHTML = materiasPrimas.map((materiaPrima) => `
-    <tr>
+    <tr class="${Number(materiaPrima.ativo) === 1 ? '' : 'is-inactive'}">
       <td class="table-code">${escapeHtml(materiaPrima.codigo)}</td>
-      <td class="table-description">${escapeHtml(materiaPrima.nome)}</td>
+      <td class="table-description">${escapeHtml(materiaPrima.nome)}${Number(materiaPrima.ativo) === 1 ? '' : ' (Inativa)'}</td>
       <td>${renderizarCategoriaGeometria(materiaPrima)}</td>
       <td>${escapeHtml(materiaPrima.liga || '-')}</td>
       <td>${escapeHtml(formatarReferencia(materiaPrima))}</td>
@@ -259,7 +261,8 @@ function renderizarTabelaMateriasPrimas(materiasPrimas) {
           <div class="row-menu-panel">
             <button type="button" class="row-menu-item" data-action="view" data-id="${materiaPrima.id}">Visualizar</button>
             <button type="button" class="row-menu-item" data-action="edit" data-id="${materiaPrima.id}">Editar</button>
-            <button type="button" class="row-menu-item danger" data-action="delete" data-id="${materiaPrima.id}">Excluir</button>
+            <button type="button" class="row-menu-item" data-action="${Number(materiaPrima.ativo) === 1 ? 'inactivate' : 'reactivate'}" data-id="${materiaPrima.id}">${Number(materiaPrima.ativo) === 1 ? 'Inativar' : 'Reativar'}</button>
+            <button type="button" class="row-menu-item danger" data-action="delete" data-id="${materiaPrima.id}">Excluir definitivamente</button>
           </div>
         </details>
       </td>
@@ -523,7 +526,7 @@ function imprimirMateriaPrimaVisualizada() {
 }
 
 async function excluirMateriaPrima(id) {
-  if (!window.confirm('Deseja realmente excluir esta materia-prima?')) {
+  if (!window.confirm('Excluir definitivamente esta materia-prima? Esta acao so funciona para cadastros sem uso.')) {
     return;
   }
 
@@ -559,6 +562,14 @@ async function handleMateriaPrimaTableActions(event) {
 
   if (action === 'edit') {
     await carregarMateriaPrimaParaEdicao(materiaPrimaId);
+  }
+
+  if (action === 'inactivate') {
+    await alterarStatusMateriaPrima(materiaPrimaId, false);
+  }
+
+  if (action === 'reactivate') {
+    await alterarStatusMateriaPrima(materiaPrimaId, true);
   }
 
   if (action === 'delete') {
@@ -847,6 +858,25 @@ function formatarReferencia(materiaPrima) {
   }
 
   return '-';
+}
+
+async function alterarStatusMateriaPrima(id, ativo) {
+  const acao = ativo ? 'reativar' : 'inativar';
+  if (!window.confirm(`Deseja ${acao} esta materia-prima?`)) return;
+
+  try {
+    const response = await fetch(`${materiasPrimasApiBaseUrl}/${id}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ativo })
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.message || `Nao foi possivel ${acao} a materia-prima.`);
+    mostrarMensagemMateriaPrima(`Materia-prima ${ativo ? 'reativada' : 'inativada'} com sucesso.`, 'success');
+    await carregarMateriasPrimas();
+  } catch (error) {
+    mostrarMensagemMateriaPrima(error.message, 'error');
+  }
 }
 
 function renderizarCategoriaGeometria(materiaPrima) {

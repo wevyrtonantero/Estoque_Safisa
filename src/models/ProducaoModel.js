@@ -315,6 +315,7 @@ class ProducaoModel {
           p.classificacao,
           p.comprimento_mm,
           p.id_materia_prima,
+          p.ativo,
           mp.codigo AS materia_prima_codigo,
           mp.nome AS materia_prima_nome,
           mp.material AS materia_prima_material,
@@ -343,7 +344,8 @@ class ProducaoModel {
           geometria,
           unidade_estoque,
           peso_por_metro,
-          peso_unitario_kg
+          peso_unitario_kg,
+          ativo
         FROM materias_primas
         WHERE id = ?
       `,
@@ -702,7 +704,7 @@ class ProducaoModel {
       }
 
       const peca = await this.findProductionPieceById(data.id_peca, connection);
-      if (!peca || peca.tipo !== 'PRODUZIDA' || peca.classificacao !== 'ITEM') {
+      if (!peca || peca.tipo !== 'PRODUZIDA' || peca.classificacao !== 'ITEM' || Number(peca.ativo) !== 1) {
         throw this.createBusinessError('Selecione uma peca produzida valida para iniciar a producao.');
       }
 
@@ -711,7 +713,7 @@ class ProducaoModel {
 
       if (data.id_materia_prima) {
         materiaPrima = await this.findMateriaPrimaById(data.id_materia_prima, connection);
-        if (!materiaPrima) {
+        if (!materiaPrima || Number(materiaPrima.ativo) !== 1) {
           throw this.createBusinessError('A materia-prima selecionada para a ordem nao foi encontrada.');
         }
 
@@ -726,8 +728,8 @@ class ProducaoModel {
         materiaPrima = await this.findMateriaPrimaById(materiaPrimaId, connection);
       }
 
-      if (!materiaPrima) {
-        throw this.createBusinessError('A materia-prima selecionada para a ordem nao foi encontrada.');
+      if (!materiaPrima || Number(materiaPrima.ativo) !== 1) {
+        throw this.createBusinessError('A materia-prima selecionada para a ordem nao esta ativa.');
       }
 
       const comprimentoCorte = data.comprimento_corte_mm && Number(data.comprimento_corte_mm) > 0

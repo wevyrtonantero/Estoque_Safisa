@@ -37,6 +37,11 @@ class MateriaPrimaModel {
     const conditions = ['1 = 1'];
     const values = [];
 
+    if (filters.ativo !== null && filters.ativo !== undefined) {
+      conditions.push('mp.ativo = ?');
+      values.push(filters.ativo ? 1 : 0);
+    }
+
     if (filters.codigo) {
       conditions.push('mp.codigo LIKE ?');
       values.push(`%${filters.codigo}%`);
@@ -98,6 +103,7 @@ class MateriaPrimaModel {
           fp.nome AS fornecedor_principal_nome,
           COALESCE(fs.fornecedores_nomes, fp.nome, '') AS fornecedores_nomes,
           mp.observacao,
+          mp.ativo,
           mp.created_at,
           mp.updated_at
         FROM materias_primas mp
@@ -136,6 +142,7 @@ class MateriaPrimaModel {
           fp.nome AS fornecedor_principal_nome,
           COALESCE(fs.fornecedores_nomes, fp.nome, '') AS fornecedores_nomes,
           mp.observacao,
+          mp.ativo,
           mp.created_at,
           mp.updated_at
         FROM materias_primas mp
@@ -171,6 +178,7 @@ class MateriaPrimaModel {
           COALESCE(fs.fornecedores_nomes, '') AS fornecedores_nomes
         FROM materias_primas mp
         LEFT JOIN (${this.supplierSummarySubquery()}) fs ON fs.id_materia_prima = mp.id
+        WHERE mp.ativo = 1
         ORDER BY mp.codigo ASC
       `
     );
@@ -284,6 +292,15 @@ class MateriaPrimaModel {
     );
 
     return result.affectedRows > 0;
+  }
+
+  static async setActive(id, ativo) {
+    const [result] = await pool.query(
+      'UPDATE materias_primas SET ativo = ? WHERE id = ?',
+      [ativo ? 1 : 0, id]
+    );
+
+    return result.affectedRows > 0 ? this.findById(id) : null;
   }
 }
 

@@ -422,7 +422,7 @@ class ConsultaEstoqueModel {
   }
 
   static async findResumo(filters = {}) {
-    const conditions = ["p.classificacao = 'ITEM'"];
+    const conditions = ["p.classificacao = 'ITEM'", 'p.ativo = 1'];
     const values = [];
 
     if (filters.codigo) {

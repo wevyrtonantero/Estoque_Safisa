@@ -13,6 +13,7 @@ class CadastroApoioModel {
           geometria,
           bitola
         FROM materias_primas
+        WHERE ativo = 1
         ORDER BY codigo ASC
       `
     );

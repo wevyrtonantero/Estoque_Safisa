@@ -141,6 +141,7 @@ class EstoqueModel {
           p.descricao,
           COALESCE(p.tipo, '-') AS tipo,
           p.classificacao,
+          p.ativo,
           p.estoque_minimo,
           p.estoque_seguranca,
           p.consumo_mensal,
@@ -153,7 +154,7 @@ class EstoqueModel {
           AND sa.id_estoque = (
             SELECT id FROM estoques WHERE nome = 'Almoxarifado' LIMIT 1
           )
-        WHERE p.classificacao IN ('ITEM', 'SUBMONTAGEM')
+        WHERE p.classificacao IN ('ITEM', 'SUBMONTAGEM') AND p.ativo = 1
         ORDER BY p.codigo ASC
       `
     );
@@ -166,8 +167,8 @@ class EstoqueModel {
     const mostrarTodos = Boolean(filters.mostrar_todos);
     const quantidadeExpression = mostrarTodos ? 'COALESCE(s.quantidade, 0)' : 's.quantidade';
     const conditions = mostrarTodos
-      ? ['e.ativo = 1', "p.classificacao IN ('ITEM', 'SUBMONTAGEM')"]
-      : ['s.quantidade > 0'];
+      ? ['e.ativo = 1', "p.classificacao IN ('ITEM', 'SUBMONTAGEM')", 'p.ativo = 1']
+      : ['s.quantidade > 0', 'p.ativo = 1'];
     const values = [];
     const orderBy = filters.ordem_quantidade
       ? `${quantidadeExpression} ${filters.ordem_quantidade}, p.codigo ASC`
@@ -288,7 +289,8 @@ class EstoqueModel {
     const values = [];
     const baseConditions = [
       'e.ativo = 1',
-      "p.classificacao IN ('ITEM', 'SUBMONTAGEM')"
+      "p.classificacao IN ('ITEM', 'SUBMONTAGEM')",
+      'p.ativo = 1'
     ];
     const outerConditions = [
       "(quantidade > 0 OR quantidade_saida_mes > 0 OR estoque_seguranca > 0 OR (UPPER(COALESCE(estoque_nome, '')) LIKE '%ALMOX%' AND quantidade <= 0))"
@@ -458,6 +460,9 @@ class EstoqueModel {
           em.tipo_movimentacao,
           em.quantidade,
           em.observacao,
+          em.id_usuario,
+          em.usuario_login,
+          em.usuario_nome,
           em.data_movimentacao,
           p.codigo,
           p.descricao,
@@ -488,6 +493,7 @@ class EstoqueModel {
           COALESCE(p.tipo, '-') AS tipo,
           p.classificacao,
           p.id_maquina,
+          p.ativo,
           COALESCE(m.nome, '-') AS maquina_nome
         FROM pecas p
         LEFT JOIN maquinas m ON m.id = p.id_maquina
@@ -509,6 +515,7 @@ class EstoqueModel {
           p.codigo,
           p.descricao,
           p.classificacao
+          ,p.ativo
         FROM estrutura_submontagem es
         INNER JOIN pecas p ON p.id = es.id_item_componente
         WHERE es.id_submontagem = ?
@@ -524,6 +531,84 @@ class EstoqueModel {
     return estoque && String(estoque.nome || '') === this.EXPEDICAO_NOME;
   }
 
+  static getSpecialStockType(estoque) {
+    const nome = String(estoque?.nome || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .toUpperCase();
+
+    if (nome === 'RETRABALHO') return 'RETRABALHO';
+    if (nome === 'PECAS INACABADAS') return 'PECAS_INACABADAS';
+    return null;
+  }
+
+  static async findSpecialStockQuantityForUpdate(connection, idEstoque, idPeca) {
+    const [rows] = await connection.query(
+      `
+        SELECT id, quantidade
+        FROM estoque_especial_registros
+        WHERE id_estoque = ?
+          AND id_peca = ?
+          AND quantidade > 0
+        ORDER BY id ASC
+        FOR UPDATE
+      `,
+      [idEstoque, idPeca]
+    );
+
+    return {
+      rows,
+      quantidade: Number(rows.reduce((total, row) => total + Number(row.quantidade || 0), 0).toFixed(2))
+    };
+  }
+
+  static async reduceSpecialStockQuantity(connection, specialStock, quantidade) {
+    let restante = Number(quantidade);
+
+    for (const row of specialStock.rows) {
+      if (restante <= 0) break;
+
+      const quantidadeAtual = Number(row.quantidade || 0);
+      const baixa = Math.min(quantidadeAtual, restante);
+      const novaQuantidade = Number((quantidadeAtual - baixa).toFixed(2));
+
+      if (novaQuantidade <= 0) {
+        await connection.query('DELETE FROM estoque_especial_registros WHERE id = ?', [row.id]);
+      } else {
+        await connection.query(
+          'UPDATE estoque_especial_registros SET quantidade = ? WHERE id = ?',
+          [novaQuantidade, row.id]
+        );
+      }
+
+      restante = Number((restante - baixa).toFixed(2));
+    }
+  }
+
+  static async addSpecialStockQuantity(connection, data) {
+    await connection.query(
+      `
+        INSERT INTO estoque_especial_registros (
+          tipo,
+          id_estoque,
+          id_peca,
+          quantidade,
+          origem,
+          observacao
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `,
+      [
+        data.tipo,
+        data.id_estoque,
+        data.id_peca,
+        data.quantidade,
+        'TRANSFERENCIA_ESTOQUE',
+        data.observacao || 'Entrada por transferencia entre estoques.'
+      ]
+    );
+  }
+
   static buildExpandedObservation(baseText, itemCodigo, itemDescricao) {
     const prefix = baseText || 'Movimentacao automatica.';
     return `${prefix} Estrutura da submontagem ${itemCodigo} - ${itemDescricao}.`.slice(0, 255);
@@ -536,7 +621,8 @@ class EstoqueModel {
     idEstoqueDestino,
     observacaoBase,
     tipoMovimentacao,
-    idEstoqueOrigem = null
+    idEstoqueOrigem = null,
+    usuario = null
   ) {
     const componentes = await this.findSubmontagemComponents(submontagem.id, connection);
 
@@ -570,7 +656,8 @@ class EstoqueModel {
         id_estoque_destino: idEstoqueDestino,
         tipo_movimentacao: tipoMovimentacao,
         quantidade: quantidadeExpandida,
-        observacao: this.buildExpandedObservation(observacaoBase, submontagem.codigo, submontagem.descricao)
+        observacao: this.buildExpandedObservation(observacaoBase, submontagem.codigo, submontagem.descricao),
+        usuario
       });
 
       resultados.push({
@@ -591,12 +678,20 @@ class EstoqueModel {
     quantidadeBase,
     idEstoqueOrigem,
     estoqueDestinoSubmontagem,
-    observacaoBase
+    observacaoBase,
+    usuario = null
   ) {
     const componentes = await this.findSubmontagemComponents(submontagem.id, connection);
 
     if (componentes.length === 0) {
       throw this.createBusinessError(`A submontagem ${submontagem.codigo} nao possui componentes cadastrados.`);
+    }
+
+    const componentesInativos = componentes.filter((componente) => Number(componente.ativo) !== 1);
+    if (componentesInativos.length > 0) {
+      throw this.createBusinessError(
+        `Nao e possivel montar a submontagem ${submontagem.codigo} porque ela possui componente inativo: ${componentesInativos.map((item) => item.codigo).join(', ')}.`
+      );
     }
 
     const faltantes = [];
@@ -660,7 +755,8 @@ class EstoqueModel {
         id_estoque_destino: null,
         tipo_movimentacao: 'SAIDA',
         quantidade: quantidadeConsumida,
-        observacao: `${observacaoBase || 'Consumo de componentes para montagem.'} Componente ${componente.codigo} consumido na montagem de ${submontagem.codigo} para ${estoqueDestinoSubmontagem}.`.slice(0, 255)
+        observacao: `${observacaoBase || 'Consumo de componentes para montagem.'} Componente ${componente.codigo} consumido na montagem de ${submontagem.codigo} para ${estoqueDestinoSubmontagem}.`.slice(0, 255),
+        usuario
       });
 
       consumos.push({
@@ -1331,8 +1427,11 @@ class EstoqueModel {
           id_estoque_destino,
           tipo_movimentacao,
           quantidade,
-          observacao
-        ) VALUES (?, ?, ?, ?, ?, ?)
+          observacao,
+          id_usuario,
+          usuario_login,
+          usuario_nome
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         data.id_peca,
@@ -1340,7 +1439,10 @@ class EstoqueModel {
         data.id_estoque_destino,
         data.tipo_movimentacao,
         data.quantidade,
-        data.observacao
+        data.observacao,
+        data.usuario?.id || null,
+        data.usuario?.login || null,
+        data.usuario?.nome || null
       ]
     );
 
@@ -1357,6 +1459,9 @@ class EstoqueModel {
       const item = await this.findItemById(data.id_peca, connection);
       if (!item) {
         throw this.createBusinessError('Item nao encontrado para a entrada inicial.');
+      }
+      if (Number(item.ativo) !== 1) {
+        throw this.createBusinessError(`O item ${item.codigo} esta inativo e nao pode receber uma nova entrada ou montagem.`);
       }
 
       const estoqueDestino = await this.findStockById(data.id_estoque_destino, connection);
@@ -1380,7 +1485,8 @@ class EstoqueModel {
           data.quantidade,
           estoqueOrigemComponentes.id,
           estoqueDestino.nome,
-          data.observacao || 'Montagem de submontagem pela entrada de estoque.'
+          data.observacao || 'Montagem de submontagem pela entrada de estoque.',
+          data.usuario
         );
 
         const saldoAtualSubmontagem = await this.findSaldoForUpdate(
@@ -1405,7 +1511,8 @@ class EstoqueModel {
           id_estoque_destino: data.id_estoque_destino,
           tipo_movimentacao: 'ENTRADA_INICIAL',
           quantidade: data.quantidade,
-          observacao: `${data.observacao || 'Montagem de submontagem pela entrada de estoque.'} Submontagem montada com consumo de componentes.`.slice(0, 255)
+          observacao: `${data.observacao || 'Montagem de submontagem pela entrada de estoque.'} Submontagem montada com consumo de componentes.`.slice(0, 255),
+          usuario: data.usuario
         });
 
         await connection.commit();
@@ -1443,7 +1550,8 @@ class EstoqueModel {
         id_estoque_destino: data.id_estoque_destino,
         tipo_movimentacao: 'ENTRADA_INICIAL',
         quantidade: data.quantidade,
-        observacao: data.observacao || 'Entrada inicial registrada manualmente.'
+        observacao: data.observacao || 'Entrada inicial registrada manualmente.',
+        usuario: data.usuario
       });
 
       await connection.commit();
@@ -1463,11 +1571,14 @@ class EstoqueModel {
   }
 
   // Realiza transferencia entre dois estoques atualizando origem e destino.
-  static async processTransferencia(data) {
-    const connection = await pool.getConnection();
+  static async processTransferencia(data, externalConnection = null) {
+    const connection = externalConnection || await pool.getConnection();
+    const managesTransaction = !externalConnection;
 
     try {
-      await connection.beginTransaction();
+      if (managesTransaction) {
+        await connection.beginTransaction();
+      }
 
       if (data.id_estoque_origem === data.id_estoque_destino) {
         throw this.createBusinessError('O estoque de origem deve ser diferente do estoque de destino.');
@@ -1489,42 +1600,58 @@ class EstoqueModel {
         throw this.createBusinessError('Estoque de destino nao encontrado ou inativo.');
       }
 
-      const saldoOrigem = await this.findSaldoForUpdate(
-        connection,
-        data.id_estoque_origem,
-        data.id_peca
-      );
-
-      const quantidadeOrigem = saldoOrigem ? Number(saldoOrigem.quantidade) : 0;
+      const tipoEspecialOrigem = this.getSpecialStockType(estoqueOrigem);
+      const tipoEspecialDestino = this.getSpecialStockType(estoqueDestino);
+      const saldoOrigem = tipoEspecialOrigem
+        ? await this.findSpecialStockQuantityForUpdate(connection, data.id_estoque_origem, data.id_peca)
+        : await this.findSaldoForUpdate(connection, data.id_estoque_origem, data.id_peca);
+      const quantidadeOrigem = tipoEspecialOrigem
+        ? saldoOrigem.quantidade
+        : (saldoOrigem ? Number(saldoOrigem.quantidade) : 0);
       const quantidadeTransferida = Number(data.quantidade);
 
       if (quantidadeTransferida > quantidadeOrigem) {
-        throw this.createBusinessError('A quantidade informada e maior que o saldo disponivel no estoque de origem.');
+        throw this.createBusinessError(
+          `A quantidade informada e maior que o saldo disponivel em ${estoqueOrigem.nome} (${quantidadeOrigem}).`
+        );
       }
 
-      const saldoDestino = await this.findSaldoForUpdate(
-        connection,
-        data.id_estoque_destino,
-        data.id_peca
-      );
+      const saldoDestino = tipoEspecialDestino
+        ? await this.findSpecialStockQuantityForUpdate(connection, data.id_estoque_destino, data.id_peca)
+        : await this.findSaldoForUpdate(connection, data.id_estoque_destino, data.id_peca);
+      const quantidadeDestino = tipoEspecialDestino
+        ? saldoDestino.quantidade
+        : (saldoDestino ? Number(saldoDestino.quantidade) : 0);
 
-      const quantidadeDestino = saldoDestino ? Number(saldoDestino.quantidade) : 0;
+      if (tipoEspecialOrigem) {
+        await this.reduceSpecialStockQuantity(connection, saldoOrigem, quantidadeTransferida);
+      } else {
+        await this.persistSaldo(
+          connection,
+          data.id_estoque_origem,
+          data.id_peca,
+          quantidadeOrigem - quantidadeTransferida,
+          saldoOrigem
+        );
+      }
 
-      await this.persistSaldo(
-        connection,
-        data.id_estoque_origem,
-        data.id_peca,
-        quantidadeOrigem - quantidadeTransferida,
-        saldoOrigem
-      );
-
-      await this.persistSaldo(
-        connection,
-        data.id_estoque_destino,
-        data.id_peca,
-        quantidadeDestino + quantidadeTransferida,
-        saldoDestino
-      );
+      if (tipoEspecialDestino) {
+        await this.addSpecialStockQuantity(connection, {
+          tipo: tipoEspecialDestino,
+          id_estoque: data.id_estoque_destino,
+          id_peca: data.id_peca,
+          quantidade: quantidadeTransferida,
+          observacao: data.observacao
+        });
+      } else {
+        await this.persistSaldo(
+          connection,
+          data.id_estoque_destino,
+          data.id_peca,
+          quantidadeDestino + quantidadeTransferida,
+          saldoDestino
+        );
+      }
 
       await this.createMovimentacao(connection, {
         id_peca: data.id_peca,
@@ -1532,10 +1659,13 @@ class EstoqueModel {
         id_estoque_destino: data.id_estoque_destino,
         tipo_movimentacao: 'TRANSFERENCIA',
         quantidade: data.quantidade,
-        observacao: data.observacao || 'Transferencia entre estoques.'
+        observacao: data.observacao || 'Transferencia entre estoques.',
+        usuario: data.usuario
       });
 
-      await connection.commit();
+      if (managesTransaction) {
+        await connection.commit();
+      }
 
       return {
         item,
@@ -1545,10 +1675,14 @@ class EstoqueModel {
         saldo_destino_atual: quantidadeDestino + quantidadeTransferida
       };
     } catch (error) {
-      await connection.rollback();
+      if (managesTransaction) {
+        await connection.rollback();
+      }
       throw error;
     } finally {
-      connection.release();
+      if (managesTransaction) {
+        connection.release();
+      }
     }
   }
 
@@ -1605,7 +1739,8 @@ class EstoqueModel {
         id_estoque_destino: null,
         tipo_movimentacao: 'SAIDA',
         quantidade: quantidadeDesmembrada,
-        observacao: `${data.observacao || 'Desmembramento de submontagem.'} Saida da submontagem ${submontagem.codigo} para retorno dos componentes.`.slice(0, 255)
+        observacao: `${data.observacao || 'Desmembramento de submontagem.'} Saida da submontagem ${submontagem.codigo} para retorno dos componentes.`.slice(0, 255),
+        usuario: data.usuario
       });
 
       const componentesRetornados = await this.expandSubmontagemIntoStock(
@@ -1615,7 +1750,8 @@ class EstoqueModel {
         data.id_estoque_destino,
         data.observacao || 'Desmembramento de submontagem.',
         'TRANSFERENCIA',
-        data.id_estoque_origem
+        data.id_estoque_origem,
+        data.usuario
       );
 
       await connection.commit();
@@ -1680,7 +1816,8 @@ class EstoqueModel {
         id_estoque_destino: diferenca > 0 ? data.id_estoque : null,
         tipo_movimentacao: 'AJUSTE',
         quantidade: Math.abs(diferenca),
-        observacao: data.observacao || 'Ajuste manual de saldo.'
+        observacao: data.observacao || 'Ajuste manual de saldo.',
+        usuario: data.usuario
       });
 
       await connection.commit();
@@ -1939,7 +2076,8 @@ class EstoqueModel {
           id_estoque_destino: null,
           tipo_movimentacao: 'SAIDA',
           quantidade: movimento.quantidade,
-          observacao: movimento.observacao
+          observacao: movimento.observacao,
+          usuario: data.usuario
         });
 
         movimento.id_movimentacao_estoque = idMovimentacao;
@@ -2044,7 +2182,8 @@ class EstoqueModel {
           id_estoque_destino: null,
           tipo_movimentacao: 'SAIDA',
           quantidade,
-          observacao: observacaoMovimento
+          observacao: observacaoMovimento,
+          usuario: data.usuario
         });
 
         solicitacoes.push({

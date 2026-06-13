@@ -598,13 +598,36 @@
         <div>
           <span class="section-pill">Historico</span>
           <h2 id="historico-modal-title">Historico do Item</h2>
-          <p>Entradas iniciais, transferencias e ajustes registrados para o item selecionado.</p>
+          <p id="historico-modal-subtitle">Movimentacoes da peca selecionada em todos os estoques.</p>
         </div>
 
         <button id="btn-fechar-modal-historico" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
       </div>
 
       <div id="historico-mensagem" class="message hidden"></div>
+
+      <form id="historico-filtro-form" class="toolbar-form stock-toolbar">
+        <div class="field-group">
+          <label for="historico-data-inicial">Data inicial</label>
+          <input id="historico-data-inicial" type="date">
+        </div>
+
+        <div class="field-group">
+          <label for="historico-data-final">Data final</label>
+          <input id="historico-data-final" type="date">
+        </div>
+
+        <div class="field-group">
+          <label for="historico-usuario">Usuario</label>
+          <select id="historico-usuario">
+            <option value="">Todos</option>
+          </select>
+        </div>
+
+        <button id="btn-limpar-filtros-historico" class="btn btn-neutral" type="button">Limpar Filtros</button>
+      </form>
+
+      <p id="historico-total">0 movimentacao(oes)</p>
 
       <div class="table-wrapper">
         <table class="history-table">
@@ -615,12 +638,14 @@
               <th>Origem</th>
               <th>Destino</th>
               <th>Quantidade</th>
+              <th>Usuario</th>
+              <th>O que ocorreu</th>
               <th>Observacao</th>
             </tr>
           </thead>
           <tbody id="historico-tbody">
             <tr>
-              <td colspan="6" class="empty-state">Abra o historico a partir da tabela principal.</td>
+              <td colspan="8" class="empty-state">Abra o historico a partir da tabela principal.</td>
             </tr>
           </tbody>
         </table>

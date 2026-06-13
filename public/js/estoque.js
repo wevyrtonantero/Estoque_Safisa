@@ -16,6 +16,7 @@ let saldosOperacionaisCache = [];
 let saidaLista = [];
 let estruturasSubmontagemCache = new Map();
 let composicoesVendaCache = new Map();
+let historicoMovimentacoesCache = [];
 let filtroDebounceTimer = null;
 const expedicaoNomeCorreto = 'Expedi\u00e7\u00e3o';
 const almoxarifadoNomeCorreto = 'Almoxarifado';
@@ -69,6 +70,11 @@ const transferenciaMensagemBox = document.getElementById('transferencia-mensagem
 const saidaMensagemBox = document.getElementById('saida-mensagem');
 const ajusteMensagemBox = document.getElementById('ajuste-mensagem');
 const historicoMensagemBox = document.getElementById('historico-mensagem');
+const historicoFiltroForm = document.getElementById('historico-filtro-form');
+const historicoDataInicialInput = document.getElementById('historico-data-inicial');
+const historicoDataFinalInput = document.getElementById('historico-data-final');
+const historicoUsuarioSelect = document.getElementById('historico-usuario');
+const historicoTotalBox = document.getElementById('historico-total');
 const desmembrarMensagemBox = document.getElementById('desmembrar-mensagem');
 
 const entradaForm = document.getElementById('entrada-form');
@@ -118,6 +124,11 @@ function bindEvents() {
   btnNovaEntrada.addEventListener('click', abrirModalEntrada);
   btnNovaTransferencia.addEventListener('click', () => abrirModalTransferencia());
   btnNovaSaida.addEventListener('click', abrirModalSaida);
+  historicoFiltroForm.querySelectorAll('input, select').forEach((field) => {
+    field.addEventListener('input', renderizarHistoricoFiltrado);
+    field.addEventListener('change', renderizarHistoricoFiltrado);
+  });
+  document.getElementById('btn-limpar-filtros-historico').addEventListener('click', limparFiltrosHistorico);
 
   entradaForm.addEventListener('submit', handleEntradaInicial);
   transferenciaForm.addEventListener('submit', handleTransferencia);
@@ -1373,6 +1384,10 @@ async function handleDesmembrar(event) {
 async function abrirModalHistorico(saldo) {
   try {
     document.getElementById('historico-modal-title').textContent = `Historico de ${saldo.codigo}`;
+    document.getElementById('historico-modal-subtitle').textContent = `${saldo.descricao || 'Item selecionado'} | movimentacoes desta peca em todos os estoques.`;
+    historicoFiltroForm.reset();
+    historicoMovimentacoesCache = [];
+    atualizarUsuariosHistorico();
     esconderMensagemHistorico();
     renderizarHistorico([]);
     abrirModal(historicoModal);
@@ -1384,13 +1399,18 @@ async function abrirModalHistorico(saldo) {
       throw new Error(movimentacoes.message || 'Nao foi possivel carregar o historico do item.');
     }
 
-    renderizarHistorico(movimentacoes);
+    historicoMovimentacoesCache = Array.isArray(movimentacoes) ? movimentacoes : [];
+    atualizarUsuariosHistorico();
+    renderizarHistoricoFiltrado();
   } catch (error) {
     mostrarMensagemHistorico(error.message, 'error');
   }
 }
 
 function fecharModalHistorico() {
+  historicoMovimentacoesCache = [];
+  historicoFiltroForm.reset();
+  atualizarUsuariosHistorico();
   renderizarHistorico([]);
   esconderMensagemHistorico();
   fecharModal(historicoModal);
@@ -1499,22 +1519,127 @@ function renderizarEstadoNecessidade(estado) {
 
 function renderizarHistorico(movimentacoes) {
   const historicoTbody = document.getElementById('historico-tbody');
+  historicoTotalBox.textContent = `${movimentacoes.length} movimentacao(oes) encontrada(s)`;
 
   if (movimentacoes.length === 0) {
-    historicoTbody.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhuma movimentacao encontrada para este item.</td></tr>';
+    historicoTbody.innerHTML = '<tr><td colspan="8" class="empty-state">Nenhuma movimentacao encontrada para esta peca com os filtros informados.</td></tr>';
     return;
   }
 
   historicoTbody.innerHTML = movimentacoes.map((movimentacao) => `
     <tr>
       <td>${formatarData(movimentacao.data_movimentacao)}</td>
-      <td>${escapeHtml(movimentacao.tipo_movimentacao)}</td>
+      <td>${escapeHtml(formatarTipoHistorico(movimentacao.tipo_movimentacao))}</td>
       <td>${escapeHtml(movimentacao.estoque_origem_nome)}</td>
       <td>${escapeHtml(movimentacao.estoque_destino_nome)}</td>
       <td class="table-quantity">${formatarQuantidade(movimentacao.quantidade)}</td>
+      <td>${escapeHtml(formatarUsuarioHistorico(movimentacao))}</td>
+      <td>${escapeHtml(descreverMovimentacaoHistorico(movimentacao))}</td>
       <td>${escapeHtml(movimentacao.observacao || '-')}</td>
     </tr>
   `).join('');
+}
+
+function renderizarHistoricoFiltrado() {
+  const dataInicial = historicoDataInicialInput.value;
+  const dataFinal = historicoDataFinalInput.value;
+  const usuario = historicoUsuarioSelect.value;
+
+  const movimentacoes = historicoMovimentacoesCache.filter((movimentacao) => {
+    const dataMovimentacao = normalizarDataHistorico(movimentacao.data_movimentacao);
+    const usuarioMovimentacao = obterChaveUsuarioHistorico(movimentacao);
+
+    return (!dataInicial || dataMovimentacao >= dataInicial)
+      && (!dataFinal || dataMovimentacao <= dataFinal)
+      && (!usuario || usuarioMovimentacao === usuario);
+  });
+
+  renderizarHistorico(movimentacoes);
+}
+
+function limparFiltrosHistorico() {
+  historicoFiltroForm.reset();
+  renderizarHistoricoFiltrado();
+}
+
+function atualizarUsuariosHistorico() {
+  const usuarioSelecionado = historicoUsuarioSelect.value;
+  const usuarios = new Map();
+
+  historicoMovimentacoesCache.forEach((movimentacao) => {
+    usuarios.set(obterChaveUsuarioHistorico(movimentacao), formatarUsuarioHistorico(movimentacao));
+  });
+
+  historicoUsuarioSelect.innerHTML = [
+    '<option value="">Todos</option>',
+    ...Array.from(usuarios.entries())
+      .sort((a, b) => a[1].localeCompare(b[1], 'pt-BR'))
+      .map(([chave, nome]) => `<option value="${escapeHtml(chave)}">${escapeHtml(nome)}</option>`)
+  ].join('');
+
+  if (usuarios.has(usuarioSelecionado)) {
+    historicoUsuarioSelect.value = usuarioSelecionado;
+  }
+}
+
+function obterChaveUsuarioHistorico(movimentacao) {
+  return movimentacao.id_usuario
+    ? `usuario:${movimentacao.id_usuario}`
+    : `nome:${movimentacao.usuario_login || movimentacao.usuario_nome || 'sistema-legado'}`;
+}
+
+function formatarUsuarioHistorico(movimentacao) {
+  if (movimentacao.usuario_nome && movimentacao.usuario_login) {
+    return `${movimentacao.usuario_nome} (${movimentacao.usuario_login})`;
+  }
+
+  return movimentacao.usuario_nome || movimentacao.usuario_login || 'Sistema ou registro antigo';
+}
+
+function formatarTipoHistorico(tipo) {
+  const labels = {
+    ENTRADA_INICIAL: 'Entrada',
+    TRANSFERENCIA: 'Transferencia',
+    AJUSTE: 'Ajuste de saldo',
+    SAIDA: 'Saida'
+  };
+
+  return labels[tipo] || tipo || '-';
+}
+
+function normalizarDataHistorico(valor) {
+  const data = new Date(valor);
+  if (Number.isNaN(data.getTime())) {
+    return '';
+  }
+
+  const ano = data.getFullYear();
+  const mes = String(data.getMonth() + 1).padStart(2, '0');
+  const dia = String(data.getDate()).padStart(2, '0');
+  return `${ano}-${mes}-${dia}`;
+}
+
+function descreverMovimentacaoHistorico(movimentacao) {
+  const origem = movimentacao.estoque_origem_nome || '-';
+  const destino = movimentacao.estoque_destino_nome || '-';
+  const quantidade = formatarQuantidade(movimentacao.quantidade);
+
+  if (movimentacao.tipo_movimentacao === 'TRANSFERENCIA') {
+    return `${quantidade} transferida(s) de ${origem} para ${destino}.`;
+  }
+  if (movimentacao.tipo_movimentacao === 'ENTRADA_INICIAL') {
+    return `${quantidade} adicionada(s) em ${destino}.`;
+  }
+  if (movimentacao.tipo_movimentacao === 'AJUSTE') {
+    return movimentacao.id_estoque_destino
+      ? `Saldo aumentado em ${quantidade} no estoque ${destino}.`
+      : `Saldo reduzido em ${quantidade} no estoque ${origem}.`;
+  }
+  if (movimentacao.tipo_movimentacao === 'SAIDA') {
+    return `${quantidade} retirada(s) de ${origem}.`;
+  }
+
+  return `${quantidade} movimentada(s).`;
 }
 
 function atualizarIndicadores(saldos) {

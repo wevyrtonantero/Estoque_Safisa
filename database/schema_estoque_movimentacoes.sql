@@ -13,6 +13,9 @@ CREATE TABLE IF NOT EXISTS estoque_movimentacoes (
   tipo_movimentacao ENUM('ENTRADA_INICIAL', 'TRANSFERENCIA', 'AJUSTE', 'SAIDA') NOT NULL,
   quantidade DECIMAL(10, 2) NOT NULL,
   observacao VARCHAR(255) NULL,
+  id_usuario INT NULL,
+  usuario_login VARCHAR(80) NULL,
+  usuario_nome VARCHAR(120) NULL,
   data_movimentacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT fk_estoque_movimentacoes_peca
     FOREIGN KEY (id_peca) REFERENCES pecas (id),
@@ -25,6 +28,7 @@ CREATE TABLE IF NOT EXISTS estoque_movimentacoes (
   INDEX idx_estoque_movimentacoes_peca (id_peca),
   INDEX idx_estoque_movimentacoes_origem (id_estoque_origem),
   INDEX idx_estoque_movimentacoes_destino (id_estoque_destino),
+  INDEX idx_estoque_movimentacoes_usuario (id_usuario),
   INDEX idx_estoque_movimentacoes_data (data_movimentacao)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4

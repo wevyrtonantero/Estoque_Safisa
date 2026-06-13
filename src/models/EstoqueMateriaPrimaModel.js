@@ -142,6 +142,7 @@ class EstoqueMateriaPrimaModel {
           mp.peso_por_metro,
           mp.peso_unitario_kg,
           mp.unidade_estoque,
+          mp.ativo,
           COALESCE(s.quantidade, 0) AS quantidade,
           COALESCE(fs.fornecedores_nomes, fp.nome, '') AS fornecedores_nomes
         FROM materias_primas mp
@@ -159,7 +160,7 @@ class EstoqueMateriaPrimaModel {
   static async findSaldos(filters = {}) {
     const includeZeroBySearch = Boolean(filters.codigo || filters.nome);
     const mostrarTodos = Boolean(filters.mostrar_todos);
-    const conditions = [];
+    const conditions = ['mp.ativo = 1'];
     const values = [];
 
     if (!mostrarTodos && !includeZeroBySearch) {
@@ -206,6 +207,7 @@ class EstoqueMateriaPrimaModel {
           mp.peso_unitario_kg,
           mp.estoque_minimo,
           mp.unidade_estoque,
+          mp.ativo,
           COALESCE(s.quantidade, 0) AS quantidade,
           COALESCE(fs.fornecedores_nomes, fp.nome, '') AS fornecedores_nomes,
           s.created_at,

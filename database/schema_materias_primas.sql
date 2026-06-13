@@ -27,6 +27,7 @@ CREATE TABLE materias_primas (
   unidade_estoque VARCHAR(20) NOT NULL DEFAULT 'KG',
   id_fornecedor_principal INT NULL,
   observacao VARCHAR(255) NULL,
+  ativo TINYINT(1) NOT NULL DEFAULT 1,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uq_materias_primas_codigo (codigo),
@@ -36,6 +37,7 @@ CREATE TABLE materias_primas (
   INDEX idx_materias_primas_liga (liga),
   INDEX idx_materias_primas_geometria (geometria),
   INDEX idx_materias_primas_bitola (bitola),
+  INDEX idx_materias_primas_ativo (ativo),
   INDEX idx_materias_primas_fornecedor_principal (id_fornecedor_principal),
   CONSTRAINT fk_materias_primas_fornecedor_principal
     FOREIGN KEY (id_fornecedor_principal) REFERENCES fornecedores(id)

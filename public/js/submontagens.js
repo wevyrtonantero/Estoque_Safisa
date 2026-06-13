@@ -196,6 +196,7 @@ async function carregarSubmontagens() {
   const params = new URLSearchParams();
   const codigo = document.getElementById('filtro-sub-codigo').value.trim();
   const descricao = document.getElementById('filtro-sub-descricao').value.trim();
+  const status = document.getElementById('filtro-sub-status').value;
 
   if (codigo) {
     params.append('codigo', codigo);
@@ -204,6 +205,7 @@ async function carregarSubmontagens() {
   if (descricao) {
     params.append('descricao', descricao);
   }
+  params.append('status', status);
 
   try {
     const endpoint = params.toString()
@@ -242,9 +244,9 @@ function renderizarTabelaSubmontagens() {
   }
 
   refs.tabelaSubmontagens.innerHTML = submontagensCache.map((submontagem) => `
-    <tr>
+    <tr class="${Number(submontagem.ativo) === 1 ? '' : 'is-inactive'}">
       <td class="table-code">${escapeHtml(formatarCodigoVisual(submontagem.codigo))}</td>
-      <td class="table-description">${escapeHtml(submontagem.descricao)}</td>
+      <td class="table-description">${escapeHtml(submontagem.descricao)}${Number(submontagem.ativo) === 1 ? '' : ' (Inativa)'}${Number(submontagem.total_componentes_inativos || 0) > 0 ? ` | ${formatInteger(submontagem.total_componentes_inativos)} componente(s) inativo(s)` : ''}</td>
       <td>${formatInteger(submontagem.total_componentes || 0)}</td>
       <td>${formatDecimal(submontagem.massa_kg || 0, 3)} kg</td>
       <td class="table-actions-cell">
@@ -253,7 +255,8 @@ function renderizarTabelaSubmontagens() {
           <div class="row-menu-panel">
             <button type="button" class="row-menu-item" data-sub-act="estrutura" data-id="${submontagem.id}">Estrutura</button>
             <button type="button" class="row-menu-item" data-sub-act="editar" data-id="${submontagem.id}">Editar</button>
-            <button type="button" class="row-menu-item danger" data-sub-act="excluir" data-id="${submontagem.id}">Excluir</button>
+            <button type="button" class="row-menu-item" data-sub-act="${Number(submontagem.ativo) === 1 ? 'inativar' : 'reativar'}" data-id="${submontagem.id}">${Number(submontagem.ativo) === 1 ? 'Inativar' : 'Reativar'}</button>
+            <button type="button" class="row-menu-item danger" data-sub-act="excluir" data-id="${submontagem.id}">Excluir definitivamente</button>
           </div>
         </details>
       </td>
@@ -299,7 +302,12 @@ async function handleTabelaSubmontagens(event) {
     return;
   }
 
-  if (!window.confirm('Deseja realmente excluir esta submontagem?')) {
+  if (actionButton.dataset.subAct === 'inativar' || actionButton.dataset.subAct === 'reativar') {
+    await alterarStatusSubmontagem(id, actionButton.dataset.subAct === 'reativar');
+    return;
+  }
+
+  if (!window.confirm('Excluir definitivamente esta submontagem? Esta acao so funciona para cadastros sem uso.')) {
     return;
   }
 
@@ -316,6 +324,25 @@ async function handleTabelaSubmontagens(event) {
     }
 
     showMessage(refs.mensagem, 'Submontagem excluida com sucesso.', 'success');
+    await carregarSubmontagens();
+  } catch (error) {
+    showMessage(refs.mensagem, error.message, 'error');
+  }
+}
+
+async function alterarStatusSubmontagem(id, ativo) {
+  const acao = ativo ? 'reativar' : 'inativar';
+  if (!window.confirm(`Deseja ${acao} esta submontagem?`)) return;
+
+  try {
+    const response = await fetch(`${submontagensApiUrl}/${id}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ativo })
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.message || `Nao foi possivel ${acao} a submontagem.`);
+    showMessage(refs.mensagem, `Submontagem ${ativo ? 'reativada' : 'inativada'} com sucesso.`, 'success');
     await carregarSubmontagens();
   } catch (error) {
     showMessage(refs.mensagem, error.message, 'error');
@@ -383,7 +410,7 @@ function renderizarEstruturaAtual() {
   refs.tabelaEstrutura.innerHTML = componentesEstruturaCache.map((component) => `
     <tr>
       <td class="table-code">${escapeHtml(formatarCodigoVisual(component.codigo_componente))}</td>
-      <td class="table-description">${escapeHtml(component.descricao_componente)}</td>
+      <td class="table-description">${escapeHtml(component.descricao_componente)}${Number(component.componente_ativo) === 1 ? '' : ' (Inativa)'}</td>
       <td>${formatInteger(component.quantidade)}</td>
       <td>${escapeHtml(component.tipo_componente || '-')}</td>
       <td>${formatDecimal(component.massa_kg || 0, 3)} kg</td>

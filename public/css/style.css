@@ -5270,3 +5270,11 @@ tbody tr:hover {
     max-width: 42vw;
   }
 }
+.is-inactive {
+  opacity: 0.68;
+}
+
+.is-inactive .table-code,
+.is-inactive .table-description {
+  text-decoration: line-through;
+}

@@ -115,11 +115,13 @@ async function carregarPecas() {
   const idMateriaPrima = document.getElementById('filtro-materia-prima').value;
   const idFornecedor = document.getElementById('filtro-fornecedor').value;
   const idMaquina = document.getElementById('filtro-maquina').value;
+  const status = document.getElementById('filtro-status-peca').value;
   if (codigo) params.append('codigo', codigo);
   if (descricao) params.append('descricao', descricao);
   if (idMateriaPrima) params.append('id_materia_prima', idMateriaPrima);
   if (idFornecedor) params.append('id_fornecedor', idFornecedor);
   if (idMaquina) params.append('id_maquina', idMaquina);
+  params.append('status', status);
 
   try {
     const endpoint = params.toString() ? `${apiBaseUrl}?${params}` : apiBaseUrl;
@@ -246,6 +248,8 @@ async function handleTableActions(event) {
   const action = actionButton.dataset.action;
   const pecaId = Number.parseInt(actionButton.dataset.id, 10);
   if (action === 'edit') await carregarPecaParaEdicao(pecaId);
+  if (action === 'inactivate') await alterarStatusPeca(pecaId, false);
+  if (action === 'reactivate') await alterarStatusPeca(pecaId, true);
   if (action === 'delete') await excluirPeca(pecaId);
 }
 
@@ -319,7 +323,7 @@ async function carregarPecaParaEdicao(id) {
 }
 
 async function excluirPeca(id) {
-  if (!window.confirm('Deseja realmente excluir esta peca?')) return;
+  if (!window.confirm('Excluir definitivamente esta peca? Esta acao so funciona para cadastros sem uso.')) return;
 
   try {
     const response = await fetch(`${apiBaseUrl}/${id}`, { method: 'DELETE' });
@@ -329,6 +333,25 @@ async function excluirPeca(id) {
     }
     if (editingId === id) fecharModalPeca();
     mostrarMensagem('Peca excluida com sucesso.', 'success');
+    await carregarPecas();
+  } catch (error) {
+    mostrarMensagem(error.message, 'error');
+  }
+}
+
+async function alterarStatusPeca(id, ativo) {
+  const acao = ativo ? 'reativar' : 'inativar';
+  if (!window.confirm(`Deseja ${acao} esta peca?`)) return;
+
+  try {
+    const response = await fetch(`${apiBaseUrl}/${id}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ativo })
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.message || `Nao foi possivel ${acao} a peca.`);
+    mostrarMensagem(`Peca ${ativo ? 'reativada' : 'inativada'} com sucesso.`, 'success');
     await carregarPecas();
   } catch (error) {
     mostrarMensagem(error.message, 'error');
@@ -536,9 +559,9 @@ function renderizarTabela(pecas) {
   }
 
   tabelaBody.innerHTML = pecas.map((peca) => `
-    <tr>
+    <tr class="${Number(peca.ativo) === 1 ? '' : 'is-inactive'}">
       <td class="table-code">${escapeHtml(peca.codigo)}</td>
-      <td class="table-description">${escapeHtml(peca.descricao)}</td>
+      <td class="table-description">${escapeHtml(peca.descricao)}${Number(peca.ativo) === 1 ? '' : ' (Inativa)'}</td>
       <td>${formatMetricValue(peca.estoque_minimo)}</td>
       <td>${formatMetricValue(peca.consumo_mensal)}</td>
       <td class="table-actions-cell">
@@ -546,7 +569,8 @@ function renderizarTabela(pecas) {
           <summary class="row-menu-trigger" aria-label="Abrir acoes">...</summary>
           <div class="row-menu-panel">
             <button type="button" class="row-menu-item" data-action="edit" data-id="${peca.id}">Editar</button>
-            <button type="button" class="row-menu-item danger" data-action="delete" data-id="${peca.id}">Excluir</button>
+            <button type="button" class="row-menu-item" data-action="${Number(peca.ativo) === 1 ? 'inactivate' : 'reactivate'}" data-id="${peca.id}">${Number(peca.ativo) === 1 ? 'Inativar' : 'Reativar'}</button>
+            <button type="button" class="row-menu-item danger" data-action="delete" data-id="${peca.id}">Excluir definitivamente</button>
           </div>
         </details>
       </td>

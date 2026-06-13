@@ -2,7 +2,14 @@
 const SubmontagemModel = require('../models/SubmontagemModel');
 const EstruturaSubmontagemModel = require('../models/EstruturaSubmontagemModel');
 const EstoqueModel = require('../models/EstoqueModel');
+const PecaModel = require('../models/PecaModel');
 const { recordAuditLog } = require('../audit/auditLogger');
+
+function parseActiveFilter(value) {
+  const status = String(value || '').trim().toUpperCase();
+  if (status === 'TODOS') return null;
+  return status === 'INATIVOS' ? false : true;
+}
 
 // Normaliza inteiros opcionais usados na mesma tabela pecas.
 function normalizeOptionalInteger(value) {
@@ -228,7 +235,8 @@ const SubmontagemController = {
         descricao: req.query.descricao ? String(req.query.descricao).trim() : '',
         tipo: 'PRODUZIDA',
         id_item_componente: Number.isInteger(itemComponenteId) ? itemComponenteId : null,
-        id_estoque_referencia: Number.isInteger(estoqueReferenciaId) ? estoqueReferenciaId : null
+        id_estoque_referencia: Number.isInteger(estoqueReferenciaId) ? estoqueReferenciaId : null,
+        ativo: parseActiveFilter(req.query.status)
       };
 
       const submontagens = await SubmontagemModel.findAll(filters);
@@ -305,7 +313,8 @@ const SubmontagemController = {
         id_estoque_destino: payload.id_estoque,
         id_estoque_origem_componentes: payload.id_estoque,
         quantidade: payload.quantidade,
-        observacao
+        observacao,
+        usuario: req.currentUser || null
       });
 
       await recordAuditLog(req, {
@@ -349,7 +358,8 @@ const SubmontagemController = {
         id_estoque_origem: payload.id_estoque_origem,
         id_estoque_destino: payload.id_estoque_destino,
         quantidade: payload.quantidade,
-        observacao
+        observacao,
+        usuario: req.currentUser || null
       });
 
       await recordAuditLog(req, {
@@ -385,6 +395,11 @@ const SubmontagemController = {
         return res.status(400).json({ message: 'Dados invalidos.', errors });
       }
 
+      const duplicatePeca = await PecaModel.findByCode(payload.codigo);
+      if (duplicatePeca) {
+        return res.status(409).json({ message: `O codigo ${payload.codigo} ja esta cadastrado.` });
+      }
+
       const componentValidation = await Promise.all(
         componentes.map((component) => EstruturaSubmontagemModel.simpleItemExists(component.id_item_componente))
       );
@@ -403,6 +418,9 @@ const SubmontagemController = {
       return res.status(201).json(createdSubmontagem);
     } catch (error) {
       console.error('Erro ao criar submontagem:', error);
+      if (error.code === 'ER_DUP_ENTRY' || error.code === 'ER_SIGNAL_EXCEPTION') {
+        return res.status(409).json({ message: 'Ja existe uma peca ou submontagem com esse codigo.' });
+      }
       return res.status(500).json({ message: 'Erro ao criar submontagem.' });
     }
   },
@@ -435,6 +453,11 @@ const SubmontagemController = {
         return res.status(400).json({ message: 'Dados invalidos.', errors });
       }
 
+      const duplicatePeca = await PecaModel.findByCode(payload.codigo, req.params.id);
+      if (duplicatePeca) {
+        return res.status(409).json({ message: `O codigo ${payload.codigo} ja esta cadastrado.` });
+      }
+
       if (Array.isArray(componentes)) {
         const componentValidation = await Promise.all(
           componentes.map((component) => EstruturaSubmontagemModel.simpleItemExists(component.id_item_componente))
@@ -456,6 +479,9 @@ const SubmontagemController = {
       return res.status(200).json(updatedSubmontagem);
     } catch (error) {
       console.error('Erro ao atualizar submontagem:', error);
+      if (error.code === 'ER_DUP_ENTRY' || error.code === 'ER_SIGNAL_EXCEPTION') {
+        return res.status(409).json({ message: 'Ja existe uma peca ou submontagem com esse codigo.' });
+      }
       return res.status(500).json({ message: 'Erro ao atualizar submontagem.' });
     }
   },
@@ -478,6 +504,31 @@ const SubmontagemController = {
         });
       }
       return res.status(500).json({ message: 'Erro ao excluir submontagem.' });
+    }
+  },
+
+  async setActive(req, res) {
+    try {
+      const ativo = Boolean(req.body.ativo);
+      const atualizada = await SubmontagemModel.setActive(req.params.id, ativo);
+
+      if (!atualizada) {
+        return res.status(404).json({ message: 'Submontagem nao encontrada.' });
+      }
+
+      await recordAuditLog(req, {
+        modulo: 'SUBMONTAGEM',
+        acao: ativo ? 'REATIVAR' : 'INATIVAR',
+        entidade_tipo: 'SUBMONTAGEM',
+        entidade_id: atualizada.id,
+        descricao: `Submontagem ${atualizada.codigo} ${ativo ? 'reativada' : 'inativada'}.`,
+        depois: atualizada
+      });
+
+      return res.status(200).json(atualizada);
+    } catch (error) {
+      console.error('Erro ao alterar status da submontagem:', error);
+      return res.status(500).json({ message: 'Erro ao alterar status da submontagem.' });
     }
   }
 };

@@ -170,6 +170,11 @@ class SubmontagemModel {
     const values = [];
     let filterJoin = '';
 
+    if (filters.ativo !== null && filters.ativo !== undefined) {
+      conditions.push('p.ativo = ?');
+      values.push(filters.ativo ? 1 : 0);
+    }
+
     if (filters.codigo) {
       conditions.push('p.codigo LIKE ?');
       values.push(`%${filters.codigo}%`);
@@ -206,11 +211,13 @@ class SubmontagemModel {
           p.estoque_minimo,
           p.estoque_seguranca,
           p.consumo_mensal,
+          p.ativo,
           COALESCE(SUM(es.quantidade * COALESCE(pc.massa_kg, 0)), 0) AS massa_kg,
           ${this.buildStockMetricsSelect(filters.id_estoque_referencia)},
           p.created_at,
           p.updated_at,
           COUNT(DISTINCT es.id) AS total_componentes,
+          COUNT(DISTINCT CASE WHEN pc.ativo = 0 THEN es.id END) AS total_componentes_inativos,
           GROUP_CONCAT(DISTINCT CONCAT(pc.codigo, ' - ', pc.descricao) ORDER BY pc.codigo SEPARATOR ' || ') AS componentes_resumo
         FROM pecas p
         ${filterJoin}
@@ -243,11 +250,13 @@ class SubmontagemModel {
           p.estoque_minimo,
           p.estoque_seguranca,
           p.consumo_mensal,
+          p.ativo,
           COALESCE(SUM(es.quantidade * COALESCE(pc.massa_kg, 0)), 0) AS massa_kg,
           ${this.buildStockMetricsSelect(idEstoqueReferencia)},
           p.created_at,
           p.updated_at,
           COUNT(es.id) AS total_componentes
+          ,COUNT(CASE WHEN pc.ativo = 0 THEN es.id END) AS total_componentes_inativos
         FROM pecas p
         LEFT JOIN estrutura_submontagem es ON es.id_submontagem = p.id
         LEFT JOIN pecas pc ON pc.id = es.id_item_componente
@@ -525,6 +534,15 @@ class SubmontagemModel {
     );
 
     return result.affectedRows > 0;
+  }
+
+  static async setActive(id, ativo) {
+    const [result] = await pool.query(
+      "UPDATE pecas SET ativo = ? WHERE id = ? AND classificacao = 'SUBMONTAGEM'",
+      [ativo ? 1 : 0, id]
+    );
+
+    return result.affectedRows > 0 ? this.findById(id) : null;
   }
 }
 

@@ -31,6 +31,7 @@ router.post('/pecas/:id/fornecedores', requireApiRoles(ADMIN_WRITE_ROLES), PecaF
 
 // Rota para atualizar pecas.
 router.put('/pecas/:id', requireApiRoles(ADMIN_WRITE_ROLES), PecaController.update);
+router.patch('/pecas/:id/status', requireApiRoles(ADMIN_WRITE_ROLES), PecaController.setActive);
 
 // Estrutura preparada para atualizar vinculos de fornecedor da peca.
 router.put('/pecas/:id/fornecedores/:vinculoId', requireApiRoles(ADMIN_WRITE_ROLES), PecaFornecedorController.update);

@@ -18,6 +18,11 @@ class PecaModel {
     const conditions = ["p.classificacao = 'ITEM'"];
     const values = [];
 
+    if (filters.ativo !== null && filters.ativo !== undefined) {
+      conditions.push('p.ativo = ?');
+      values.push(filters.ativo ? 1 : 0);
+    }
+
     if (filters.codigo) {
       conditions.push('p.codigo LIKE ?');
       values.push(`%${filters.codigo}%`);
@@ -71,6 +76,7 @@ class PecaModel {
           p.estoque_seguranca,
           p.consumo_mensal,
           p.massa_kg,
+          p.ativo,
           p.created_at,
           p.updated_at,
           mp.codigo AS materia_prima_codigo,
@@ -92,6 +98,29 @@ class PecaModel {
     return rows;
   }
 
+  static async findByCode(codigo, excludeId = null, connection = pool) {
+    const conditions = ['TRIM(codigo) = TRIM(?)'];
+    const values = [codigo];
+
+    if (excludeId !== null && excludeId !== undefined) {
+      conditions.push('id <> ?');
+      values.push(excludeId);
+    }
+
+    const [rows] = await connection.query(
+      `
+        SELECT id, codigo, descricao, classificacao
+        FROM pecas
+        WHERE ${conditions.join(' AND ')}
+        ORDER BY id ASC
+        LIMIT 1
+      `,
+      values
+    );
+
+    return rows[0] || null;
+  }
+
   // Busca um item simples pelo ID.
   static async findById(id) {
     const [rows] = await pool.query(
@@ -110,6 +139,7 @@ class PecaModel {
           p.estoque_seguranca,
           p.consumo_mensal,
           p.massa_kg,
+          p.ativo,
           p.created_at,
           p.updated_at,
           mp.codigo AS materia_prima_codigo,
@@ -142,7 +172,7 @@ class PecaModel {
           comprimento_mm,
           massa_kg
         FROM pecas
-        WHERE classificacao = 'ITEM'
+        WHERE classificacao = 'ITEM' AND ativo = 1
         ORDER BY codigo ASC
       `
     );
@@ -259,6 +289,15 @@ class PecaModel {
     );
 
     return result.affectedRows > 0;
+  }
+
+  static async setActive(id, ativo) {
+    const [result] = await pool.query(
+      "UPDATE pecas SET ativo = ? WHERE id = ? AND classificacao = 'ITEM'",
+      [ativo ? 1 : 0, id]
+    );
+
+    return result.affectedRows > 0 ? this.findById(id) : null;
   }
 }
 

@@ -11,6 +11,12 @@ const UNIDADES_FUNDIDO = ['UN'];
 const ESTOQUE_MINIMO_PADRAO_TREFILADO = 60;
 const ESTOQUE_MINIMO_PADRAO_FUNDIDO = 50;
 
+function parseActiveFilter(value) {
+  const status = String(value || '').trim().toUpperCase();
+  if (status === 'TODOS') return null;
+  return status === 'INATIVOS' ? false : true;
+}
+
 function parseLocaleDecimal(value) {
   const text = String(value || '').trim();
 
@@ -228,7 +234,8 @@ const MateriaPrimaController = {
         categoria: req.query.categoria ? normalizeCategoria(req.query.categoria) : '',
         geometria: req.query.geometria ? String(req.query.geometria).trim() : '',
         bitola: req.query.bitola ? String(req.query.bitola).trim() : '',
-        id_fornecedor: normalizeOptionalInteger(req.query.id_fornecedor_principal || req.query.id_fornecedor)
+        id_fornecedor: normalizeOptionalInteger(req.query.id_fornecedor_principal || req.query.id_fornecedor),
+        ativo: parseActiveFilter(req.query.status)
       });
 
       res.status(200).json(materiasPrimas);
@@ -368,7 +375,39 @@ const MateriaPrimaController = {
       return res.status(200).json({ message: 'Materia-prima excluida com sucesso.' });
     } catch (error) {
       console.error('Erro ao excluir materia-prima:', error);
+      if (error.code === 'ER_ROW_IS_REFERENCED_2') {
+        return res.status(400).json({
+          message: 'Nao e possivel excluir definitivamente esta materia-prima porque ela possui saldo, movimentacoes ou producoes. Inative o cadastro para impedir novos usos.'
+        });
+      }
       return res.status(500).json({ message: 'Erro ao excluir materia-prima.' });
+    }
+  },
+
+  async setActive(req, res) {
+    try {
+      const ativo = Boolean(req.body.ativo);
+      const anterior = await MateriaPrimaModel.findById(req.params.id);
+      const atualizada = await MateriaPrimaModel.setActive(req.params.id, ativo);
+
+      if (!atualizada) {
+        return res.status(404).json({ message: 'Materia-prima nao encontrada.' });
+      }
+
+      await recordAuditLog(req, {
+        modulo: 'MATERIAS_PRIMAS',
+        acao: ativo ? 'REATIVAR' : 'INATIVAR',
+        entidade_tipo: 'MATERIA_PRIMA',
+        entidade_id: atualizada.id,
+        descricao: `Materia-prima ${atualizada.codigo} ${ativo ? 'reativada' : 'inativada'}.`,
+        antes: anterior,
+        depois: atualizada
+      });
+
+      return res.status(200).json(atualizada);
+    } catch (error) {
+      console.error('Erro ao alterar status da materia-prima:', error);
+      return res.status(500).json({ message: 'Erro ao alterar status da materia-prima.' });
     }
   }
 };

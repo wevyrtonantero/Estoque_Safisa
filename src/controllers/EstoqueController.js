@@ -347,7 +347,7 @@ const EstoqueController = {
         return res.status(400).json({ message: 'Dados invalidos.', errors });
       }
 
-      const result = await EstoqueModel.processEntradaInicial(payload);
+      const result = await EstoqueModel.processEntradaInicial({ ...payload, usuario: req.currentUser || null });
       await recordAuditLog(req, {
         modulo: 'ESTOQUE',
         acao: 'ENTRADA_INICIAL',
@@ -376,7 +376,7 @@ const EstoqueController = {
         return res.status(400).json({ message: 'Dados invalidos.', errors });
       }
 
-      const result = await EstoqueModel.processTransferencia(payload);
+      const result = await EstoqueModel.processTransferencia({ ...payload, usuario: req.currentUser || null });
       await recordAuditLog(req, {
         modulo: 'ESTOQUE',
         acao: 'TRANSFERENCIA',
@@ -405,7 +405,7 @@ const EstoqueController = {
         return res.status(400).json({ message: 'Dados invalidos.', errors });
       }
 
-      const result = await EstoqueModel.processAjuste(payload);
+      const result = await EstoqueModel.processAjuste({ ...payload, usuario: req.currentUser || null });
       await recordAuditLog(req, {
         modulo: 'ESTOQUE',
         acao: 'AJUSTE',

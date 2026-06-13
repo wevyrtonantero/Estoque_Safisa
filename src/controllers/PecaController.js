@@ -6,6 +6,12 @@ const { recordAuditLog } = require('../audit/auditLogger');
 
 const TIPOS_VALIDOS = ['COMPRADA', 'PRODUZIDA'];
 
+function parseActiveFilter(value) {
+  const status = String(value || '').trim().toUpperCase();
+  if (status === 'TODOS') return null;
+  return status === 'INATIVOS' ? false : true;
+}
+
 // Normaliza campos inteiros opcionais sem perder null.
 function normalizeOptionalInteger(value) {
   if (value === undefined || value === null || value === '') {
@@ -160,7 +166,8 @@ const PecaController = {
         tipo: TIPOS_VALIDOS.includes(tipo) ? tipo : '',
         id_materia_prima: Number.isInteger(idMateriaPrima) ? idMateriaPrima : null,
         id_fornecedor: Number.isInteger(idFornecedor) ? idFornecedor : null,
-        id_maquina: Number.isInteger(idMaquina) ? idMaquina : null
+        id_maquina: Number.isInteger(idMaquina) ? idMaquina : null,
+        ativo: parseActiveFilter(req.query.status)
       };
 
       const pecas = await PecaModel.findAll(filters);
@@ -230,6 +237,11 @@ const PecaController = {
         return res.status(400).json({ message: 'Um ou mais fornecedores nao foram encontrados.' });
       }
 
+      const duplicatePeca = await PecaModel.findByCode(payload.codigo);
+      if (duplicatePeca) {
+        return res.status(409).json({ message: `O codigo ${payload.codigo} ja esta cadastrado.` });
+      }
+
       const createdPeca = await PecaModel.create(payload);
       await syncSuppliers(createdPeca.id, payload.fornecedor_ids);
       const pecaAtualizada = await PecaModel.findById(createdPeca.id);
@@ -244,6 +256,9 @@ const PecaController = {
       return res.status(201).json(pecaAtualizada);
     } catch (error) {
       console.error('Erro ao criar peca:', error);
+      if (error.code === 'ER_DUP_ENTRY' || error.code === 'ER_SIGNAL_EXCEPTION') {
+        return res.status(409).json({ message: 'Ja existe uma peca ou submontagem com esse codigo.' });
+      }
       return res.status(500).json({ message: 'Erro ao criar peca.' });
     }
   },
@@ -261,6 +276,11 @@ const PecaController = {
       const suppliersExist = await ensureSuppliersExist(payload.fornecedor_ids);
       if (!suppliersExist) {
         return res.status(400).json({ message: 'Um ou mais fornecedores nao foram encontrados.' });
+      }
+
+      const duplicatePeca = await PecaModel.findByCode(payload.codigo, req.params.id);
+      if (duplicatePeca) {
+        return res.status(409).json({ message: `O codigo ${payload.codigo} ja esta cadastrado.` });
       }
 
       const pecaAnterior = await PecaModel.findById(req.params.id);
@@ -284,6 +304,9 @@ const PecaController = {
       return res.status(200).json(pecaAtualizada);
     } catch (error) {
       console.error('Erro ao atualizar peca:', error);
+      if (error.code === 'ER_DUP_ENTRY' || error.code === 'ER_SIGNAL_EXCEPTION') {
+        return res.status(409).json({ message: 'Ja existe uma peca ou submontagem com esse codigo.' });
+      }
       return res.status(500).json({ message: 'Erro ao atualizar peca.' });
     }
   },
@@ -322,6 +345,33 @@ const PecaController = {
       }
 
       return res.status(500).json({ message: 'Erro ao excluir peca.' });
+    }
+  },
+
+  async setActive(req, res) {
+    try {
+      const ativo = Boolean(req.body.ativo);
+      const anterior = await PecaModel.findById(req.params.id);
+      const atualizada = await PecaModel.setActive(req.params.id, ativo);
+
+      if (!atualizada) {
+        return res.status(404).json({ message: 'Peca nao encontrada.' });
+      }
+
+      await recordAuditLog(req, {
+        modulo: 'PECAS',
+        acao: ativo ? 'REATIVAR' : 'INATIVAR',
+        entidade_tipo: 'PECA',
+        entidade_id: atualizada.id,
+        descricao: `Peca ${atualizada.codigo} ${ativo ? 'reativada' : 'inativada'}.`,
+        antes: anterior,
+        depois: atualizada
+      });
+
+      return res.status(200).json(atualizada);
+    } catch (error) {
+      console.error('Erro ao alterar status da peca:', error);
+      return res.status(500).json({ message: 'Erro ao alterar status da peca.' });
     }
   }
 };
