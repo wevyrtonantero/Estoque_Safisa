@@ -167,6 +167,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   try {
     await carregarTudo();
+    abrirAcaoInicialViaQueryString();
     iniciarAtualizacaoAutomatica();
   } catch (error) {
     mostrarMensagem(error.message, 'error');
@@ -358,6 +359,27 @@ async function carregarTudo() {
     carregarHistoricoSaidas(),
     carregarProducaoEmAndamento()
   ]);
+}
+
+function abrirAcaoInicialViaQueryString() {
+  const params = new URLSearchParams(window.location.search);
+  const acao = String(params.get('acao') || '').toLowerCase();
+  const actions = {
+    saida: abrirModalSaida,
+    retorno: abrirModalRetorno,
+    desmembrar: abrirModalDesmembrar,
+    solicitar: () => abrirModalSolicitacao(),
+    'meus-pedidos': abrirModalPedidos,
+    'historico-saidas': abrirModalHistorico,
+    efetuar: abrirModalEfetuarMontagem,
+    simular: abrirModalSimulacao,
+    producao: abrirModalProducao,
+    'numeros-disponiveis': () => document.getElementById('expedicao-btn-seriais-disponiveis')?.click()
+  };
+
+  if (actions[acao]) {
+    window.setTimeout(() => actions[acao](), 0);
+  }
 }
 
 async function carregarEstoques() {

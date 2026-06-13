@@ -17,7 +17,7 @@
       </div>
 
       <div class="topbar-actions">
-        <a class="btn btn-neutral" href="/pagina-expedicao"><span class="btn-label">Voltar para Expedicao</span></a>
+        <a class="btn btn-neutral" href="/pagina-operacao"><span class="btn-label">Voltar para Setores</span></a>
       </div>
     </header>
 
@@ -63,18 +63,55 @@
 
           <div class="sector-menu-panel">
             <div class="sector-menu-panel-head">
-              <span class="section-pill">Pedidos</span>
-              <strong>Apoio da expedicao</strong>
-              <small>Cadastro, historico e relatorios operacionais.</small>
+              <span class="section-pill">Expedicao</span>
+              <strong>Central operacional</strong>
+              <small>Pedidos, estoque, solicitacoes, montagem e relatorios.</small>
             </div>
 
             <div class="sector-menu-list">
-              <button id="pedidos-btn-novo" class="btn btn-primary" type="button"><span class="btn-label">Novo pedido</span></button>
-              <button id="pedidos-btn-atualizar" class="btn btn-neutral" type="button"><span class="btn-label">Atualizar</span></button>
-              <button id="pedidos-btn-historico" class="btn btn-neutral" type="button"><span class="btn-label">Historico de Pedidos</span></button>
-              <button id="pedidos-btn-relatorio-dia" class="btn btn-secondary" type="button"><span class="btn-label">Relatorio do Dia</span></button>
-              <button id="pedidos-btn-relatorio-geral" class="btn btn-secondary" type="button"><span class="btn-label">Relatorio Geral</span></button>
-              <button id="pedidos-btn-kits" class="btn btn-secondary" type="button"><span class="btn-label">Gerenciamento de Kits</span></button>
+              <details class="sector-menu-group" open>
+                <summary class="sector-menu-group-title">Pedidos</summary>
+                <button id="pedidos-btn-novo" class="btn btn-primary" type="button"><span class="btn-label">Novo pedido</span></button>
+                <button id="pedidos-btn-atualizar" class="btn btn-neutral" type="button"><span class="btn-label">Atualizar</span></button>
+                <button id="pedidos-btn-historico" class="btn btn-neutral" type="button"><span class="btn-label">Historico de Pedidos</span></button>
+              </details>
+
+              <details class="sector-menu-group">
+                <summary class="sector-menu-group-title">Estoque e saidas</summary>
+                <button id="pedidos-btn-estoque-expedicao" class="btn btn-secondary" type="button"><span class="btn-label">Estoque da Expedicao</span></button>
+                <a class="btn btn-neutral" href="/pagina-expedicao?acao=saida"><span class="btn-label">Registrar Saida</span></a>
+                <a class="btn btn-neutral" href="/pagina-expedicao?acao=retorno"><span class="btn-label">Devolver Item</span></a>
+                <a class="btn btn-neutral" href="/pagina-expedicao?acao=desmembrar"><span class="btn-label">Desmembrar</span></a>
+                <a class="btn btn-secondary" href="/pagina-saidas-expedicao"><span class="btn-label">Relatorio de Saidas</span></a>
+                <a class="btn btn-neutral" href="/pagina-expedicao?acao=historico-saidas"><span class="btn-label">Historico de Saidas</span></a>
+              </details>
+
+              <details class="sector-menu-group">
+                <summary class="sector-menu-group-title">Solicitacoes</summary>
+                <a class="btn btn-neutral" href="/pagina-expedicao?acao=solicitar"><span class="btn-label">Solicitar Pecas</span></a>
+                <a class="btn btn-neutral" href="/pagina-expedicao?acao=meus-pedidos"><span class="btn-label">Meus Pedidos</span></a>
+              </details>
+
+              <details class="sector-menu-group">
+                <summary class="sector-menu-group-title">Kits e servos</summary>
+                <button id="pedidos-btn-kits" class="btn btn-secondary" type="button"><span class="btn-label">Gerenciamento de Kits</span></button>
+                <a class="btn btn-secondary" href="/pagina-gerenciamento-servos"><span class="btn-label">Gerenciamento de Servos</span></a>
+                <a class="btn btn-secondary" href="/pagina-expedicao?acao=numeros-disponiveis"><span class="btn-label">Numeros Disponiveis</span></a>
+                <a class="btn btn-secondary" href="/pagina-historico-numeros-serie?voltar=expedicao"><span class="btn-label">Historico de Numeros</span></a>
+              </details>
+
+              <details class="sector-menu-group">
+                <summary class="sector-menu-group-title">Montagem e producao</summary>
+                <a class="btn btn-success" href="/pagina-expedicao?acao=efetuar"><span class="btn-label">Efetuar Montagem</span></a>
+                <a class="btn btn-secondary" href="/pagina-expedicao?acao=simular"><span class="btn-label">Simulacao de Montagem</span></a>
+                <a class="btn btn-secondary" href="/pagina-expedicao?acao=producao"><span class="btn-label">Consumir da Producao</span></a>
+              </details>
+
+              <details class="sector-menu-group">
+                <summary class="sector-menu-group-title">Relatorios</summary>
+                <button id="pedidos-btn-relatorio-dia" class="btn btn-secondary" type="button"><span class="btn-label">Relatorio do Dia</span></button>
+                <button id="pedidos-btn-relatorio-geral" class="btn btn-secondary" type="button"><span class="btn-label">Relatorio Geral</span></button>
+              </details>
             </div>
           </div>
         </details>
@@ -126,6 +163,78 @@
       </div>
     </section>
   </main>
+
+  <div id="pedido-estoque-expedicao-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="pedido-estoque-expedicao"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Estoque</span>
+          <h2>Estoque da Expedicao</h2>
+          <p id="pedido-estoque-expedicao-total">0 registro(s) encontrado(s)</p>
+        </div>
+
+        <div class="topbar-actions">
+          <a class="btn btn-neutral btn-small" href="/pagina-expedicao"><span class="btn-label">Abrir completo</span></a>
+          <button id="btn-fechar-modal-pedido-estoque-expedicao" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+        </div>
+      </div>
+
+      <div id="pedido-estoque-expedicao-mensagem" class="message hidden"></div>
+
+      <form class="toolbar-form" id="pedido-estoque-expedicao-filtro-form">
+        <div class="field">
+          <label for="pedido-estoque-expedicao-filtro-codigo">Codigo</label>
+          <input id="pedido-estoque-expedicao-filtro-codigo" type="text" placeholder="Ex.: A-176">
+        </div>
+
+        <div class="field">
+          <label for="pedido-estoque-expedicao-filtro-descricao">Nome / Descricao</label>
+          <input id="pedido-estoque-expedicao-filtro-descricao" type="text" placeholder="Digite parte do nome">
+        </div>
+
+        <div class="field">
+          <label for="pedido-estoque-expedicao-filtro-classificacao">Classificacao</label>
+          <select id="pedido-estoque-expedicao-filtro-classificacao">
+            <option value="">Todos</option>
+            <option value="ITEM">Itens</option>
+            <option value="SUBMONTAGEM">Submontagens</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="pedido-estoque-expedicao-filtro-quantidade">Quantidade em estoque</label>
+          <select id="pedido-estoque-expedicao-filtro-quantidade">
+            <option value="">Padrao</option>
+            <option value="asc">Menor quantidade</option>
+            <option value="desc">Maior quantidade</option>
+          </select>
+        </div>
+
+        <button id="pedido-estoque-expedicao-btn-limpar" class="btn btn-neutral" type="button">Limpar</button>
+      </form>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Codigo</th>
+              <th>Descricao</th>
+              <th>Tipo</th>
+              <th>Classificacao</th>
+              <th>Quantidade</th>
+            </tr>
+          </thead>
+          <tbody id="pedido-estoque-expedicao-tbody">
+            <tr>
+              <td colspan="5" class="empty-state">Carregando estoque...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 
   <div id="pedido-criacao-modal" class="modal hidden" aria-hidden="true">
     <div class="modal-backdrop" data-close-modal="pedido-criacao"></div>

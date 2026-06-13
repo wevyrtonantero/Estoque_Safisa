@@ -1,4 +1,6 @@
 const pedidosApiBaseUrl = '/api/pedidos-expedicao';
+const estoquesApiBaseUrl = '/api/estoques';
+const estoqueSaldosApiBaseUrl = '/api/estoque/saldos';
 const estoqueItensApiBaseUrl = '/api/estoque/itens';
 const submontagemSeriaisApiBaseUrl = '/api/submontagem-seriais';
 const AUTO_REFRESH_MS = 15000;
@@ -15,6 +17,8 @@ const RELATORIO_REPARO_CODES = new Set(['R064', 'R065', 'R066', 'R067', 'R068'])
 let itensCache = [];
 let clientesCache = [];
 let pedidosCache = [];
+let estoquesCache = [];
+let estoqueExpedicaoCache = [];
 let resumoSeriaisDisponiveis = { total_disponivel: 0, modelos: [] };
 let pedidoItensDraft = [];
 let itemDraftSelecionado = null;
@@ -51,6 +55,14 @@ const refs = {
   cardHoje: document.getElementById('pedidos-card-hoje'),
   cardSeriais: document.getElementById('pedidos-card-seriais'),
   sectorMenu: document.getElementById('pedidos-sector-menu'),
+  estoqueExpedicaoModal: document.getElementById('pedido-estoque-expedicao-modal'),
+  estoqueExpedicaoMensagem: document.getElementById('pedido-estoque-expedicao-mensagem'),
+  estoqueExpedicaoTotal: document.getElementById('pedido-estoque-expedicao-total'),
+  estoqueExpedicaoTbody: document.getElementById('pedido-estoque-expedicao-tbody'),
+  estoqueExpedicaoFiltroCodigo: document.getElementById('pedido-estoque-expedicao-filtro-codigo'),
+  estoqueExpedicaoFiltroDescricao: document.getElementById('pedido-estoque-expedicao-filtro-descricao'),
+  estoqueExpedicaoFiltroClassificacao: document.getElementById('pedido-estoque-expedicao-filtro-classificacao'),
+  estoqueExpedicaoFiltroQuantidade: document.getElementById('pedido-estoque-expedicao-filtro-quantidade'),
 
   criacaoModal: document.getElementById('pedido-criacao-modal'),
   criacaoMensagem: document.getElementById('pedido-criacao-mensagem'),
@@ -187,8 +199,24 @@ function bindEvents() {
       mostrarMensagem(error.message || 'Nao foi possivel abrir o gerenciamento de kits.', 'error');
     });
   });
+  document.getElementById('pedidos-btn-estoque-expedicao').addEventListener('click', () => {
+    fecharMenuPedidos();
+    abrirModalEstoqueExpedicao().catch((error) => {
+      mostrarMensagem(error.message || 'Nao foi possivel abrir o estoque da Expedicao.', 'error');
+    });
+  });
 
   refs.filtroBusca.addEventListener('input', renderizarPedidos);
+  [
+    refs.estoqueExpedicaoFiltroCodigo,
+    refs.estoqueExpedicaoFiltroDescricao,
+    refs.estoqueExpedicaoFiltroClassificacao,
+    refs.estoqueExpedicaoFiltroQuantidade
+  ].forEach((field) => {
+    field.addEventListener('input', renderizarEstoqueExpedicao);
+    field.addEventListener('change', renderizarEstoqueExpedicao);
+  });
+  document.getElementById('pedido-estoque-expedicao-btn-limpar').addEventListener('click', limparFiltrosEstoqueExpedicao);
 
   refs.pedidosHojeLista.addEventListener('click', handleListaPedidosActions);
   refs.prioridadeLista.addEventListener('click', handleListaPedidosActions);
@@ -248,6 +276,7 @@ function bindEvents() {
 
   document.getElementById('btn-fechar-modal-pedido-faltas').addEventListener('click', fecharModalFaltas);
   document.getElementById('btn-fechar-modal-pedido-historico').addEventListener('click', fecharModalHistoricoPedidos);
+  document.getElementById('btn-fechar-modal-pedido-estoque-expedicao').addEventListener('click', fecharModalEstoqueExpedicao);
   document.getElementById('btn-fechar-modal-pedido-relatorio').addEventListener('click', fecharModalRelatorio);
   document.getElementById('btn-fechar-modal-pedido-kits').addEventListener('click', fecharModalKits);
   refs.kitsBtnDia.addEventListener('click', () => carregarResumoKits('dia').catch((error) => {
@@ -511,6 +540,111 @@ async function carregarTudo() {
   preencherClientesDatalist();
   atualizarIndicadores();
   renderizarPedidos();
+}
+
+async function abrirModalEstoqueExpedicao() {
+  refs.estoqueExpedicaoMensagem.className = 'message hidden';
+  refs.estoqueExpedicaoMensagem.textContent = '';
+  refs.estoqueExpedicaoTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Carregando estoque da Expedicao...</td></tr>';
+  refs.estoqueExpedicaoTotal.textContent = 'Carregando...';
+  openModal(refs.estoqueExpedicaoModal);
+
+  try {
+    await carregarEstoqueExpedicao();
+  } catch (error) {
+    refs.estoqueExpedicaoMensagem.textContent = error.message || 'Nao foi possivel carregar o estoque da Expedicao.';
+    refs.estoqueExpedicaoMensagem.className = 'message error';
+    refs.estoqueExpedicaoMensagem.classList.remove('hidden');
+    refs.estoqueExpedicaoTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Nao foi possivel carregar o estoque.</td></tr>';
+    refs.estoqueExpedicaoTotal.textContent = '0 registro(s) encontrado(s)';
+  }
+}
+
+function fecharModalEstoqueExpedicao() {
+  closeModal(refs.estoqueExpedicaoModal);
+}
+
+async function carregarEstoqueExpedicao() {
+  if (!estoquesCache.length) {
+    estoquesCache = await fetchJson(estoquesApiBaseUrl);
+  }
+
+  const estoqueExpedicao = obterEstoquePorNome('exped');
+  if (!estoqueExpedicao) {
+    throw new Error('Estoque da Expedicao nao encontrado.');
+  }
+
+  const saldos = await fetchJson(`${estoqueSaldosApiBaseUrl}?estoque=${estoqueExpedicao.id}`);
+  estoqueExpedicaoCache = Array.isArray(saldos) ? saldos : [];
+  renderizarEstoqueExpedicao();
+}
+
+function renderizarEstoqueExpedicao() {
+  const saldosFiltrados = obterEstoqueExpedicaoFiltrado();
+  refs.estoqueExpedicaoTotal.textContent = `${saldosFiltrados.length} registro(s) encontrado(s)`;
+
+  if (!estoqueExpedicaoCache.length) {
+    refs.estoqueExpedicaoTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhum saldo na Expedicao.</td></tr>';
+    return;
+  }
+
+  if (!saldosFiltrados.length) {
+    refs.estoqueExpedicaoTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhum item encontrado com os filtros informados.</td></tr>';
+    return;
+  }
+
+  refs.estoqueExpedicaoTbody.innerHTML = saldosFiltrados.map((item) => `
+    <tr>
+      <td class="table-code">${escapeHtml(item.codigo)}</td>
+      <td class="table-description">${escapeHtml(item.descricao)}</td>
+      <td>${escapeHtml(item.tipo || '-')}</td>
+      <td>${escapeHtml(item.classificacao || '-')}</td>
+      <td class="table-quantity">${formatInteger(item.quantidade)}</td>
+    </tr>
+  `).join('');
+}
+
+function obterEstoqueExpedicaoFiltrado() {
+  const filtroCodigo = normalizarBusca(refs.estoqueExpedicaoFiltroCodigo.value.trim());
+  const filtroDescricao = normalizarBusca(refs.estoqueExpedicaoFiltroDescricao.value.trim());
+  const filtroClassificacao = refs.estoqueExpedicaoFiltroClassificacao.value.trim().toUpperCase();
+  const ordenacaoQuantidade = refs.estoqueExpedicaoFiltroQuantidade.value;
+
+  const saldosFiltrados = estoqueExpedicaoCache.filter((item) => {
+    if (filtroCodigo && !normalizarBusca(item.codigo).includes(filtroCodigo)) {
+      return false;
+    }
+
+    if (filtroDescricao && !normalizarBusca(item.descricao).includes(filtroDescricao)) {
+      return false;
+    }
+
+    if (filtroClassificacao && String(item.classificacao || '').toUpperCase() !== filtroClassificacao) {
+      return false;
+    }
+
+    return true;
+  });
+
+  if (ordenacaoQuantidade === 'asc') {
+    saldosFiltrados.sort((a, b) => Number(a.quantidade || 0) - Number(b.quantidade || 0));
+  } else if (ordenacaoQuantidade === 'desc') {
+    saldosFiltrados.sort((a, b) => Number(b.quantidade || 0) - Number(a.quantidade || 0));
+  }
+
+  return saldosFiltrados;
+}
+
+function limparFiltrosEstoqueExpedicao() {
+  refs.estoqueExpedicaoFiltroCodigo.value = '';
+  refs.estoqueExpedicaoFiltroDescricao.value = '';
+  refs.estoqueExpedicaoFiltroClassificacao.value = '';
+  refs.estoqueExpedicaoFiltroQuantidade.value = '';
+  renderizarEstoqueExpedicao();
+}
+
+function obterEstoquePorNome(chave) {
+  return estoquesCache.find((estoque) => normalizarBusca(estoque.nome).includes(chave)) || null;
 }
 
 function preencherClientesDatalist() {
@@ -2445,7 +2579,8 @@ function closeModal(modal) {
     refs.relatorioModal,
     refs.kitsModal,
     refs.kitImagemModal,
-    refs.coletaConfirmModal
+    refs.coletaConfirmModal,
+    refs.estoqueExpedicaoModal
   ].some((item) => !item.classList.contains('hidden'));
 
   document.body.classList.toggle('has-modal', algumModalAberto);
@@ -2462,6 +2597,7 @@ function handleModalBackdrop(event) {
   if (event.target.dataset.closeModal === 'pedido-kits') fecharModalKits();
   if (event.target.dataset.closeModal === 'pedido-kit-imagem') fecharModalKitImagem();
   if (event.target.dataset.closeModal === 'pedido-coleta-confirm') fecharConfirmacaoColetaPedido();
+  if (event.target.dataset.closeModal === 'pedido-estoque-expedicao') fecharModalEstoqueExpedicao();
 }
 
 function handleKeyboardShortcuts(event) {
@@ -2498,6 +2634,11 @@ function handleKeyboardShortcuts(event) {
 
   if (!refs.relatorioModal.classList.contains('hidden')) {
     fecharModalRelatorio();
+    return;
+  }
+
+  if (!refs.estoqueExpedicaoModal.classList.contains('hidden')) {
+    fecharModalEstoqueExpedicao();
     return;
   }
 
