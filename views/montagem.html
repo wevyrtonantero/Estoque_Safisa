@@ -197,6 +197,29 @@
 
       <div id="montagem-historico-item-mensagem" class="message hidden"></div>
 
+      <form id="montagem-historico-item-filtro-form" class="toolbar-form stock-toolbar">
+        <div class="field">
+          <label for="montagem-historico-item-data-inicial">Data inicial</label>
+          <input id="montagem-historico-item-data-inicial" type="date">
+        </div>
+
+        <div class="field">
+          <label for="montagem-historico-item-data-final">Data final</label>
+          <input id="montagem-historico-item-data-final" type="date">
+        </div>
+
+        <div class="field">
+          <label for="montagem-historico-item-usuario">Usuario</label>
+          <select id="montagem-historico-item-usuario">
+            <option value="">Todos</option>
+          </select>
+        </div>
+
+        <button id="btn-limpar-filtros-montagem-historico-item" class="btn btn-neutral" type="button">Limpar Filtros</button>
+      </form>
+
+      <p id="montagem-historico-item-total">0 movimentacao(oes)</p>
+
       <div class="table-wrapper">
         <table>
           <thead>
@@ -206,12 +229,14 @@
               <th>Origem</th>
               <th>Destino</th>
               <th>Quantidade</th>
+              <th>Usuario</th>
+              <th>O que ocorreu</th>
               <th>Observacao</th>
             </tr>
           </thead>
           <tbody id="montagem-historico-item-tbody">
             <tr>
-              <td colspan="6" class="empty-state">Selecione um item para visualizar o historico.</td>
+              <td colspan="8" class="empty-state">Selecione um item para visualizar o historico.</td>
             </tr>
           </tbody>
         </table>
@@ -369,7 +394,10 @@
           <p id="montagem-pedidos-recebidos-total">0 registro(s) encontrado(s)</p>
         </div>
 
-        <button id="btn-fechar-modal-montagem-recebidos" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+        <div class="topbar-actions">
+          <button id="montagem-btn-marcar-pronto-recebidos-todos" class="btn btn-neutral" type="button">Marcar pronto p/ todos</button>
+          <button id="btn-fechar-modal-montagem-recebidos" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+        </div>
       </div>
 
       <div class="table-wrapper">
@@ -382,6 +410,27 @@
               <option value="todas">Todas</option>
             </select>
           </div>
+
+          <div class="field">
+            <label for="montagem-recebidos-filtro-q">Busca</label>
+            <input id="montagem-recebidos-filtro-q" type="search" placeholder="Codigo, descricao ou observacao">
+          </div>
+
+          <div class="field">
+            <label for="montagem-recebidos-filtro-status">Status</label>
+            <select id="montagem-recebidos-filtro-status">
+              <option value="">Todos</option>
+              <option value="PENDENTE">Pendente</option>
+              <option value="MONTANDO">Montando</option>
+              <option value="FALTANDO_PECA">Faltando peca</option>
+              <option value="EM_SEPARACAO">Pronto</option>
+              <option value="ATENDIDA_PARCIAL">Atendida parcial</option>
+              <option value="ATENDIDA">Atendida</option>
+              <option value="CANCELADA">Cancelada</option>
+            </select>
+          </div>
+
+          <button id="montagem-btn-limpar-filtros-recebidos" class="btn btn-neutral" type="button">Limpar</button>
         </form>
 
         <table>
@@ -1103,8 +1152,8 @@
       <div class="modal-header">
         <div>
           <span class="section-pill">Montagem</span>
-          <h2>Atender pedido da Expedicao</h2>
-          <p>Transfira da Montagem para a Expedicao conforme a solicitacao recebida.</p>
+          <h2>Registrar retirada da Expedicao</h2>
+          <p>Confirme a quantidade retirada fisicamente da Montagem para a Expedicao.</p>
         </div>
 
         <button id="btn-fechar-modal-montagem-atendimento" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
@@ -1118,7 +1167,7 @@
         <div id="montagem-atendimento-resumo" class="span-12 selected-tags empty">Selecione um pedido para atender.</div>
 
         <div class="field span-4">
-          <label for="montagem-atendimento-quantidade">Quantidade a separar</label>
+          <label for="montagem-atendimento-quantidade">Quantidade retirada</label>
           <input id="montagem-atendimento-quantidade" type="number" min="1" step="1" value="1" required>
         </div>
 
@@ -1129,7 +1178,7 @@
 
         <div class="span-12 modal-actions">
           <button id="btn-cancelar-modal-montagem-atendimento" class="btn btn-neutral" type="button">Cancelar</button>
-          <button class="btn btn-success" type="submit">Confirmar Atendimento</button>
+          <button class="btn btn-success" type="submit">Confirmar retirada</button>
         </div>
       </form>
     </div>

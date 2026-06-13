@@ -351,8 +351,8 @@ class SubmontagemSerialModel {
 
     const { whereClause, params } = this.buildWhereClause(filters);
     const limit = Number.isInteger(filters.limit) && filters.limit > 0
-      ? Math.min(filters.limit, 100)
-      : 100;
+      ? Math.min(filters.limit, 1000)
+      : 1000;
 
     const [rows] = await db.query(
       `

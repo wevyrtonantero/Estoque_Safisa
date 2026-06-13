@@ -276,19 +276,14 @@ class SolicitacaoEstoqueModel {
       return;
     }
 
-    const isReady = ['EM_SEPARACAO', 'ATENDIDA', 'ATENDIDA_PARCIAL'].includes(currentStatus);
-    const title = isReady ? 'Sua solicitacao esta pronta' : 'Status da solicitacao atualizado';
-    const readyText = currentStatus === 'ATENDIDA_PARCIAL'
-      ? 'esta parcialmente pronta para retirada.'
-      : 'esta pronta para retirada.';
-    const message = isReady
-      ? `Solicitacao #${solicitacao.id} de ${this.buildItemLabel(solicitacao)} ${readyText}`
-      : `Solicitacao #${solicitacao.id} de ${this.buildItemLabel(solicitacao)} mudou para ${this.formatStatus(currentStatus)}.`;
+    if (currentStatus !== 'EM_SEPARACAO') {
+      return;
+    }
 
     await NotificacaoModel.createForUser(solicitacao.solicitante_id, {
       tipo: 'SOLICITACAO_STATUS',
-      titulo: title,
-      mensagem: message,
+      titulo: 'Sua solicitacao esta pronta',
+      mensagem: `Solicitacao #${solicitacao.id} de ${this.buildItemLabel(solicitacao)} esta pronta para retirada.`,
       link: this.buildSolicitacaoLink(solicitacao.area_origem),
       payload: {
         solicitacao_id: Number(solicitacao.id),

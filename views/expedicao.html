@@ -193,6 +193,29 @@
 
       <div id="expedicao-historico-item-mensagem" class="message hidden"></div>
 
+      <form id="expedicao-historico-item-filtro-form" class="toolbar-form stock-toolbar">
+        <div class="field">
+          <label for="expedicao-historico-item-data-inicial">Data inicial</label>
+          <input id="expedicao-historico-item-data-inicial" type="date">
+        </div>
+
+        <div class="field">
+          <label for="expedicao-historico-item-data-final">Data final</label>
+          <input id="expedicao-historico-item-data-final" type="date">
+        </div>
+
+        <div class="field">
+          <label for="expedicao-historico-item-usuario">Usuario</label>
+          <select id="expedicao-historico-item-usuario">
+            <option value="">Todos</option>
+          </select>
+        </div>
+
+        <button id="btn-limpar-filtros-expedicao-historico-item" class="btn btn-neutral" type="button">Limpar Filtros</button>
+      </form>
+
+      <p id="expedicao-historico-item-total">0 movimentacao(oes)</p>
+
       <div class="table-wrapper">
         <table>
           <thead>
@@ -202,12 +225,14 @@
               <th>Origem</th>
               <th>Destino</th>
               <th>Quantidade</th>
+              <th>Usuario</th>
+              <th>O que ocorreu</th>
               <th>Observacao</th>
             </tr>
           </thead>
           <tbody id="expedicao-historico-item-tbody">
             <tr>
-              <td colspan="6" class="empty-state">Selecione um item para visualizar o historico.</td>
+              <td colspan="8" class="empty-state">Selecione um item para visualizar o historico.</td>
             </tr>
           </tbody>
         </table>

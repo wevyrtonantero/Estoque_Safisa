@@ -507,7 +507,21 @@ class GerenciamentoServosModel {
         return;
       }
 
-      demandasPorItem.set(Number(item.id), classificacao);
+      const quantidadePendente = Math.max(
+        0,
+        toNumber(classificacao.quantidade) - toNumber(item.quantidade_seriais_vinculados)
+      );
+
+      if (quantidadePendente <= 0) {
+        return;
+      }
+
+      demandasPorItem.set(Number(item.id), {
+        ...classificacao,
+        quantidade: quantidadePendente,
+        quantidade_total: toNumber(classificacao.quantidade),
+        quantidade_seriais_vinculados: toNumber(item.quantidade_seriais_vinculados)
+      });
       pedidosComServoIds.add(Number(item.id_pedido));
     });
 

@@ -18,6 +18,7 @@ const refs = {
 
 document.addEventListener('DOMContentLoaded', async () => {
   bindEvents();
+  configurarAtualizacaoOperacional();
 
   try {
     await carregarMatriz();
@@ -25,6 +26,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     mostrarMensagem(error.message || 'Nao foi possivel carregar a planilha.', 'error');
   }
 });
+
+function configurarAtualizacaoOperacional() {
+  if (!window.SafisaSync?.subscribe) {
+    return;
+  }
+
+  const recarregar = () => {
+    carregarMatriz().catch((error) => {
+      mostrarMensagem(error.message || 'Nao foi possivel atualizar a planilha.', 'error');
+    });
+  };
+
+  ['pedidos-expedicao', 'submontagem-seriais'].forEach((topic) => {
+    window.SafisaSync.subscribe(topic, recarregar);
+  });
+}
 
 function bindEvents() {
   refs.btnDia.addEventListener('click', () => alternarEscopo('dia'));
@@ -135,7 +152,7 @@ function renderizarTabela() {
       <th class="servo-sheet-total-col servo-sheet-head-accent">TOTAL</th>
       ${pedidos.map((pedido) => `
         <th class="servo-sheet-vertical-col" title="${escapeHtml(`${pedido.cliente_nome} | ${pedido.codigo_pedido}`)}">
-          <span>${escapeHtml(pedido.cliente_nome)}</span>
+          <strong>${escapeHtml(pedido.cliente_nome)}</strong>
         </th>
       `).join('')}
       <th class="servo-sheet-resource-col servo-sheet-divider-left"><span>ESTOQUE</span></th>

@@ -89,6 +89,7 @@ const refs = {
   detalheEditar: document.getElementById('pedido-btn-editar'),
   detalheSalvarDadosFinais: document.getElementById('pedido-btn-salvar-dados-finais'),
   detalheMarcarColetado: document.getElementById('pedido-btn-marcar-coletado'),
+  detalheReabrir: document.getElementById('pedido-btn-reabrir'),
   detalheImprimirCaixas: document.getElementById('pedido-btn-imprimir-caixas'),
 
   seriaisModal: document.getElementById('pedido-seriais-modal'),
@@ -224,6 +225,7 @@ function bindEvents() {
   refs.detalheExcluir.addEventListener('click', excluirPedidoSelecionado);
   refs.detalheEditar.addEventListener('click', abrirEdicaoPedidoSelecionado);
   refs.detalheSalvarDadosFinais.addEventListener('click', salvarDadosFinaisPedido);
+  refs.detalheReabrir.addEventListener('click', reabrirPedidoSelecionado);
   refs.detalheImprimirCaixas.addEventListener('click', imprimirEtiquetasCaixaPedidoSelecionado);
   document.getElementById('pedido-btn-marcar-coletado').addEventListener('click', abrirConfirmacaoColetaPedido);
   refs.detalheItensTbody.addEventListener('click', handleDetalheItemActions);
@@ -1613,13 +1615,16 @@ async function abrirDetalhePedido(pedidoId) {
     3
   );
   refs.detalheVolumes.value = pedido.quantidade_volumes ?? '';
-  refs.detalheNf.disabled = !pedido.possui_nota_fiscal || pedido.status === 'PEDIDO COLETADO';
-  refs.detalhePesoTotal.disabled = pedido.status === 'PEDIDO COLETADO';
-  refs.detalheVolumes.disabled = pedido.status === 'PEDIDO COLETADO';
-  refs.detalheSalvarDadosFinais.disabled = pedido.status === 'PEDIDO COLETADO';
-  refs.detalheMarcarColetado.disabled = pedido.status === 'PEDIDO COLETADO';
-  refs.detalheEditar.disabled = pedido.status === 'PEDIDO COLETADO';
-  refs.detalheExcluir.disabled = pedido.status === 'PEDIDO COLETADO';
+  const pedidoColetado = pedido.status === 'PEDIDO COLETADO';
+  refs.detalheNf.disabled = !pedido.possui_nota_fiscal || pedidoColetado;
+  refs.detalhePesoTotal.disabled = pedidoColetado;
+  refs.detalheVolumes.disabled = pedidoColetado;
+  refs.detalheSalvarDadosFinais.disabled = pedidoColetado;
+  refs.detalheMarcarColetado.disabled = pedidoColetado;
+  refs.detalheEditar.disabled = pedidoColetado;
+  refs.detalheExcluir.disabled = pedidoColetado;
+  refs.detalheReabrir.classList.toggle('hidden', !pedidoColetado);
+  refs.detalheReabrir.disabled = !pedidoColetado;
 
   refs.detalheResumo.innerHTML = `
     <span class="selected-tag">${escapeHtml(pedido.status)}</span>
@@ -2080,6 +2085,39 @@ async function marcarPedidoColetado() {
     refs.coletaConfirmMensagem.textContent = error.message || 'Nao foi possivel finalizar a coleta do pedido.';
     refs.coletaConfirmMensagem.className = 'message error';
     refs.coletaConfirmMensagem.classList.remove('hidden');
+  }
+}
+
+async function reabrirPedidoSelecionado() {
+  const pedido = obterPedidoSelecionado();
+  if (!pedido || pedido.status !== 'PEDIDO COLETADO') {
+    return;
+  }
+
+  const confirmado = window.confirm(
+    `Reabrir o pedido ${pedido.codigo_pedido} para a lista de pedidos ativos?`
+  );
+
+  if (!confirmado) {
+    return;
+  }
+
+  refs.detalheReabrir.disabled = true;
+
+  try {
+    const atualizado = await fetchJson(`${pedidosApiBaseUrl}/${pedido.id}/reabrir`, {
+      method: 'POST'
+    });
+
+    atualizarPedidoCache(atualizado);
+    renderizarPedidos();
+    atualizarIndicadores();
+    notificarAtualizacaoOperacional(['pedidos-expedicao', 'submontagem-seriais', 'estoque']);
+    mostrarMensagem('Pedido reaberto e devolvido para pedidos ativos.', 'success');
+    await abrirDetalhePedido(atualizado.id);
+  } catch (error) {
+    refs.detalheReabrir.disabled = false;
+    mostrarMensagemDetalhe(error.message || 'Nao foi possivel reabrir o pedido.', 'error');
   }
 }
 

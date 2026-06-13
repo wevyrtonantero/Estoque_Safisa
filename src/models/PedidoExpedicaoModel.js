@@ -1944,6 +1944,74 @@ class PedidoExpedicaoModel {
     return status;
   }
 
+  static async hasSaidaColetaRegistrada(connection, pedido) {
+    if (!pedido?.codigo_pedido) {
+      return false;
+    }
+
+    await ExpedicaoSaidaModel.ensureSchema(connection);
+
+    const [rows] = await connection.query(
+      `
+        SELECT id
+        FROM expedicao_saidas
+        WHERE tipo_saida = 'VENDA'
+          AND observacao LIKE ?
+        ORDER BY id DESC
+        LIMIT 1
+      `,
+      [`Pedido ${pedido.codigo_pedido}%`]
+    );
+
+    return rows.length > 0;
+  }
+
+  static async reabrirColeta(idPedido, usuarioId = null, db = pool) {
+    await this.ensureSchema(db);
+
+    const pedidoId = normalizeOptionalInteger(idPedido);
+    if (!Number.isInteger(pedidoId)) {
+      throw this.createBusinessError('O pedido informado e invalido.');
+    }
+
+    const connection = await db.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      const pedido = await this.findById(pedidoId, connection);
+      if (!pedido) {
+        throw this.createBusinessError('Pedido nao encontrado.');
+      }
+
+      if (pedido.status !== STATUS.PEDIDO_COLETADO && !pedido.data_coleta) {
+        throw this.createBusinessError('Este pedido nao esta marcado como coletado.');
+      }
+
+      const statusReaberto = this.calcularStatus({ ...pedido, data_coleta: null }, pedido.itens);
+
+      await connection.query(
+        `
+          UPDATE pedidos_expedicao
+          SET
+            data_coleta = NULL,
+            status = ?,
+            updated_by = ?
+          WHERE id = ?
+        `,
+        [statusReaberto, usuarioId, pedidoId]
+      );
+
+      await connection.commit();
+      return this.findById(pedidoId, connection);
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }
+
   static async updatePrioridades(orderIds = [], usuarioId = null, db = pool) {
     await this.ensureSchema(db);
 
@@ -2607,6 +2675,7 @@ class PedidoExpedicaoModel {
           nome: null
         };
 
+      const coletaSaidaJaRegistrada = await this.hasSaidaColetaRegistrada(connection, pedido);
       const solicitacoesSaida = [];
       const movimentosSaida = [];
       const observacaoSaidaBase = [
@@ -2616,7 +2685,8 @@ class PedidoExpedicaoModel {
         pedido.numero_nota_fiscal ? `NF ${pedido.numero_nota_fiscal}` : ''
       ].filter(Boolean).join(' | ').slice(0, 255);
 
-      for (const item of pedido.itens) {
+      if (!coletaSaidaJaRegistrada) {
+        for (const item of pedido.itens) {
         const componentesBaixa = [];
         const solicitacaoRef = Number(item.id);
         const ehComposicaoVenda = Array.isArray(item.composicao_venda) && item.composicao_venda.length > 0;
@@ -2763,8 +2833,9 @@ class PedidoExpedicaoModel {
           );
         }
       }
+      }
 
-      if (solicitacoesSaida.length && movimentosSaida.length) {
+      if (!coletaSaidaJaRegistrada && solicitacoesSaida.length && movimentosSaida.length) {
         await ExpedicaoSaidaModel.createFromProcess(connection, {
           tipo_saida: 'VENDA',
           observacao: observacaoSaidaBase,

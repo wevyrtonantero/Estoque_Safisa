@@ -687,6 +687,33 @@ const PedidoExpedicaoController = {
 
       return res.status(500).json({ message: 'Erro ao finalizar a coleta do pedido.' });
     }
+  },
+
+  async reabrir(req, res) {
+    try {
+      const id = normalizeOptionalInteger(req.params.id);
+      if (!Number.isInteger(id)) {
+        return res.status(400).json({ message: 'O pedido informado e invalido.' });
+      }
+
+      const pedido = await PedidoExpedicaoModel.reabrirColeta(
+        id,
+        req.currentUser?.id || null
+      );
+
+      return res.status(200).json(pedido);
+    } catch (error) {
+      console.error('Erro ao reabrir pedido coletado da Expedicao:', error);
+
+      if (error.statusCode) {
+        return res.status(error.statusCode).json({
+          message: error.message,
+          details: error.details || null
+        });
+      }
+
+      return res.status(500).json({ message: 'Erro ao reabrir o pedido coletado.' });
+    }
   }
 };
 

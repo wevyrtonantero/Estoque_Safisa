@@ -1,4 +1,5 @@
 const submontagemSeriaisApiBaseUrl = '/api/submontagem-seriais';
+const HISTORICO_SERIAIS_LIMIT = 1000;
 
 let registrosNumeroSerieCache = [];
 let filtroDebounceTimer = null;
@@ -30,12 +31,15 @@ document.addEventListener('DOMContentLoaded', () => {
 function bindEvents() {
   refs.filtros.addEventListener('submit', (event) => {
     event.preventDefault();
-    renderizarRegistrosNumeroSerie();
+    carregarRegistrosNumeroSerie();
   });
 
   refs.limpar.addEventListener('click', limparFiltros);
 
-  refs.filtros.querySelectorAll('input, select').forEach((field) => {
+  refs.numero.addEventListener('input', agendarCarregamentoRegistrosNumeroSerie);
+  refs.numero.addEventListener('change', agendarCarregamentoRegistrosNumeroSerie);
+
+  [refs.modelo, refs.montador, refs.clientePedido, refs.data, refs.situacao].forEach((field) => {
     field.addEventListener('input', agendarRenderizacao);
     field.addEventListener('change', agendarRenderizacao);
   });
@@ -60,12 +64,24 @@ function agendarRenderizacao() {
   filtroDebounceTimer = window.setTimeout(renderizarRegistrosNumeroSerie, 200);
 }
 
+function agendarCarregamentoRegistrosNumeroSerie() {
+  window.clearTimeout(filtroDebounceTimer);
+  filtroDebounceTimer = window.setTimeout(carregarRegistrosNumeroSerie, 250);
+}
+
 async function carregarRegistrosNumeroSerie() {
   refs.mensagem.className = 'message hidden';
   refs.mensagem.textContent = '';
 
   try {
-    const response = await fetch(`${submontagemSeriaisApiBaseUrl}?limit=1000`);
+    const params = new URLSearchParams({ limit: String(HISTORICO_SERIAIS_LIMIT) });
+    const numeroSerie = refs.numero.value.trim();
+
+    if (numeroSerie) {
+      params.set('numero_serie', numeroSerie);
+    }
+
+    const response = await fetch(`${submontagemSeriaisApiBaseUrl}?${params.toString()}`);
     const result = await response.json();
 
     if (!response.ok) {
@@ -85,7 +101,7 @@ async function carregarRegistrosNumeroSerie() {
 
 function limparFiltros() {
   refs.filtros.reset();
-  renderizarRegistrosNumeroSerie();
+  carregarRegistrosNumeroSerie();
 }
 
 function obterRegistrosNumeroSerieFiltrados() {

@@ -26,5 +26,6 @@ router.patch('/pedidos-expedicao/itens/:itemId/separado', requireApiRoles(OPERAT
 router.patch('/pedidos-expedicao/:id/nota-fiscal', requireApiRoles(OPERATION_WRITE_ROLES), PedidoExpedicaoController.updateNotaFiscal);
 router.patch('/pedidos-expedicao/:id/dados-finais', requireApiRoles(OPERATION_WRITE_ROLES), PedidoExpedicaoController.updateDadosFinais);
 router.post('/pedidos-expedicao/:id/coletar', requireApiRoles(OPERATION_WRITE_ROLES), PedidoExpedicaoController.coletar);
+router.post('/pedidos-expedicao/:id/reabrir', requireApiRoles(OPERATION_WRITE_ROLES), PedidoExpedicaoController.reabrir);
 
 module.exports = router;

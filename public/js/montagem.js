@@ -9,8 +9,11 @@ const submontagensApiBaseUrl = '/api/submontagens';
 const submontagemSeriaisApiBaseUrl = '/api/submontagem-seriais';
 const producaoApiBaseUrl = '/api/producao';
 const AUTO_REFRESH_MS = 15000;
+const HISTORICO_SERIAIS_LIMIT = 1000;
 const ACTIVE_REQUEST_STATUSES = ['PENDENTE', 'FALTANDO_PECA', 'MONTANDO', 'EM_SEPARACAO', 'ATENDIDA_PARCIAL'];
 const CLOSED_REQUEST_STATUSES = ['ATENDIDA', 'CANCELADA'];
+const MONTAGEM_READY_ELIGIBLE_STATUSES = ['PENDENTE', 'FALTANDO_PECA', 'MONTANDO', 'ATENDIDA_PARCIAL'];
+const MONTAGEM_WITHDRAW_ELIGIBLE_STATUSES = ['EM_SEPARACAO', 'ATENDIDA_PARCIAL'];
 
 let estoquesCache = [];
 let itensCache = [];
@@ -30,6 +33,8 @@ let ultimoMontadorNumeroSerie = '';
 let diagnosticoNumeroSerieAtual = null;
 let reabrirModalNumeroSerieAoFecharDiagnostico = false;
 let solicitacaoEnvioEmAndamento = false;
+let historicoItemMovimentacoesCache = [];
+let numeroSerieFiltroDebounceTimer = null;
 
 const refs = {
   mensagem: document.getElementById('montagem-mensagem'),
@@ -45,6 +50,8 @@ const refs = {
   pedidosRecebidosTbody: document.getElementById('montagem-pedidos-recebidos-tbody'),
   pedidosFiltroSituacao: document.getElementById('montagem-pedidos-filtro-situacao'),
   pedidosRecebidosFiltroSituacao: document.getElementById('montagem-recebidos-filtro-situacao'),
+  pedidosRecebidosFiltroQ: document.getElementById('montagem-recebidos-filtro-q'),
+  pedidosRecebidosFiltroStatus: document.getElementById('montagem-recebidos-filtro-status'),
   estoqueTbody: document.getElementById('montagem-estoque-tbody'),
   filtroCodigo: document.getElementById('montagem-filtro-codigo'),
   filtroDescricao: document.getElementById('montagem-filtro-descricao'),
@@ -62,6 +69,11 @@ const refs = {
   historicoItemMensagem: document.getElementById('montagem-historico-item-mensagem'),
   historicoItemTitulo: document.getElementById('montagem-historico-item-titulo'),
   historicoItemSubtitulo: document.getElementById('montagem-historico-item-subtitulo'),
+  historicoItemFiltroForm: document.getElementById('montagem-historico-item-filtro-form'),
+  historicoItemDataInicial: document.getElementById('montagem-historico-item-data-inicial'),
+  historicoItemDataFinal: document.getElementById('montagem-historico-item-data-final'),
+  historicoItemUsuario: document.getElementById('montagem-historico-item-usuario'),
+  historicoItemTotal: document.getElementById('montagem-historico-item-total'),
   historicoItemTbody: document.getElementById('montagem-historico-item-tbody'),
   saldosItemModal: document.getElementById('montagem-saldos-item-modal'),
   saldosItemMensagem: document.getElementById('montagem-saldos-item-mensagem'),
@@ -269,6 +281,8 @@ function bindEvents() {
   document.getElementById('montagem-btn-producao').addEventListener('click', abrirModalProducao);
   refs.pedidosFiltroSituacao.addEventListener('change', renderizarPedidos);
   refs.pedidosRecebidosFiltroSituacao.addEventListener('change', renderizarPedidosRecebidos);
+  refs.pedidosRecebidosFiltroQ.addEventListener('input', renderizarPedidosRecebidos);
+  refs.pedidosRecebidosFiltroStatus.addEventListener('change', renderizarPedidosRecebidos);
   refs.pedidosTbody.addEventListener('click', handlePedidosActions);
   refs.filtroCodigo.addEventListener('input', renderizarEstoque);
   refs.filtroDescricao.addEventListener('input', renderizarEstoque);
@@ -278,11 +292,18 @@ function bindEvents() {
   document.getElementById('montagem-btn-limpar-filtros-estoque').addEventListener('click', limparFiltrosEstoque);
   document.getElementById('btn-fechar-modal-montagem-estrutura').addEventListener('click', fecharModalEstrutura);
   document.getElementById('btn-fechar-modal-montagem-historico-item').addEventListener('click', fecharModalHistoricoItem);
+  refs.historicoItemFiltroForm.querySelectorAll('input, select').forEach((field) => {
+    field.addEventListener('input', renderizarHistoricoItemFiltrado);
+    field.addEventListener('change', renderizarHistoricoItemFiltrado);
+  });
+  document.getElementById('btn-limpar-filtros-montagem-historico-item').addEventListener('click', limparFiltrosHistoricoItem);
   document.getElementById('btn-fechar-modal-montagem-saldos-item').addEventListener('click', fecharModalSaldosItem);
   document.getElementById('btn-fechar-modal-montagem-transferencia').addEventListener('click', fecharModalTransferencia);
   document.getElementById('btn-cancelar-modal-montagem-transferencia').addEventListener('click', fecharModalTransferencia);
   document.getElementById('btn-fechar-modal-montagem-pedidos').addEventListener('click', fecharModalPedidos);
   document.getElementById('btn-fechar-modal-montagem-recebidos').addEventListener('click', fecharModalPedidosRecebidos);
+  document.getElementById('montagem-btn-marcar-pronto-recebidos-todos').addEventListener('click', marcarProntoTodosPedidosRecebidos);
+  document.getElementById('montagem-btn-limpar-filtros-recebidos').addEventListener('click', limparFiltrosPedidosRecebidos);
   document.getElementById('btn-fechar-modal-montagem-producao').addEventListener('click', fecharModalProducao);
   document.getElementById('btn-fechar-modal-montagem-producao-rodape').addEventListener('click', fecharModalProducao);
   document.getElementById('btn-fechar-modal-montagem-consumir-producao').addEventListener('click', fecharModalConsumirProducao);
@@ -372,7 +393,8 @@ function bindEvents() {
   refs.numeroSerieManual.addEventListener('input', atualizarFaixaNumeroSerie);
   refs.numeroSerieSequenciaForm.addEventListener('submit', handleSalvarSequenciaNumeroSerie);
   refs.numeroSerieSequenciaValor.addEventListener('input', atualizarPreviewSequenciaNumeroSerie);
-  refs.numeroSerieFiltroNumero.addEventListener('input', renderizarRegistrosNumeroSerie);
+  refs.numeroSerieFiltroNumero.addEventListener('input', agendarCarregamentoRegistrosNumeroSerie);
+  refs.numeroSerieFiltroNumero.addEventListener('change', agendarCarregamentoRegistrosNumeroSerie);
   refs.numeroSerieFiltroModelo.addEventListener('input', renderizarRegistrosNumeroSerie);
   refs.numeroSerieFiltroMontador.addEventListener('input', renderizarRegistrosNumeroSerie);
   refs.numeroSerieFiltroCliente.addEventListener('input', renderizarRegistrosNumeroSerie);
@@ -485,50 +507,126 @@ async function abrirModalHistoricoItem(itemId) {
   const item = saldosMontagemCache.find((entry) => Number(entry.id_peca) === Number(itemId))
     || itensCache.find((entry) => Number(entry.id) === Number(itemId));
 
+  historicoItemMovimentacoesCache = [];
+  refs.historicoItemFiltroForm.reset();
+  atualizarUsuariosHistoricoItem();
   refs.historicoItemMensagem.className = 'message hidden';
   refs.historicoItemMensagem.textContent = '';
   refs.historicoItemTitulo.textContent = item
     ? `Historico de ${item.codigo}`
     : 'Historico da peca';
   refs.historicoItemSubtitulo.textContent = item
-    ? `${item.descricao} | Ultimas movimentacoes deste item.`
-    : 'Veja as ultimas movimentacoes desta peca no sistema.';
-  refs.historicoItemTbody.innerHTML = '<tr><td colspan="6" class="empty-state">Carregando historico...</td></tr>';
+    ? `${item.descricao} | movimentacoes desta peca em todos os estoques.`
+    : 'Veja as movimentacoes desta peca em todos os estoques.';
+  renderizarHistoricoItem([]);
+  refs.historicoItemTbody.innerHTML = '<tr><td colspan="8" class="empty-state">Carregando historico...</td></tr>';
   openModal(refs.historicoItemModal);
 
   try {
-    const response = await fetch(`${estoqueMovimentacoesApiBaseUrl}?idPeca=${itemId}`);
+    const response = await fetch(`${estoqueMovimentacoesApiBaseUrl}/${itemId}`);
     const result = await response.json();
 
     if (!response.ok) {
       throw new Error(result.message || 'Nao foi possivel carregar o historico da peca.');
     }
 
-    if (!Array.isArray(result) || !result.length) {
-      refs.historicoItemTbody.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhuma movimentacao encontrada para este item.</td></tr>';
-      return;
-    }
-
-    refs.historicoItemTbody.innerHTML = result.map((movimentacao) => `
-      <tr>
-        <td>${formatarDataHora(movimentacao.data_movimentacao)}</td>
-        <td>${escapeHtml(movimentacao.tipo_movimentacao || '-')}</td>
-        <td>${escapeHtml(movimentacao.estoque_origem_nome || '-')}</td>
-        <td>${escapeHtml(movimentacao.estoque_destino_nome || '-')}</td>
-        <td class="table-quantity">${formatDecimal(movimentacao.quantidade)}</td>
-        <td>${escapeHtml(movimentacao.observacao || '-')}</td>
-      </tr>
-    `).join('');
+    historicoItemMovimentacoesCache = Array.isArray(result) ? result : [];
+    atualizarUsuariosHistoricoItem();
+    renderizarHistoricoItemFiltrado();
   } catch (error) {
     refs.historicoItemMensagem.textContent = error.message;
     refs.historicoItemMensagem.className = 'message error';
     refs.historicoItemMensagem.classList.remove('hidden');
-    refs.historicoItemTbody.innerHTML = '<tr><td colspan="6" class="empty-state">Nao foi possivel carregar o historico.</td></tr>';
+    refs.historicoItemTbody.innerHTML = '<tr><td colspan="8" class="empty-state">Nao foi possivel carregar o historico.</td></tr>';
   }
 }
 
 function fecharModalHistoricoItem() {
+  historicoItemMovimentacoesCache = [];
+  refs.historicoItemFiltroForm.reset();
+  atualizarUsuariosHistoricoItem();
+  renderizarHistoricoItem([]);
+  refs.historicoItemMensagem.className = 'message hidden';
+  refs.historicoItemMensagem.textContent = '';
   closeModal(refs.historicoItemModal);
+}
+
+function renderizarHistoricoItem(movimentacoes) {
+  refs.historicoItemTotal.textContent = `${movimentacoes.length} movimentacao(oes) encontrada(s)`;
+
+  if (!movimentacoes.length) {
+    refs.historicoItemTbody.innerHTML = '<tr><td colspan="8" class="empty-state">Nenhuma movimentacao encontrada para esta peca com os filtros informados.</td></tr>';
+    return;
+  }
+
+  refs.historicoItemTbody.innerHTML = movimentacoes.map((movimentacao) => `
+    <tr>
+      <td>${formatarDataHora(movimentacao.data_movimentacao)}</td>
+      <td>${escapeHtml(formatarTipoHistoricoItem(movimentacao.tipo_movimentacao))}</td>
+      <td>${escapeHtml(movimentacao.estoque_origem_nome || '-')}</td>
+      <td>${escapeHtml(movimentacao.estoque_destino_nome || '-')}</td>
+      <td class="table-quantity">${formatDecimal(movimentacao.quantidade)}</td>
+      <td>${escapeHtml(formatarUsuarioHistoricoItem(movimentacao))}</td>
+      <td>${escapeHtml(descreverMovimentacaoHistoricoItem(movimentacao))}</td>
+      <td>${escapeHtml(movimentacao.observacao || '-')}</td>
+    </tr>
+  `).join('');
+}
+
+function renderizarHistoricoItemFiltrado() {
+  const dataInicial = refs.historicoItemDataInicial.value;
+  const dataFinal = refs.historicoItemDataFinal.value;
+  const usuario = refs.historicoItemUsuario.value;
+
+  const movimentacoes = historicoItemMovimentacoesCache.filter((movimentacao) => {
+    const dataMovimentacao = normalizarDataHistoricoItem(movimentacao.data_movimentacao);
+    const usuarioMovimentacao = obterChaveUsuarioHistoricoItem(movimentacao);
+
+    return (!dataInicial || dataMovimentacao >= dataInicial)
+      && (!dataFinal || dataMovimentacao <= dataFinal)
+      && (!usuario || usuarioMovimentacao === usuario);
+  });
+
+  renderizarHistoricoItem(movimentacoes);
+}
+
+function limparFiltrosHistoricoItem() {
+  refs.historicoItemFiltroForm.reset();
+  renderizarHistoricoItemFiltrado();
+}
+
+function atualizarUsuariosHistoricoItem() {
+  const usuarioSelecionado = refs.historicoItemUsuario.value;
+  const usuarios = new Map();
+
+  historicoItemMovimentacoesCache.forEach((movimentacao) => {
+    usuarios.set(obterChaveUsuarioHistoricoItem(movimentacao), formatarUsuarioHistoricoItem(movimentacao));
+  });
+
+  refs.historicoItemUsuario.innerHTML = [
+    '<option value="">Todos</option>',
+    ...[...usuarios.entries()]
+      .sort((a, b) => a[1].localeCompare(b[1], 'pt-BR'))
+      .map(([value, label]) => `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`)
+  ].join('');
+
+  if ([...usuarios.keys()].includes(usuarioSelecionado)) {
+    refs.historicoItemUsuario.value = usuarioSelecionado;
+  }
+}
+
+function obterChaveUsuarioHistoricoItem(movimentacao) {
+  return movimentacao.id_usuario
+    ? `usuario:${movimentacao.id_usuario}`
+    : `nome:${movimentacao.usuario_login || movimentacao.usuario_nome || 'sistema-legado'}`;
+}
+
+function formatarUsuarioHistoricoItem(movimentacao) {
+  if (movimentacao.usuario_nome && movimentacao.usuario_login) {
+    return `${movimentacao.usuario_nome} (${movimentacao.usuario_login})`;
+  }
+
+  return movimentacao.usuario_nome || movimentacao.usuario_login || 'Sistema ou registro antigo';
 }
 
 async function abrirModalSaldosItem(itemId) {
@@ -689,7 +787,7 @@ async function carregarPedidosMontagem() {
 }
 
 async function carregarPedidosRecebidos() {
-  const response = await fetch(`${solicitacoesApiBaseUrl}?area_origem=EXPEDICAO&origem_atendimento=MONTAGEM&abertas=1`);
+  const response = await fetch(`${solicitacoesApiBaseUrl}?area_origem=EXPEDICAO&origem_atendimento=MONTAGEM`);
   const result = await response.json();
 
   if (!response.ok) {
@@ -1282,7 +1380,14 @@ async function carregarProximoNumeroSerie() {
 }
 
 async function carregarRegistrosNumeroSerie() {
-  const response = await fetch(`${submontagemSeriaisApiBaseUrl}?limit=100`);
+  const params = new URLSearchParams({ limit: String(HISTORICO_SERIAIS_LIMIT) });
+  const numeroSerie = refs.numeroSerieFiltroNumero.value.trim();
+
+  if (numeroSerie) {
+    params.set('numero_serie', numeroSerie);
+  }
+
+  const response = await fetch(`${submontagemSeriaisApiBaseUrl}?${params.toString()}`);
   const result = await response.json();
 
   if (!response.ok) {
@@ -1293,13 +1398,24 @@ async function carregarRegistrosNumeroSerie() {
   renderizarRegistrosNumeroSerie();
 }
 
+function agendarCarregamentoRegistrosNumeroSerie() {
+  window.clearTimeout(numeroSerieFiltroDebounceTimer);
+  numeroSerieFiltroDebounceTimer = window.setTimeout(() => {
+    carregarRegistrosNumeroSerie().catch((error) => {
+      mostrarMensagemNumeroSerie(error.message, 'error');
+    });
+  }, 250);
+}
+
 function limparFiltrosNumeroSerie() {
   refs.numeroSerieFiltroNumero.value = '';
   refs.numeroSerieFiltroModelo.value = '';
   refs.numeroSerieFiltroMontador.value = '';
   refs.numeroSerieFiltroCliente.value = '';
   refs.numeroSerieFiltroData.value = '';
-  renderizarRegistrosNumeroSerie();
+  carregarRegistrosNumeroSerie().catch((error) => {
+    mostrarMensagemNumeroSerie(error.message, 'error');
+  });
 }
 
 function obterRegistrosNumeroSerieFiltrados() {
@@ -2895,16 +3011,43 @@ function renderizarPedidosRecebidos() {
       <td>${renderStatus(item.status)}</td>
       <td>${formatarDataCurta(item.data_previsao)}</td>
       <td class="table-actions-cell">
-        <details class="row-menu">
-          <summary class="row-menu-trigger" aria-label="Abrir acoes">...</summary>
-          <div class="row-menu-panel">
-            <button type="button" class="row-menu-item" data-action="status" data-id="${item.id}">Atualizar status</button>
-            <button type="button" class="row-menu-item" data-action="atender" data-id="${item.id}">Atender</button>
-          </div>
-        </details>
+        ${renderizarAcoesPedidoRecebido(item)}
       </td>
     </tr>
   `).join('');
+}
+
+function renderizarAcoesPedidoRecebido(item) {
+  const status = String(item.status || '').toUpperCase();
+  const quantidadePendente = Number(item.quantidade_pendente || 0);
+  const podeMarcarPronto = quantidadePendente > 0 && MONTAGEM_READY_ELIGIBLE_STATUSES.includes(status);
+  const podeRetirar = quantidadePendente > 0 && MONTAGEM_WITHDRAW_ELIGIBLE_STATUSES.includes(status);
+
+  if (!podeMarcarPronto && !podeRetirar && CLOSED_REQUEST_STATUSES.includes(status)) {
+    return '<span class="muted">-</span>';
+  }
+
+  const actions = [
+    '<button type="button" class="row-menu-item" data-action="status" data-id="' + item.id + '">Atualizar status</button>'
+  ];
+
+  if (podeMarcarPronto) {
+    actions.push('<button type="button" class="row-menu-item" data-action="marcar-pronto" data-id="' + item.id + '">Marcar pronto</button>');
+  }
+
+  if (podeRetirar) {
+    actions.push('<button type="button" class="row-menu-item" data-action="retirou-tudo" data-id="' + item.id + '">Retirou tudo</button>');
+    actions.push('<button type="button" class="row-menu-item" data-action="retirou-parcial" data-id="' + item.id + '">Retirou parcialmente</button>');
+  }
+
+  return `
+    <details class="row-menu">
+      <summary class="row-menu-trigger" aria-label="Abrir acoes">...</summary>
+      <div class="row-menu-panel">
+        ${actions.join('')}
+      </div>
+    </details>
+  `;
 }
 
 function handlePedidosRecebidosActions(event) {
@@ -2937,6 +3080,24 @@ function handlePedidosRecebidosActions(event) {
     return;
   }
 
+  if (actionButton.dataset.action === 'marcar-pronto') {
+    marcarProntoPedidoRecebido(pedido);
+    return;
+  }
+
+  if (actionButton.dataset.action === 'retirou-tudo') {
+    atenderPedidoRecebido(pedido.id, Math.max(1, Number(pedido.quantidade_pendente || 0)), '', 'Pedido retirado por completo.');
+    return;
+  }
+
+  if (actionButton.dataset.action !== 'retirou-parcial') {
+    return;
+  }
+
+  abrirModalAtendimentoPedidoRecebido(pedido);
+}
+
+function abrirModalAtendimentoPedidoRecebido(pedido) {
   refs.atendimentoMensagem.className = 'message hidden';
   refs.atendimentoMensagem.textContent = '';
   refs.atendimentoId.value = String(pedido.id);
@@ -2955,23 +3116,73 @@ function handlePedidosRecebidosActions(event) {
   openModal(refs.atendimentoModal);
 }
 
-async function executarAcaoSolicitacao(url, successMessage) {
+async function marcarProntoPedidoRecebido(pedido) {
   try {
-    const response = await fetch(url, {
+    const response = await fetch(`${solicitacoesApiBaseUrl}/${pedido.id}/status`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({})
+      body: JSON.stringify({
+        status: 'EM_SEPARACAO',
+        data_previsao: pedido.data_previsao || null,
+        observacao: pedido.observacao || ''
+      })
     });
     const result = await response.json();
 
     if (!response.ok) {
-      throw new Error(result.message || 'Operacao nao concluida.');
+      throw new Error(result.message || 'Nao foi possivel marcar o pedido como pronto.');
     }
 
-    mostrarMensagem(successMessage, 'success');
+    mostrarMensagem('Pedido da Expedicao marcado como pronto.', 'success');
     await carregarPedidosRecebidos();
+    notificarAtualizacaoOperacional(['solicitacoes-estoque']);
   } catch (error) {
     mostrarMensagem(error.message, 'error');
+  }
+}
+
+async function marcarProntoTodosPedidosRecebidos() {
+  const pedidosElegiveis = obterPedidosRecebidosFiltrados().filter((item) => (
+    Number(item.quantidade_pendente || 0) > 0
+    && MONTAGEM_READY_ELIGIBLE_STATUSES.includes(String(item.status || '').toUpperCase())
+  ));
+
+  if (!pedidosElegiveis.length) {
+    mostrarMensagem('Nao ha pedidos elegiveis para marcar como pronto nos filtros atuais.', 'info');
+    return;
+  }
+
+  if (!confirm(`Marcar ${pedidosElegiveis.length} pedido(s) da Expedicao como pronto?`)) {
+    return;
+  }
+
+  let totalAtualizados = 0;
+  try {
+    for (const pedido of pedidosElegiveis) {
+      const response = await fetch(`${solicitacoesApiBaseUrl}/${pedido.id}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'EM_SEPARACAO',
+          data_previsao: pedido.data_previsao || null,
+          observacao: pedido.observacao || ''
+        })
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || `Nao foi possivel marcar o pedido ${pedido.codigo} como pronto.`);
+      }
+
+      totalAtualizados += 1;
+    }
+
+    mostrarMensagem(`${totalAtualizados} pedido(s) da Expedicao marcado(s) como pronto.`, 'success');
+    await carregarPedidosRecebidos();
+    notificarAtualizacaoOperacional(['solicitacoes-estoque']);
+  } catch (error) {
+    mostrarMensagem(error.message, 'error');
+    await carregarPedidosRecebidos();
   }
 }
 
@@ -3016,13 +3227,23 @@ async function handleAtualizarStatusSolicitacao(event) {
 async function handleAtenderPedidoRecebido(event) {
   event.preventDefault();
 
+  await atenderPedidoRecebido(
+    refs.atendimentoId.value,
+    refs.atendimentoQuantidade.value,
+    refs.atendimentoObservacao.value.trim(),
+    'Retirada parcial registrada com sucesso.',
+    refs.atendimentoMensagem
+  );
+}
+
+async function atenderPedidoRecebido(id, quantidade, observacao = '', successMessage = 'Pedido da Expedicao atendido com sucesso.', errorTarget = null) {
   try {
-    const response = await fetch(`${solicitacoesApiBaseUrl}/${refs.atendimentoId.value}/atender`, {
+    const response = await fetch(`${solicitacoesApiBaseUrl}/${id}/atender`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        quantidade_atendida: refs.atendimentoQuantidade.value,
-        observacao: refs.atendimentoObservacao.value.trim()
+        quantidade_atendida: quantidade,
+        observacao
       })
     });
     const result = await response.json();
@@ -3032,13 +3253,18 @@ async function handleAtenderPedidoRecebido(event) {
     }
 
     fecharModalAtendimento();
-    mostrarMensagem('Pedido da Expedicao atendido com sucesso.', 'success');
+    mostrarMensagem(successMessage, 'success');
     await Promise.all([carregarPedidosRecebidos(), carregarEstoqueMontagem()]);
     notificarAtualizacaoOperacional(['solicitacoes-estoque', 'estoque']);
   } catch (error) {
-    refs.atendimentoMensagem.textContent = error.message;
-    refs.atendimentoMensagem.className = 'message error';
-    refs.atendimentoMensagem.classList.remove('hidden');
+    if (errorTarget) {
+      errorTarget.textContent = error.message;
+      errorTarget.className = 'message error';
+      errorTarget.classList.remove('hidden');
+      return;
+    }
+
+    mostrarMensagem(error.message, 'error');
   }
 }
 
@@ -3146,7 +3372,37 @@ function obterPedidosMontagemFiltrados() {
 }
 
 function obterPedidosRecebidosFiltrados() {
-  return pedidosRecebidosCache.filter((item) => filtrarPorTimeline(item.status, refs.pedidosRecebidosFiltroSituacao.value));
+  const filtroTimeline = refs.pedidosRecebidosFiltroSituacao.value;
+  const filtroStatus = String(refs.pedidosRecebidosFiltroStatus.value || '').toUpperCase();
+  const filtroBusca = normalizarBusca(refs.pedidosRecebidosFiltroQ.value.trim());
+
+  return pedidosRecebidosCache.filter((item) => {
+    if (!filtrarPorTimeline(item.status, filtroTimeline)) {
+      return false;
+    }
+
+    if (filtroStatus && String(item.status || '').toUpperCase() !== filtroStatus) {
+      return false;
+    }
+
+    if (!filtroBusca) {
+      return true;
+    }
+
+    return normalizarBusca([
+      item.codigo,
+      item.descricao,
+      item.observacao,
+      item.status
+    ].join(' ')).includes(filtroBusca);
+  });
+}
+
+function limparFiltrosPedidosRecebidos() {
+  refs.pedidosRecebidosFiltroSituacao.value = 'abertas';
+  refs.pedidosRecebidosFiltroQ.value = '';
+  refs.pedidosRecebidosFiltroStatus.value = '';
+  renderizarPedidosRecebidos();
 }
 
 function filtrarPorTimeline(status, filtro) {
@@ -3576,6 +3832,61 @@ function formatStatusLabel(value) {
 
 function formatarDataHora(value) {
   return formatDate(value);
+}
+
+function formatarTipoHistoricoItem(tipo) {
+  const normalized = String(tipo || '').toUpperCase();
+  const labels = {
+    ENTRADA_INICIAL: 'Entrada',
+    TRANSFERENCIA: 'Transferencia',
+    SAIDA: 'Saida',
+    AJUSTE: 'Ajuste'
+  };
+
+  return labels[normalized] || String(tipo || '-').replaceAll('_', ' ');
+}
+
+function normalizarDataHistoricoItem(valor) {
+  if (!valor) {
+    return '';
+  }
+
+  const data = new Date(valor);
+  if (Number.isNaN(data.getTime())) {
+    return '';
+  }
+
+  const ano = data.getFullYear();
+  const mes = String(data.getMonth() + 1).padStart(2, '0');
+  const dia = String(data.getDate()).padStart(2, '0');
+  return `${ano}-${mes}-${dia}`;
+}
+
+function descreverMovimentacaoHistoricoItem(movimentacao) {
+  const origem = movimentacao.estoque_origem_nome || '-';
+  const destino = movimentacao.estoque_destino_nome || '-';
+  const quantidade = formatDecimal(movimentacao.quantidade);
+  const tipo = String(movimentacao.tipo_movimentacao || '').toUpperCase();
+
+  if (tipo === 'TRANSFERENCIA') {
+    return `${quantidade} transferida(s) de ${origem} para ${destino}.`;
+  }
+
+  if (tipo === 'ENTRADA_INICIAL') {
+    return `${quantidade} adicionada(s) em ${destino}.`;
+  }
+
+  if (tipo === 'AJUSTE') {
+    return movimentacao.id_estoque_destino
+      ? `${quantidade} ajustada(s) em ${destino}.`
+      : `${quantidade} ajustada(s) em ${origem}.`;
+  }
+
+  if (tipo === 'SAIDA') {
+    return `${quantidade} retirada(s) de ${origem}.`;
+  }
+
+  return `${quantidade} movimentada(s).`;
 }
 
 function formatarDataCurta(value) {

@@ -936,6 +936,7 @@ textarea {
 }
 
 .servo-sheet-vertical-col > span,
+.servo-sheet-vertical-col > strong,
 .servo-sheet-vertical-col {
   color: #111111;
   font-size: 0.58rem;
@@ -943,7 +944,8 @@ textarea {
   letter-spacing: 0.06em;
 }
 
-.servo-sheet-vertical-col > span {
+.servo-sheet-vertical-col > span,
+.servo-sheet-vertical-col > strong {
   display: inline-flex;
   align-items: flex-end;
   justify-content: center;
@@ -1167,7 +1169,8 @@ textarea {
     max-width: 22px;
   }
 
-  .servo-sheet-vertical-col > span {
+  .servo-sheet-vertical-col > span,
+  .servo-sheet-vertical-col > strong {
     min-height: 88px;
     font-size: 0.52rem;
   }

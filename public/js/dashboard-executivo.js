@@ -8,6 +8,7 @@ const pedidosExpedicaoApiBaseUrl = '/api/pedidos-expedicao';
 const gerenciamentoServosApiBaseUrl = '/api/gerenciamento-servos/matriz';
 const submontagemSeriaisApiBaseUrl = '/api/submontagem-seriais';
 const AUTO_REFRESH_MS = 15000;
+const HISTORICO_SERIAIS_LIMIT = 1000;
 
 let painelCache = null;
 let estoquesDetalhadosCache = [];
@@ -22,6 +23,7 @@ let servosDashboardMatriz = null;
 let servosDashboardEscopo = 'global';
 let historicoSeriaisDashboardCache = [];
 let autoRefreshHandle = null;
+let historicoSeriaisFiltroDebounceTimer = null;
 
 const refs = {
   mensagem: document.getElementById('dashboard-mensagem'),
@@ -141,6 +143,7 @@ const refs = {
 
 document.addEventListener('DOMContentLoaded', async () => {
   bindEvents();
+  configurarAtualizacaoOperacional();
 
   try {
     await Promise.all([
@@ -155,6 +158,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     mostrarMensagem(error.message, 'error');
   }
 });
+
+function configurarAtualizacaoOperacional() {
+  if (!window.SafisaSync?.subscribe) {
+    return;
+  }
+
+  const recarregarServosSeAberto = () => {
+    if (refs.servosModal.classList.contains('hidden')) {
+      return;
+    }
+
+    carregarServosDashboard().catch((error) => {
+      refs.servosTbody.innerHTML = `<tr><td colspan="2" class="empty-state">${escapeHtml(error.message)}</td></tr>`;
+    });
+  };
+
+  ['pedidos-expedicao', 'submontagem-seriais'].forEach((topic) => {
+    window.SafisaSync.subscribe(topic, recarregarServosSeAberto);
+  });
+}
 
 function bindEvents() {
   document.getElementById('btn-dashboard-estoques').addEventListener('click', () => openModal(refs.estoquesModal));
@@ -211,7 +234,15 @@ function bindEvents() {
 
   refs.servosBtnDia.addEventListener('click', () => alternarEscopoServosDashboard('dia'));
   refs.servosBtnGlobal.addEventListener('click', () => alternarEscopoServosDashboard('global'));
-  refs.historicoSeriaisFiltroForm.querySelectorAll('input, select').forEach((field) => {
+  refs.historicoSeriaisFiltroNumero.addEventListener('input', agendarCarregamentoHistoricoSeriaisDashboard);
+  refs.historicoSeriaisFiltroNumero.addEventListener('change', agendarCarregamentoHistoricoSeriaisDashboard);
+  [
+    refs.historicoSeriaisFiltroModelo,
+    refs.historicoSeriaisFiltroMontador,
+    refs.historicoSeriaisFiltroClientePedido,
+    refs.historicoSeriaisFiltroData,
+    refs.historicoSeriaisFiltroSituacao
+  ].forEach((field) => {
     field.addEventListener('input', renderizarHistoricoSeriaisDashboard);
     field.addEventListener('change', renderizarHistoricoSeriaisDashboard);
   });
@@ -346,7 +377,14 @@ async function carregarServosDashboard() {
 }
 
 async function carregarHistoricoSeriaisDashboard() {
-  const response = await fetch(`${submontagemSeriaisApiBaseUrl}?limit=1000`);
+  const params = new URLSearchParams({ limit: String(HISTORICO_SERIAIS_LIMIT) });
+  const numeroSerie = refs.historicoSeriaisFiltroNumero.value.trim();
+
+  if (numeroSerie) {
+    params.set('numero_serie', numeroSerie);
+  }
+
+  const response = await fetch(`${submontagemSeriaisApiBaseUrl}?${params.toString()}`);
   const result = await response.json();
 
   if (!response.ok) {
@@ -355,6 +393,15 @@ async function carregarHistoricoSeriaisDashboard() {
 
   historicoSeriaisDashboardCache = Array.isArray(result) ? result : [];
   renderizarHistoricoSeriaisDashboard();
+}
+
+function agendarCarregamentoHistoricoSeriaisDashboard() {
+  window.clearTimeout(historicoSeriaisFiltroDebounceTimer);
+  historicoSeriaisFiltroDebounceTimer = window.setTimeout(() => {
+    carregarHistoricoSeriaisDashboard().catch((error) => {
+      refs.historicoSeriaisTbody.innerHTML = `<tr><td colspan="6" class="empty-state">${escapeHtml(error.message)}</td></tr>`;
+    });
+  }, 250);
 }
 
 async function carregarSubmontagens() {
@@ -731,7 +778,7 @@ function renderizarServosDashboard() {
       <th class="servo-sheet-total-col servo-sheet-head-accent">TOTAL</th>
       ${pedidos.map((pedido) => `
         <th class="servo-sheet-vertical-col" title="${escapeHtml(`${pedido.cliente_nome} | ${pedido.codigo_pedido}`)}">
-          <span>${escapeHtml(pedido.cliente_nome)}</span>
+          <strong>${escapeHtml(pedido.cliente_nome)}</strong>
         </th>
       `).join('')}
       <th class="servo-sheet-resource-col servo-sheet-divider-left"><span>ESTOQUE</span></th>
@@ -1494,7 +1541,9 @@ function limparFiltrosHistoricoPedidosDashboard() {
 
 function limparFiltrosHistoricoSeriaisDashboard() {
   refs.historicoSeriaisFiltroForm.reset();
-  renderizarHistoricoSeriaisDashboard();
+  carregarHistoricoSeriaisDashboard().catch((error) => {
+    refs.historicoSeriaisTbody.innerHTML = `<tr><td colspan="6" class="empty-state">${escapeHtml(error.message)}</td></tr>`;
+  });
 }
 
 function obterPedidosDashboardFiltrados() {

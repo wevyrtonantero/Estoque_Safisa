@@ -29,6 +29,7 @@ let autoRefreshHandle = null;
 let efetuarFaltantesCache = [];
 let solicitacaoLista = [];
 let solicitacaoEnvioEmAndamento = false;
+let historicoItemMovimentacoesCache = [];
 
 const refs = {
   mensagem: document.getElementById('expedicao-mensagem'),
@@ -60,6 +61,11 @@ const refs = {
   historicoItemMensagem: document.getElementById('expedicao-historico-item-mensagem'),
   historicoItemTitulo: document.getElementById('expedicao-historico-item-titulo'),
   historicoItemSubtitulo: document.getElementById('expedicao-historico-item-subtitulo'),
+  historicoItemFiltroForm: document.getElementById('expedicao-historico-item-filtro-form'),
+  historicoItemDataInicial: document.getElementById('expedicao-historico-item-data-inicial'),
+  historicoItemDataFinal: document.getElementById('expedicao-historico-item-data-final'),
+  historicoItemUsuario: document.getElementById('expedicao-historico-item-usuario'),
+  historicoItemTotal: document.getElementById('expedicao-historico-item-total'),
   historicoItemTbody: document.getElementById('expedicao-historico-item-tbody'),
   saldosItemModal: document.getElementById('expedicao-saldos-item-modal'),
   saldosItemMensagem: document.getElementById('expedicao-saldos-item-mensagem'),
@@ -227,6 +233,11 @@ function bindEvents() {
   refs.producaoTbody.addEventListener('click', handleProducaoActions);
   refs.consumirProducaoForm.addEventListener('submit', handleConsumirProducao);
   document.getElementById('btn-fechar-modal-expedicao-historico-item').addEventListener('click', fecharModalHistoricoItem);
+  refs.historicoItemFiltroForm.querySelectorAll('input, select').forEach((field) => {
+    field.addEventListener('input', renderizarHistoricoItemFiltrado);
+    field.addEventListener('change', renderizarHistoricoItemFiltrado);
+  });
+  document.getElementById('btn-limpar-filtros-expedicao-historico-item').addEventListener('click', limparFiltrosHistoricoItem);
   document.getElementById('btn-fechar-modal-expedicao-saldos-item').addEventListener('click', fecharModalSaldosItem);
   document.getElementById('btn-fechar-modal-expedicao-solicitacao').addEventListener('click', fecharModalSolicitacao);
   document.getElementById('btn-cancelar-modal-expedicao-solicitacao').addEventListener('click', fecharModalSolicitacao);
@@ -736,50 +747,126 @@ async function abrirModalHistoricoItem(itemId) {
   const item = saldosExpedicaoCache.find((entry) => Number(entry.id_peca) === Number(itemId))
     || itensCache.find((entry) => Number(entry.id) === Number(itemId));
 
+  historicoItemMovimentacoesCache = [];
+  refs.historicoItemFiltroForm.reset();
+  atualizarUsuariosHistoricoItem();
   refs.historicoItemMensagem.className = 'message hidden';
   refs.historicoItemMensagem.textContent = '';
   refs.historicoItemTitulo.textContent = item
     ? `Historico de ${item.codigo}`
     : 'Historico da peca';
   refs.historicoItemSubtitulo.textContent = item
-    ? `${item.descricao} | Ultimas movimentacoes deste item.`
-    : 'Veja as ultimas movimentacoes desta peca no sistema.';
-  refs.historicoItemTbody.innerHTML = '<tr><td colspan="6" class="empty-state">Carregando historico...</td></tr>';
+    ? `${item.descricao} | movimentacoes desta peca em todos os estoques.`
+    : 'Veja as movimentacoes desta peca em todos os estoques.';
+  renderizarHistoricoItem([]);
+  refs.historicoItemTbody.innerHTML = '<tr><td colspan="8" class="empty-state">Carregando historico...</td></tr>';
   openModal(refs.historicoItemModal);
 
   try {
-    const response = await fetch(`${estoqueMovimentacoesApiBaseUrl}?idPeca=${itemId}`);
+    const response = await fetch(`${estoqueMovimentacoesApiBaseUrl}/${itemId}`);
     const result = await response.json();
 
     if (!response.ok) {
       throw new Error(result.message || 'Nao foi possivel carregar o historico da peca.');
     }
 
-    if (!Array.isArray(result) || !result.length) {
-      refs.historicoItemTbody.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhuma movimentacao encontrada para este item.</td></tr>';
-      return;
-    }
-
-    refs.historicoItemTbody.innerHTML = result.map((movimentacao) => `
-      <tr>
-        <td>${formatarDataHora(movimentacao.data_movimentacao)}</td>
-        <td>${escapeHtml(movimentacao.tipo_movimentacao || '-')}</td>
-        <td>${escapeHtml(movimentacao.estoque_origem_nome || '-')}</td>
-        <td>${escapeHtml(movimentacao.estoque_destino_nome || '-')}</td>
-        <td class="table-quantity">${formatDecimal(movimentacao.quantidade)}</td>
-        <td>${escapeHtml(movimentacao.observacao || '-')}</td>
-      </tr>
-    `).join('');
+    historicoItemMovimentacoesCache = Array.isArray(result) ? result : [];
+    atualizarUsuariosHistoricoItem();
+    renderizarHistoricoItemFiltrado();
   } catch (error) {
     refs.historicoItemMensagem.textContent = error.message;
     refs.historicoItemMensagem.className = 'message error';
     refs.historicoItemMensagem.classList.remove('hidden');
-    refs.historicoItemTbody.innerHTML = '<tr><td colspan="6" class="empty-state">Nao foi possivel carregar o historico.</td></tr>';
+    refs.historicoItemTbody.innerHTML = '<tr><td colspan="8" class="empty-state">Nao foi possivel carregar o historico.</td></tr>';
   }
 }
 
 function fecharModalHistoricoItem() {
+  historicoItemMovimentacoesCache = [];
+  refs.historicoItemFiltroForm.reset();
+  atualizarUsuariosHistoricoItem();
+  renderizarHistoricoItem([]);
+  refs.historicoItemMensagem.className = 'message hidden';
+  refs.historicoItemMensagem.textContent = '';
   closeModal(refs.historicoItemModal);
+}
+
+function renderizarHistoricoItem(movimentacoes) {
+  refs.historicoItemTotal.textContent = `${movimentacoes.length} movimentacao(oes) encontrada(s)`;
+
+  if (!movimentacoes.length) {
+    refs.historicoItemTbody.innerHTML = '<tr><td colspan="8" class="empty-state">Nenhuma movimentacao encontrada para esta peca com os filtros informados.</td></tr>';
+    return;
+  }
+
+  refs.historicoItemTbody.innerHTML = movimentacoes.map((movimentacao) => `
+    <tr>
+      <td>${formatarDataHora(movimentacao.data_movimentacao)}</td>
+      <td>${escapeHtml(formatarTipoHistoricoItem(movimentacao.tipo_movimentacao))}</td>
+      <td>${escapeHtml(movimentacao.estoque_origem_nome || '-')}</td>
+      <td>${escapeHtml(movimentacao.estoque_destino_nome || '-')}</td>
+      <td class="table-quantity">${formatDecimal(movimentacao.quantidade)}</td>
+      <td>${escapeHtml(formatarUsuarioHistoricoItem(movimentacao))}</td>
+      <td>${escapeHtml(descreverMovimentacaoHistoricoItem(movimentacao))}</td>
+      <td>${escapeHtml(movimentacao.observacao || '-')}</td>
+    </tr>
+  `).join('');
+}
+
+function renderizarHistoricoItemFiltrado() {
+  const dataInicial = refs.historicoItemDataInicial.value;
+  const dataFinal = refs.historicoItemDataFinal.value;
+  const usuario = refs.historicoItemUsuario.value;
+
+  const movimentacoes = historicoItemMovimentacoesCache.filter((movimentacao) => {
+    const dataMovimentacao = normalizarDataHistoricoItem(movimentacao.data_movimentacao);
+    const usuarioMovimentacao = obterChaveUsuarioHistoricoItem(movimentacao);
+
+    return (!dataInicial || dataMovimentacao >= dataInicial)
+      && (!dataFinal || dataMovimentacao <= dataFinal)
+      && (!usuario || usuarioMovimentacao === usuario);
+  });
+
+  renderizarHistoricoItem(movimentacoes);
+}
+
+function limparFiltrosHistoricoItem() {
+  refs.historicoItemFiltroForm.reset();
+  renderizarHistoricoItemFiltrado();
+}
+
+function atualizarUsuariosHistoricoItem() {
+  const usuarioSelecionado = refs.historicoItemUsuario.value;
+  const usuarios = new Map();
+
+  historicoItemMovimentacoesCache.forEach((movimentacao) => {
+    usuarios.set(obterChaveUsuarioHistoricoItem(movimentacao), formatarUsuarioHistoricoItem(movimentacao));
+  });
+
+  refs.historicoItemUsuario.innerHTML = [
+    '<option value="">Todos</option>',
+    ...[...usuarios.entries()]
+      .sort((a, b) => a[1].localeCompare(b[1], 'pt-BR'))
+      .map(([value, label]) => `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`)
+  ].join('');
+
+  if ([...usuarios.keys()].includes(usuarioSelecionado)) {
+    refs.historicoItemUsuario.value = usuarioSelecionado;
+  }
+}
+
+function obterChaveUsuarioHistoricoItem(movimentacao) {
+  return movimentacao.id_usuario
+    ? `usuario:${movimentacao.id_usuario}`
+    : `nome:${movimentacao.usuario_login || movimentacao.usuario_nome || 'sistema-legado'}`;
+}
+
+function formatarUsuarioHistoricoItem(movimentacao) {
+  if (movimentacao.usuario_nome && movimentacao.usuario_login) {
+    return `${movimentacao.usuario_nome} (${movimentacao.usuario_login})`;
+  }
+
+  return movimentacao.usuario_nome || movimentacao.usuario_login || 'Sistema ou registro antigo';
 }
 
 async function abrirModalSaldosItem(itemId) {
@@ -3258,6 +3345,61 @@ function formatStatusLabel(value) {
 
 function formatarDataHora(value) {
   return formatDate(value);
+}
+
+function formatarTipoHistoricoItem(tipo) {
+  const normalized = String(tipo || '').toUpperCase();
+  const labels = {
+    ENTRADA_INICIAL: 'Entrada',
+    TRANSFERENCIA: 'Transferencia',
+    SAIDA: 'Saida',
+    AJUSTE: 'Ajuste'
+  };
+
+  return labels[normalized] || String(tipo || '-').replaceAll('_', ' ');
+}
+
+function normalizarDataHistoricoItem(valor) {
+  if (!valor) {
+    return '';
+  }
+
+  const data = new Date(valor);
+  if (Number.isNaN(data.getTime())) {
+    return '';
+  }
+
+  const ano = data.getFullYear();
+  const mes = String(data.getMonth() + 1).padStart(2, '0');
+  const dia = String(data.getDate()).padStart(2, '0');
+  return `${ano}-${mes}-${dia}`;
+}
+
+function descreverMovimentacaoHistoricoItem(movimentacao) {
+  const origem = movimentacao.estoque_origem_nome || '-';
+  const destino = movimentacao.estoque_destino_nome || '-';
+  const quantidade = formatDecimal(movimentacao.quantidade);
+  const tipo = String(movimentacao.tipo_movimentacao || '').toUpperCase();
+
+  if (tipo === 'TRANSFERENCIA') {
+    return `${quantidade} transferida(s) de ${origem} para ${destino}.`;
+  }
+
+  if (tipo === 'ENTRADA_INICIAL') {
+    return `${quantidade} adicionada(s) em ${destino}.`;
+  }
+
+  if (tipo === 'AJUSTE') {
+    return movimentacao.id_estoque_destino
+      ? `${quantidade} ajustada(s) em ${destino}.`
+      : `${quantidade} ajustada(s) em ${origem}.`;
+  }
+
+  if (tipo === 'SAIDA') {
+    return `${quantidade} retirada(s) de ${origem}.`;
+  }
+
+  return `${quantidade} movimentada(s).`;
 }
 
 function escapeHtml(value) {
