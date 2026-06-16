@@ -297,11 +297,20 @@ function resetEstoqueModal() {
   limparMensagem(refs.estoqueMensagem);
 }
 
+function normalizarNomeEstoqueEspecial(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toUpperCase();
+}
+
 function renderizarEstoquesDestino(item) {
   const nomesBloqueados = new Set(['RETRABALHO', 'PECAS INACABADAS', 'PEÇAS INACABADAS']);
   const options = stocksCache
     .filter((stock) => Number(stock.ativo) === 1)
     .filter((stock) => Number(stock.id) !== Number(item.id_estoque))
+    .filter((stock) => !['RETRABALHO', 'PECAS INACABADAS'].includes(normalizarNomeEstoqueEspecial(stock.nome)))
     .filter((stock) => !nomesBloqueados.has(String(stock.nome || '').trim().toUpperCase()))
     .map((stock) => `<option value="${stock.id}">${escapeHtml(stock.nome)}</option>`)
     .join('');

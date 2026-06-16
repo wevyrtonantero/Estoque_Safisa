@@ -20,6 +20,12 @@ class EstoqueModel {
 
   static ALMOXARIFADO_NOME = 'Almoxarifado';
 
+  static SPECIAL_STOCK_NAMES = Object.freeze([
+    'Pe\u00e7as Inacabadas',
+    'Pecas Inacabadas',
+    'Retrabalho'
+  ]);
+
   // Cria um erro de negocio padronizado para as validacoes do fluxo.
   static createBusinessError(message, details = null) {
     const error = new Error(message);
@@ -104,6 +110,17 @@ class EstoqueModel {
     };
   }
 
+  static buildSpecialStockPlaceholderList() {
+    return this.SPECIAL_STOCK_NAMES.map(() => '?').join(', ');
+  }
+
+  static async findSpecialStockById(id, connection = pool) {
+    const estoque = await this.findStockById(id, connection);
+    const tipo = this.getSpecialStockType(estoque);
+
+    return tipo ? { ...estoque, tipo_especial: tipo } : null;
+  }
+
   // Lista os estoques ativos para popular filtros e selects.
   static async findStocks() {
     const [rows] = await pool.query(
@@ -164,12 +181,20 @@ class EstoqueModel {
 
   // Lista os saldos com filtros dinamicos por estoque, item e atributos da peca.
   static async findSaldos(filters = {}) {
+    const specialStock = filters.estoque
+      ? await this.findSpecialStockById(filters.estoque)
+      : null;
+
+    if (filters.estoque && specialStock) {
+      return this.findSpecialSaldos(filters);
+    }
+
     const mostrarTodos = Boolean(filters.mostrar_todos);
     const quantidadeExpression = mostrarTodos ? 'COALESCE(s.quantidade, 0)' : 's.quantidade';
     const conditions = mostrarTodos
       ? ['e.ativo = 1', "p.classificacao IN ('ITEM', 'SUBMONTAGEM')", 'p.ativo = 1']
       : ['s.quantidade > 0', 'p.ativo = 1'];
-    const values = [];
+    const values = [...this.SPECIAL_STOCK_NAMES];
     const orderBy = filters.ordem_quantidade
       ? `${quantidadeExpression} ${filters.ordem_quantidade}, p.codigo ASC`
       : `
@@ -181,6 +206,8 @@ class EstoqueModel {
           END,
           p.codigo ASC
         `;
+
+    conditions.push(`e.nome NOT IN (${this.buildSpecialStockPlaceholderList()})`);
 
     if (filters.estoque) {
       conditions.push('e.id = ?');
@@ -281,17 +308,154 @@ class EstoqueModel {
       values
     );
 
+    if (!filters.estoque) {
+      const specialRows = await this.findSpecialSaldos(filters);
+      return rows.concat(specialRows);
+    }
+
+    return rows;
+  }
+
+  static async findSpecialSaldos(filters = {}) {
+    const conditions = [
+      'r.quantidade > 0',
+      'e.ativo = 1',
+      'p.ativo = 1',
+      "p.classificacao IN ('ITEM', 'SUBMONTAGEM')"
+    ];
+    const values = [];
+    const orderBy = filters.ordem_quantidade
+      ? `quantidade ${filters.ordem_quantidade}, p.codigo ASC`
+      : 'e.id ASC, p.codigo ASC';
+
+    if (filters.estoque) {
+      conditions.push('r.id_estoque = ?');
+      values.push(filters.estoque);
+    }
+
+    if (filters.idPeca) {
+      conditions.push('p.id = ?');
+      values.push(filters.idPeca);
+    }
+
+    if (filters.codigo) {
+      conditions.push('p.codigo LIKE ?');
+      values.push(`%${filters.codigo}%`);
+    }
+
+    if (filters.descricao) {
+      conditions.push('p.descricao LIKE ?');
+      values.push(`%${filters.descricao}%`);
+    }
+
+    if (filters.tipo) {
+      conditions.push('p.tipo = ?');
+      values.push(filters.tipo);
+    }
+
+    if (filters.maquina) {
+      conditions.push("COALESCE(m.nome, '') LIKE ?");
+      values.push(`%${filters.maquina}%`);
+    }
+
+    if (filters.classificacao) {
+      conditions.push('p.classificacao = ?');
+      values.push(filters.classificacao);
+    }
+
+    if (filters.fornecedor) {
+      conditions.push("COALESCE(fs.fornecedores_nomes, f.nome, '') LIKE ?");
+      values.push(`%${filters.fornecedor}%`);
+    }
+
+    if (filters.q) {
+      conditions.push(`
+        (
+          p.codigo LIKE ?
+          OR p.descricao LIKE ?
+          OR e.nome LIKE ?
+          OR COALESCE(m.nome, '') LIKE ?
+        )
+      `);
+      values.push(`%${filters.q}%`, `%${filters.q}%`, `%${filters.q}%`, `%${filters.q}%`);
+    }
+
+    const [rows] = await pool.query(
+      `
+        SELECT
+          MIN(r.id) AS id,
+          e.id AS id_estoque,
+          p.id AS id_peca,
+          SUM(r.quantidade) AS quantidade,
+          MIN(r.created_at) AS created_at,
+          MAX(r.updated_at) AS updated_at,
+          e.nome AS estoque_nome,
+          e.descricao AS estoque_descricao,
+          p.codigo,
+          p.descricao,
+          COALESCE(p.tipo, '-') AS tipo,
+          p.classificacao,
+          p.estoque_minimo,
+          p.estoque_seguranca,
+          p.consumo_mensal,
+          p.id_maquina,
+          COALESCE(m.nome, '-') AS maquina_nome,
+          p.id_fornecedor,
+          f.nome AS fornecedor_nome,
+          COALESCE(fs.fornecedores_nomes, f.nome, '') AS fornecedores_nomes,
+          r.tipo AS estoque_especial_tipo,
+          1 AS estoque_especial
+        FROM estoque_especial_registros r
+        INNER JOIN estoques e ON e.id = r.id_estoque
+        INNER JOIN pecas p ON p.id = r.id_peca
+        LEFT JOIN maquinas m ON m.id = p.id_maquina
+        LEFT JOIN fornecedores f ON f.id = p.id_fornecedor
+        LEFT JOIN (${this.supplierSummarySubquery()}) fs ON fs.id_peca = p.id
+        WHERE ${conditions.join(' AND ')}
+        GROUP BY
+          e.id,
+          e.nome,
+          e.descricao,
+          p.id,
+          p.codigo,
+          p.descricao,
+          p.tipo,
+          p.classificacao,
+          p.estoque_minimo,
+          p.estoque_seguranca,
+          p.consumo_mensal,
+          p.id_maquina,
+          m.nome,
+          p.id_fornecedor,
+          f.nome,
+          fs.fornecedores_nomes,
+          r.tipo
+        ORDER BY ${orderBy}
+      `,
+      values
+    );
+
     return rows;
   }
 
   // Lista itens por prioridade de reposicao/producao, incluindo saldo zerado.
   static async findPrioridades(filters = {}) {
+    const specialStock = filters.estoque
+      ? await this.findSpecialStockById(filters.estoque)
+      : null;
+
+    if (filters.estoque && specialStock) {
+      return this.findSpecialPrioridades(filters);
+    }
+
     const values = [];
     const baseConditions = [
       'e.ativo = 1',
       "p.classificacao IN ('ITEM', 'SUBMONTAGEM')",
-      'p.ativo = 1'
+      'p.ativo = 1',
+      `e.nome NOT IN (${this.buildSpecialStockPlaceholderList()})`
     ];
+    values.push(...this.SPECIAL_STOCK_NAMES);
     const outerConditions = [
       "(quantidade > 0 OR quantidade_saida_mes > 0 OR estoque_seguranca > 0 OR (UPPER(COALESCE(estoque_nome, '')) LIKE '%ALMOX%' AND quantidade <= 0))"
     ];
@@ -394,7 +558,35 @@ class EstoqueModel {
       values
     );
 
+    if (!filters.estoque) {
+      const specialRows = await this.findSpecialPrioridades(filters);
+      return rows.concat(specialRows);
+    }
+
     return rows;
+  }
+
+  static async findSpecialPrioridades(filters = {}) {
+    if (filters.modo === 'prioritarios') {
+      return [];
+    }
+
+    if (filters.estado && filters.estado !== 'NORMAL') {
+      return [];
+    }
+
+    const saldos = await this.findSpecialSaldos(filters);
+
+    return saldos.map((saldo) => ({
+      ...saldo,
+      quantidade_atual: saldo.quantidade,
+      quantidade_pacote: saldo.estoque_minimo,
+      quantidade_saida_mes: Number(saldo.consumo_mensal || 0),
+      dias_cobertura: null,
+      data_prevista_ruptura: null,
+      estado_necessidade: 'NORMAL',
+      prioridade_necessidade: 4
+    }));
   }
 
   // Busca um saldo especifico com os joins da tela de estoque.
@@ -1468,6 +1660,7 @@ class EstoqueModel {
       if (!estoqueDestino || Number(estoqueDestino.ativo) !== 1) {
         throw this.createBusinessError('Estoque de destino nao encontrado ou inativo.');
       }
+      const tipoEspecialDestino = this.getSpecialStockType(estoqueDestino);
 
       if (item.classificacao === 'SUBMONTAGEM') {
         if (!Number.isInteger(data.id_estoque_origem_componentes)) {
@@ -1489,21 +1682,35 @@ class EstoqueModel {
           data.usuario
         );
 
-        const saldoAtualSubmontagem = await this.findSaldoForUpdate(
-          connection,
-          data.id_estoque_destino,
-          data.id_peca
-        );
-        const quantidadeAtualSubmontagem = saldoAtualSubmontagem ? Number(saldoAtualSubmontagem.quantidade) : 0;
+        const saldoAtualSubmontagem = tipoEspecialDestino
+          ? await this.findSpecialStockQuantityForUpdate(connection, data.id_estoque_destino, data.id_peca)
+          : await this.findSaldoForUpdate(
+            connection,
+            data.id_estoque_destino,
+            data.id_peca
+          );
+        const quantidadeAtualSubmontagem = tipoEspecialDestino
+          ? saldoAtualSubmontagem.quantidade
+          : (saldoAtualSubmontagem ? Number(saldoAtualSubmontagem.quantidade) : 0);
         const novoSaldoSubmontagem = Number((quantidadeAtualSubmontagem + Number(data.quantidade)).toFixed(2));
 
-        await this.persistSaldo(
-          connection,
-          data.id_estoque_destino,
-          data.id_peca,
-          novoSaldoSubmontagem,
-          saldoAtualSubmontagem
-        );
+        if (tipoEspecialDestino) {
+          await this.addSpecialStockQuantity(connection, {
+            tipo: tipoEspecialDestino,
+            id_estoque: data.id_estoque_destino,
+            id_peca: data.id_peca,
+            quantidade: data.quantidade,
+            observacao: data.observacao || 'Entrada inicial registrada manualmente.'
+          });
+        } else {
+          await this.persistSaldo(
+            connection,
+            data.id_estoque_destino,
+            data.id_peca,
+            novoSaldoSubmontagem,
+            saldoAtualSubmontagem
+          );
+        }
 
         await this.createMovimentacao(connection, {
           id_peca: data.id_peca,
@@ -1527,22 +1734,36 @@ class EstoqueModel {
         };
       }
 
-      const saldoAtual = await this.findSaldoForUpdate(
-        connection,
-        data.id_estoque_destino,
-        data.id_peca
-      );
+      const saldoAtual = tipoEspecialDestino
+        ? await this.findSpecialStockQuantityForUpdate(connection, data.id_estoque_destino, data.id_peca)
+        : await this.findSaldoForUpdate(
+          connection,
+          data.id_estoque_destino,
+          data.id_peca
+        );
 
-      const quantidadeAtual = saldoAtual ? Number(saldoAtual.quantidade) : 0;
+      const quantidadeAtual = tipoEspecialDestino
+        ? saldoAtual.quantidade
+        : (saldoAtual ? Number(saldoAtual.quantidade) : 0);
       const novoSaldo = quantidadeAtual + Number(data.quantidade);
 
-      await this.persistSaldo(
-        connection,
-        data.id_estoque_destino,
-        data.id_peca,
-        novoSaldo,
-        saldoAtual
-      );
+      if (tipoEspecialDestino) {
+        await this.addSpecialStockQuantity(connection, {
+          tipo: tipoEspecialDestino,
+          id_estoque: data.id_estoque_destino,
+          id_peca: data.id_peca,
+          quantidade: data.quantidade,
+          observacao: data.observacao || 'Entrada inicial registrada manualmente.'
+        });
+      } else {
+        await this.persistSaldo(
+          connection,
+          data.id_estoque_destino,
+          data.id_peca,
+          novoSaldo,
+          saldoAtual
+        );
+      }
 
       await this.createMovimentacao(connection, {
         id_peca: data.id_peca,
@@ -1786,6 +2007,10 @@ class EstoqueModel {
       const estoque = await this.findStockById(data.id_estoque, connection);
       if (!estoque || Number(estoque.ativo) !== 1) {
         throw this.createBusinessError('Estoque nao encontrado ou inativo.');
+      }
+
+      if (this.getSpecialStockType(estoque)) {
+        throw this.createBusinessError('Use a tela especifica de retrabalho ou pecas inacabadas para ajustar este saldo.');
       }
 
       const saldoAtual = await this.findSaldoForUpdate(

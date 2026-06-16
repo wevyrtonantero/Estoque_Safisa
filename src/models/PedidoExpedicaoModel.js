@@ -1790,6 +1790,31 @@ class PedidoExpedicaoModel {
           const reservaMontagem = Math.min(capacidadeMontagem, restanteParaMontar);
           const totalParaEstePedido = vinculados + disponiveis + capacidadeMontagem;
           const falta = Math.max(0, quantidadeNecessaria - totalParaEstePedido);
+          const componentesFaltantes = restanteParaMontar > 0
+            ? diagnosticoMontagem.componentes
+              .map((componente) => {
+                const quantidadeNecessariaComponente = Number(
+                  (Number(componente.quantidade || 0) * restanteParaMontar).toFixed(2)
+                );
+                const quantidadeFaltanteComponente = Number(
+                  Math.max(0, quantidadeNecessariaComponente - Number(componente.total_disponivel || 0)).toFixed(2)
+                );
+
+                return {
+                  id_peca: componente.id_peca,
+                  codigo: componente.codigo,
+                  descricao: componente.descricao,
+                  quantidade_por_submontagem: Number(componente.quantidade || 0),
+                  quantidade_necessaria: quantidadeNecessariaComponente,
+                  quantidade_disponivel: Number(componente.total_disponivel || 0),
+                  quantidade_faltante: quantidadeFaltanteComponente,
+                  expedicao_disponivel: Number(componente.expedicao_disponivel || 0),
+                  montagem_disponivel: Number(componente.montagem_disponivel || 0),
+                  almoxarifado_disponivel: Number(componente.almoxarifado_disponivel || 0)
+                };
+              })
+              .filter((componente) => componente.quantidade_faltante > 0)
+            : [];
 
           item.quantidade_possivel = Math.min(quantidadeNecessaria, totalParaEstePedido);
           item.diagnostico = {
@@ -1800,6 +1825,7 @@ class PedidoExpedicaoModel {
             disponiveis,
             capacidade_montagem: capacidadeMontagem,
             componentes_montagem: diagnosticoMontagem.componentes,
+            componentes_faltantes: componentesFaltantes,
             total_para_este_pedido: totalParaEstePedido,
             falta
           };
@@ -1823,6 +1849,7 @@ class PedidoExpedicaoModel {
               quantidade_solicitada: quantidadeNecessaria,
               quantidade_disponivel: totalParaEstePedido,
               quantidade_faltante: falta,
+              componentes_faltantes: componentesFaltantes,
               mensagem: `Faltam ${falta} unidade(s) de material/serial para ${item.componente_serial.codigo}.`
             });
           }

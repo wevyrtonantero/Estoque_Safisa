@@ -93,14 +93,21 @@ Atencao: `seed:real` recria a base. Nao rode isso em banco com dados reais ja ca
 
 ```bash
 cd /var/www/safisa
+pm2 startup
+```
+
+Execute o comando com `sudo` exibido pelo `pm2 startup`. Depois:
+
+```bash
+cd /var/www/safisa
 pm2 start ecosystem.config.js
 pm2 save
-pm2 startup
 ```
 
 Teste localmente na VPS:
 
 ```bash
+curl http://127.0.0.1:3000/health
 curl http://127.0.0.1:3000/pagina-inicial
 ```
 
@@ -145,11 +152,49 @@ systemctl restart nginx
 ```bash
 cd /var/www/safisa
 git pull origin develop
-npm install
-pm2 restart safisa
+npm ci
+pm2 startOrReload ecosystem.config.js --update-env
+pm2 save
 ```
 
-## 9. Comandos uteis
+## 9. Corrigir erro 502
+
+O Nginx retorna `502 Bad Gateway` quando nao consegue acessar a aplicacao na porta `3000`.
+Execute na VPS:
+
+```bash
+cd /var/www/safisa
+pm2 status
+pm2 logs safisa --lines 100
+curl -i http://127.0.0.1:3000/health
+```
+
+Se o processo estiver parado ou o `curl` falhar:
+
+```bash
+cd /var/www/safisa
+npm ci
+pm2 delete safisa
+pm2 start ecosystem.config.js --update-env
+pm2 save
+curl -i http://127.0.0.1:3000/health
+```
+
+Se o healthcheck responder `200`, mas o site continuar com `502`:
+
+```bash
+nginx -t
+systemctl restart nginx
+journalctl -u nginx -n 100 --no-pager
+```
+
+Confirme que o `proxy_pass` ativo aponta para a mesma porta definida no `.env`:
+
+```nginx
+proxy_pass http://127.0.0.1:3000;
+```
+
+## 10. Comandos uteis
 
 ```bash
 pm2 status

@@ -699,11 +699,27 @@ class EstoqueEspecialModel {
 
       const saldoRegistroAtual = await this.reduceRegistro(connection, registro, quantidade);
       const saldoOrigemAtual = await this.reduceStockSaldo(connection, registro, quantidade);
-      const saldoDestino = await EstoqueModel.findSaldoForUpdate(connection, estoqueDestino.id, registro.id_peca);
-      const quantidadeDestino = saldoDestino ? Number(saldoDestino.quantidade) : 0;
+      const tipoEspecialDestino = EstoqueModel.getSpecialStockType(estoqueDestino);
+      const saldoDestino = tipoEspecialDestino
+        ? await EstoqueModel.findSpecialStockQuantityForUpdate(connection, estoqueDestino.id, registro.id_peca)
+        : await EstoqueModel.findSaldoForUpdate(connection, estoqueDestino.id, registro.id_peca);
+      const quantidadeDestino = tipoEspecialDestino
+        ? saldoDestino.quantidade
+        : (saldoDestino ? Number(saldoDestino.quantidade) : 0);
       const saldoDestinoAtual = Number((quantidadeDestino + quantidade).toFixed(2));
 
-      await EstoqueModel.persistSaldo(connection, estoqueDestino.id, registro.id_peca, saldoDestinoAtual, saldoDestino);
+      if (tipoEspecialDestino) {
+        await EstoqueModel.addSpecialStockQuantity(connection, {
+          tipo: tipoEspecialDestino,
+          id_estoque: estoqueDestino.id,
+          id_peca: registro.id_peca,
+          quantidade,
+          observacao: data.observacao || `Envio do retrabalho para ${estoqueDestino.nome}.`
+        });
+      } else {
+        await EstoqueModel.persistSaldo(connection, estoqueDestino.id, registro.id_peca, saldoDestinoAtual, saldoDestino);
+      }
+
       await EstoqueModel.createMovimentacao(connection, {
         id_peca: registro.id_peca,
         id_estoque_origem: registro.id_estoque,

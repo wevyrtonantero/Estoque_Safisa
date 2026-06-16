@@ -53,6 +53,15 @@ function isRegistroAlmoxarifado(registro) {
   return String(registro.estoque_nome || '') === almoxarifadoNomeCorreto;
 }
 
+function isRegistroEspecial(registro) {
+  if (Number(registro.estoque_especial || 0) === 1) {
+    return true;
+  }
+
+  const nome = normalizarBusca(registro.estoque_nome || '');
+  return nome === 'retrabalho' || nome === 'pecas inacabadas';
+}
+
 const filtroForm = document.getElementById('estoque-filtro-form');
 const estoqueMensagemBox = document.getElementById('estoque-mensagem');
 const totalSaldosBox = document.getElementById('total-saldos');
@@ -391,7 +400,9 @@ function montarRegistrosEstoque(prioridades) {
         ?? saldoOperacional?.consumo_mensal
         ?? itemBase.consumo_mensal
         ?? 0
-      )
+      ),
+      estoque_especial: Number(prioridade.estoque_especial ?? saldoOperacional?.estoque_especial ?? 0),
+      estoque_especial_tipo: prioridade.estoque_especial_tipo ?? saldoOperacional?.estoque_especial_tipo ?? null
     };
   });
 }
@@ -504,10 +515,20 @@ function handleSaldoActions(event) {
   }
 
   if (actionButton.dataset.action === 'adjust') {
+    if (isRegistroEspecial(saldo)) {
+      mostrarMensagemEstoque('Use a tela especifica de retrabalho ou pecas inacabadas para ajustar este saldo.', 'error');
+      return;
+    }
+
     abrirModalAjuste(saldo);
   }
 
   if (actionButton.dataset.action === 'disassemble') {
+    if (isRegistroEspecial(saldo)) {
+      mostrarMensagemEstoque('Submontagens em estoque especial nao podem ser desmembradas por esta tela.', 'error');
+      return;
+    }
+
     abrirModalDesmembrar(saldo);
   }
 }
@@ -1424,38 +1445,44 @@ function renderizarTabelaSaldos(saldos) {
     return;
   }
 
-  saldosTbody.innerHTML = saldos.map((saldo) => `
-    <tr class="${String(saldo.estado_necessidade || '').toUpperCase() === 'CRITICO' ? 'table-row-attention' : ''}">
-      <td>${escapeHtml(saldo.estoque_nome)}</td>
-      <td class="table-code">${escapeHtml(saldo.codigo)}</td>
-      <td class="table-description">${escapeHtml(saldo.descricao)}</td>
-      <td>${escapeHtml(saldo.tipo)}</td>
-      <td>${escapeHtml(saldo.classificacao)}</td>
-      <td>${escapeHtml(saldo.maquina_nome || '-')}</td>
-      <td class="table-quantity">${renderizarQuantidadeEstoque(saldo)}</td>
-      <td class="table-quantity">${formatarQuantidade(saldo.quantidade_saida_mes)}</td>
-      <td>${escapeHtml(renderizarDuracaoPrioridade(saldo))}</td>
-      <td>${renderizarEstadoNecessidade(saldo.estado_necessidade)}</td>
-      <td class="table-actions-cell">
-        <details class="row-menu">
-          <summary class="row-menu-trigger" aria-label="Abrir acoes">...</summary>
-          <div class="row-menu-panel">
-            <button type="button" class="row-menu-item" data-action="history" data-item-id="${saldo.id_peca}" data-stock-id="${saldo.id_estoque}">Ver Historico</button>
-            ${Number(saldo.quantidade || 0) > 0
-              ? `<button type="button" class="row-menu-item" data-action="transfer" data-item-id="${saldo.id_peca}" data-stock-id="${saldo.id_estoque}">Transferir</button>`
-              : ''}
-            ${Number(saldo.quantidade || 0) > 0 && String(saldo.classificacao || '').toUpperCase() === 'SUBMONTAGEM'
-              ? `<button type="button" class="row-menu-item" data-action="disassemble" data-item-id="${saldo.id_peca}" data-stock-id="${saldo.id_estoque}">Desmembrar</button>`
-              : ''}
-            ${isRegistroAlmoxarifado(saldo) && Number(saldo.quantidade || 0) > 0
-              ? `<button type="button" class="row-menu-item" data-action="sale" data-item-id="${saldo.id_peca}" data-stock-id="${saldo.id_estoque}">Consumo Interno</button>`
-              : ''}
-            <button type="button" class="row-menu-item" data-action="adjust" data-item-id="${saldo.id_peca}" data-stock-id="${saldo.id_estoque}">Ajustar Saldo</button>
-          </div>
-        </details>
-      </td>
-    </tr>
-  `).join('');
+  saldosTbody.innerHTML = saldos.map((saldo) => {
+    const registroEspecial = isRegistroEspecial(saldo);
+
+    return `
+      <tr class="${String(saldo.estado_necessidade || '').toUpperCase() === 'CRITICO' ? 'table-row-attention' : ''}">
+        <td>${escapeHtml(saldo.estoque_nome)}</td>
+        <td class="table-code">${escapeHtml(saldo.codigo)}</td>
+        <td class="table-description">${escapeHtml(saldo.descricao)}</td>
+        <td>${escapeHtml(saldo.tipo)}</td>
+        <td>${escapeHtml(saldo.classificacao)}</td>
+        <td>${escapeHtml(saldo.maquina_nome || '-')}</td>
+        <td class="table-quantity">${renderizarQuantidadeEstoque(saldo)}</td>
+        <td class="table-quantity">${formatarQuantidade(saldo.quantidade_saida_mes)}</td>
+        <td>${escapeHtml(renderizarDuracaoPrioridade(saldo))}</td>
+        <td>${renderizarEstadoNecessidade(saldo.estado_necessidade)}</td>
+        <td class="table-actions-cell">
+          <details class="row-menu">
+            <summary class="row-menu-trigger" aria-label="Abrir acoes">...</summary>
+            <div class="row-menu-panel">
+              <button type="button" class="row-menu-item" data-action="history" data-item-id="${saldo.id_peca}" data-stock-id="${saldo.id_estoque}">Ver Historico</button>
+              ${Number(saldo.quantidade || 0) > 0
+                ? `<button type="button" class="row-menu-item" data-action="transfer" data-item-id="${saldo.id_peca}" data-stock-id="${saldo.id_estoque}">Transferir</button>`
+                : ''}
+              ${!registroEspecial && Number(saldo.quantidade || 0) > 0 && String(saldo.classificacao || '').toUpperCase() === 'SUBMONTAGEM'
+                ? `<button type="button" class="row-menu-item" data-action="disassemble" data-item-id="${saldo.id_peca}" data-stock-id="${saldo.id_estoque}">Desmembrar</button>`
+                : ''}
+              ${isRegistroAlmoxarifado(saldo) && Number(saldo.quantidade || 0) > 0
+                ? `<button type="button" class="row-menu-item" data-action="sale" data-item-id="${saldo.id_peca}" data-stock-id="${saldo.id_estoque}">Consumo Interno</button>`
+                : ''}
+              ${!registroEspecial
+                ? `<button type="button" class="row-menu-item" data-action="adjust" data-item-id="${saldo.id_peca}" data-stock-id="${saldo.id_estoque}">Ajustar Saldo</button>`
+                : ''}
+            </div>
+          </details>
+        </td>
+      </tr>
+    `;
+  }).join('');
 }
 
 function renderizarQuantidadeEstoque(saldo) {

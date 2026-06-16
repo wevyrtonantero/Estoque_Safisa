@@ -2521,12 +2521,38 @@ function abrirModalFaltasPedido(pedidoId) {
         <td>${escapeHtml(item.tipo === 'NUMERO_SERIE' ? 'Numero de serie' : 'Avulso')}</td>
         <td>${formatInteger(item.quantidade_disponivel || 0)}</td>
         <td>${formatInteger(item.quantidade_faltante || 0)}</td>
-        <td>${escapeHtml(item.mensagem || '-')}</td>
+        <td>${renderizarDetalheFaltaPedido(item)}</td>
       </tr>
     `).join('');
   }
 
   openModal(refs.faltasModal);
+}
+
+function renderizarDetalheFaltaPedido(item) {
+  const componentes = Array.isArray(item.componentes_faltantes)
+    ? item.componentes_faltantes.filter((componente) => Number(componente.quantidade_faltante || 0) > 0)
+    : [];
+
+  if (!componentes.length) {
+    return escapeHtml(item.mensagem || '-');
+  }
+
+  return `
+    <div class="pedido-falta-detalhe">
+      <span>${escapeHtml(item.mensagem || '-')}</span>
+      <div class="pedido-falta-componentes" aria-label="Componentes faltantes para montar a submontagem">
+        ${componentes.map((componente) => `
+          <span
+            class="pedido-falta-componente"
+            title="${escapeHtml(`${componente.codigo} - falta ${formatInteger(componente.quantidade_faltante || 0)}`)}"
+          >
+            ${escapeHtml(componente.codigo)}
+          </span>
+        `).join('')}
+      </div>
+    </div>
+  `;
 }
 
 function fecharModalFaltas() {

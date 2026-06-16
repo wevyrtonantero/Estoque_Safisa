@@ -102,6 +102,9 @@ app.use('/kits', express.static(path.join(__dirname, 'kits'), {
     Object.entries(NO_CACHE_HEADERS).forEach(([key, value]) => res.set(key, value));
   }
 }));
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
 app.use(attachAuthContext);
 
 // Rotas HTML das paginas do sistema.
