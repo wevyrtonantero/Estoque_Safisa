@@ -69,6 +69,7 @@ class ComposicaoVendaModel {
       id_item_atende: Number(row.id_item_atende),
       item_atende_codigo: row.item_atende_codigo,
       item_atende_descricao: row.item_atende_descricao,
+      item_atende_classificacao: row.item_atende_classificacao,
       quantidade: Number(row.quantidade),
       ordem: Number(row.ordem || 0),
       created_at: row.created_at || null,
@@ -91,7 +92,8 @@ class ComposicaoVendaModel {
           pv.codigo AS item_venda_codigo,
           pv.descricao AS item_venda_descricao,
           pa.codigo AS item_atende_codigo,
-          pa.descricao AS item_atende_descricao
+          pa.descricao AS item_atende_descricao,
+          pa.classificacao AS item_atende_classificacao
         FROM composicoes_venda cv
         INNER JOIN pecas pv ON pv.id = cv.id_item_venda
         INNER JOIN pecas pa ON pa.id = cv.id_item_atende

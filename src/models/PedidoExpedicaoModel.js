@@ -1320,6 +1320,32 @@ class PedidoExpedicaoModel {
     };
   }
 
+  static montarComponentesFaltantes(componentes = [], quantidadeMontar = 0) {
+    return componentes
+      .map((componente) => {
+        const quantidadeNecessariaComponente = Number(
+          (Number(componente.quantidade || 0) * Number(quantidadeMontar || 0)).toFixed(2)
+        );
+        const quantidadeFaltanteComponente = Number(
+          Math.max(0, quantidadeNecessariaComponente - Number(componente.total_disponivel || 0)).toFixed(2)
+        );
+
+        return {
+          id_peca: componente.id_peca,
+          codigo: componente.codigo,
+          descricao: componente.descricao,
+          quantidade_por_submontagem: Number(componente.quantidade || 0),
+          quantidade_necessaria: quantidadeNecessariaComponente,
+          quantidade_disponivel: Number(componente.total_disponivel || 0),
+          quantidade_faltante: quantidadeFaltanteComponente,
+          expedicao_disponivel: Number(componente.expedicao_disponivel || 0),
+          montagem_disponivel: Number(componente.montagem_disponivel || 0),
+          almoxarifado_disponivel: Number(componente.almoxarifado_disponivel || 0)
+        };
+      })
+      .filter((componente) => componente.quantidade_faltante > 0);
+  }
+
   static async buildAvailableSerialMap(idsModelo, connection = pool) {
     if (!idsModelo.length) {
       return new Map();
@@ -1699,12 +1725,14 @@ class PedidoExpedicaoModel {
             id_peca: Number(linha.id_item_atende),
             codigo: linha.item_atende_codigo,
             descricao: linha.item_atende_descricao,
+            classificacao: linha.item_atende_classificacao,
             quantidade_por_item_venda: Number(linha.quantidade || 0)
           }))
         : (componenteSerialLocal ? [] : [{
           id_peca: Number(item.id_peca),
           codigo: item.codigo,
           descricao: item.descricao,
+          classificacao: item.classificacao,
           quantidade_por_item_venda: 1
         }]);
 
@@ -1746,14 +1774,25 @@ class PedidoExpedicaoModel {
         .filter((item) => item.componente_serial)
         .map((item) => item.componente_serial.id_peca)
     )];
-    const structureMap = await this.buildStructureMap(serialModelIds, connection);
+    const avulsoSubmontagemIds = [...new Set(
+      [...pedidosMap.values()]
+        .flatMap((pedido) => pedido.itens)
+        .flatMap((item) => item.componentes_avulsos || [])
+        .filter((componente) => String(componente.classificacao || '').toUpperCase() === 'SUBMONTAGEM')
+        .map((componente) => Number(componente.id_peca))
+    )];
+    const structureModelIds = [...new Set([...serialModelIds, ...avulsoSubmontagemIds])];
+    const structureMap = await this.buildStructureMap(structureModelIds, connection);
     const idsPeca = [...new Set(
       [...pedidosMap.values()]
         .flatMap((pedido) => pedido.itens)
         .flatMap((item) => [
           ...item.componentes_avulsos.map((componente) => componente.id_peca),
           ...(item.componente_serial ? [item.componente_serial.id_peca] : []),
-          ...((structureMap.get(Number(item.componente_serial?.id_peca || 0)) || []).map((componente) => componente.id_peca))
+          ...((structureMap.get(Number(item.componente_serial?.id_peca || 0)) || []).map((componente) => componente.id_peca)),
+          ...item.componentes_avulsos
+            .filter((componente) => String(componente.classificacao || '').toUpperCase() === 'SUBMONTAGEM')
+            .flatMap((componente) => (structureMap.get(Number(componente.id_peca)) || []).map((itemEstrutura) => itemEstrutura.id_peca))
         ])
     )];
     const [expedicaoMap, montagemMap, almoxarifadoMap, serialMap] = await Promise.all([
@@ -1791,29 +1830,7 @@ class PedidoExpedicaoModel {
           const totalParaEstePedido = vinculados + disponiveis + capacidadeMontagem;
           const falta = Math.max(0, quantidadeNecessaria - totalParaEstePedido);
           const componentesFaltantes = restanteParaMontar > 0
-            ? diagnosticoMontagem.componentes
-              .map((componente) => {
-                const quantidadeNecessariaComponente = Number(
-                  (Number(componente.quantidade || 0) * restanteParaMontar).toFixed(2)
-                );
-                const quantidadeFaltanteComponente = Number(
-                  Math.max(0, quantidadeNecessariaComponente - Number(componente.total_disponivel || 0)).toFixed(2)
-                );
-
-                return {
-                  id_peca: componente.id_peca,
-                  codigo: componente.codigo,
-                  descricao: componente.descricao,
-                  quantidade_por_submontagem: Number(componente.quantidade || 0),
-                  quantidade_necessaria: quantidadeNecessariaComponente,
-                  quantidade_disponivel: Number(componente.total_disponivel || 0),
-                  quantidade_faltante: quantidadeFaltanteComponente,
-                  expedicao_disponivel: Number(componente.expedicao_disponivel || 0),
-                  montagem_disponivel: Number(componente.montagem_disponivel || 0),
-                  almoxarifado_disponivel: Number(componente.almoxarifado_disponivel || 0)
-                };
-              })
-              .filter((componente) => componente.quantidade_faltante > 0)
+            ? this.montarComponentesFaltantes(diagnosticoMontagem.componentes, restanteParaMontar)
             : [];
 
           item.quantidade_possivel = Math.min(quantidadeNecessaria, totalParaEstePedido);
@@ -1873,19 +1890,59 @@ class PedidoExpedicaoModel {
           const expedicaoDisponivel = Number(expedicaoMap.get(componente.id_peca) || 0);
           const montagemDisponivel = Number(montagemMap.get(componente.id_peca) || 0);
           const almoxarifadoDisponivel = Number(almoxarifadoMap.get(componente.id_peca) || 0);
-          const totalParaEstePedido = quantidadeReservada + expedicaoDisponivel + montagemDisponivel + almoxarifadoDisponivel;
+          const quantidadeProntaDisponivel = expedicaoDisponivel + montagemDisponivel + almoxarifadoDisponivel;
+          const ehSubmontagemAvulsa = String(componente.classificacao || '').toUpperCase() === 'SUBMONTAGEM';
+          const quantidadeProntaReservada = Math.min(quantidadePendente, quantidadeProntaDisponivel);
+          let diagnosticoMontagemAvulsa = null;
+          let capacidadeMontagemAvulsa = 0;
+          let reservaMontagemAvulsa = 0;
+          let componentesFaltantes = [];
+          let totalParaEstePedido = quantidadeReservada + quantidadeProntaDisponivel;
+
+          if (ehSubmontagemAvulsa && quantidadePendente > quantidadeProntaDisponivel) {
+            const restanteParaMontar = Number((quantidadePendente - quantidadeProntaReservada).toFixed(2));
+            diagnosticoMontagemAvulsa = this.calcularCapacidadeMontagem(
+              structureMap,
+              stockMaps,
+              componente.id_peca
+            );
+            capacidadeMontagemAvulsa = Number(diagnosticoMontagemAvulsa.capacidade || 0);
+            reservaMontagemAvulsa = Math.min(capacidadeMontagemAvulsa, restanteParaMontar);
+            totalParaEstePedido = quantidadeReservada + quantidadeProntaDisponivel + capacidadeMontagemAvulsa;
+            componentesFaltantes = restanteParaMontar > 0
+              ? this.montarComponentesFaltantes(diagnosticoMontagemAvulsa.componentes, restanteParaMontar)
+              : [];
+          }
+
           const falta = Math.max(0, quantidadeNecessaria - totalParaEstePedido);
-          this.reserveAcrossStocks(stockMaps, componente.id_peca, quantidadePendente);
+
+          if (quantidadeProntaReservada > 0) {
+            this.reserveAcrossStocks(stockMaps, componente.id_peca, quantidadeProntaReservada);
+          }
+
+          if (reservaMontagemAvulsa > 0) {
+            (structureMap.get(Number(componente.id_peca)) || []).forEach((itemEstrutura) => {
+              const quantidadeComponente = Number((Number(itemEstrutura.quantidade || 0) * reservaMontagemAvulsa).toFixed(2));
+              this.reserveAcrossStocks(stockMaps, itemEstrutura.id_peca, quantidadeComponente);
+            });
+          }
 
           diagnosticoAvulsos.push({
             id_peca: componente.id_peca,
             codigo: componente.codigo,
             descricao: componente.descricao,
+            classificacao: componente.classificacao,
             quantidade_necessaria: quantidadeNecessaria,
             quantidade_reservada_pedido: quantidadeReservada,
+            quantidade_pronta_disponivel: quantidadeProntaDisponivel,
+            quantidade_pronta_reservada: quantidadeProntaReservada,
+            capacidade_montagem: capacidadeMontagemAvulsa,
+            quantidade_montagem_reservada: reservaMontagemAvulsa,
             expedicao_disponivel: expedicaoDisponivel,
             montagem_disponivel: montagemDisponivel,
             almoxarifado_disponivel: almoxarifadoDisponivel,
+            componentes_montagem: diagnosticoMontagemAvulsa ? diagnosticoMontagemAvulsa.componentes : [],
+            componentes_faltantes: componentesFaltantes,
             total_para_este_pedido: totalParaEstePedido,
             falta
           });
@@ -1903,6 +1960,7 @@ class PedidoExpedicaoModel {
               almoxarifado_disponivel: almoxarifadoDisponivel,
               quantidade_disponivel: totalParaEstePedido,
               quantidade_faltante: falta,
+              componentes_faltantes: componentesFaltantes,
               mensagem: `Faltam ${falta} peca(s) de ${componente.codigo}.`
             });
           }
