@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="/img/icon-safisa.ico" type="image/x-icon">
+  <title>SAFISA | Kanban de Estoque</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="kanban-stock-page">
+  <main class="workspace kanban-stock-workspace">
+    <header class="topbar kanban-stock-topbar">
+      <div class="topbar-copy">
+        <p class="page-kicker">Produção · Gestão visual</p>
+        <h1 class="page-title">Kanban de Estoque</h1>
+        <p class="page-subtitle">Acompanhe o Almoxarifado por cobertura de pacotes e consulte os demais estoques, vendas e duração em um clique.</p>
+      </div>
+
+      <div class="kanban-stock-header-actions">
+        <a class="kanban-header-icon-btn is-neutral" href="/pagina-producao" title="Voltar para Produção" aria-label="Voltar para Produção"><span aria-hidden="true">&#8592;</span></a>
+        <button id="btn-kanban-atualizar" class="kanban-header-icon-btn is-blue" type="button" title="Atualizar saldos" aria-label="Atualizar saldos"><span aria-hidden="true">&#8635;</span></button>
+        <button id="btn-kanban-nova-categoria" class="kanban-header-icon-btn is-orange" type="button" title="Criar categoria" aria-label="Criar categoria"><span aria-hidden="true">+</span></button>
+        <button id="btn-kanban-faltas" class="kanban-header-icon-btn is-red" type="button" title="Peças faltantes na Expedição" aria-label="Ver peças faltantes na Expedição"><span aria-hidden="true">!</span><strong id="kanban-faltas-badge" class="kanban-header-badge hidden">0</strong></button>
+      </div>
+    </header>
+
+    <section class="summary-row kanban-stock-summary">
+      <article class="summary-card">
+        <span>Categorias</span>
+        <strong id="kanban-metrica-categorias">0</strong>
+      </article>
+      <article class="summary-card">
+        <span>Peças monitoradas</span>
+        <strong id="kanban-metrica-pecas">0</strong>
+      </article>
+      <article class="summary-card kanban-summary-critical">
+        <span>Sem saldo no Almox.</span>
+        <strong id="kanban-metrica-zeradas">0</strong>
+      </article>
+      <article class="summary-card kanban-summary-warning">
+        <span>Até 1 pacote</span>
+        <strong id="kanban-metrica-criticas">0</strong>
+      </article>
+    </section>
+
+    <section class="content-card kanban-stock-toolbar-card">
+      <div class="kanban-stock-toolbar">
+        <div class="field kanban-stock-search-field">
+          <label for="kanban-busca">Localizar peça</label>
+          <input id="kanban-busca" type="search" placeholder="Digite código, descrição ou categoria">
+        </div>
+
+        <div class="kanban-stock-legend" aria-label="Legenda das cores">
+          <span><i class="kanban-legend-dot is-purple"></i>Sem saldo</span>
+          <span><i class="kanban-legend-dot is-red"></i>Até 1 pacote</span>
+          <span><i class="kanban-legend-dot is-yellow"></i>Até 2 pacotes</span>
+          <span><i class="kanban-legend-dot is-green"></i>Acima de 2 pacotes</span>
+        </div>
+      </div>
+    </section>
+
+    <div id="kanban-mensagem" class="message hidden" role="status"></div>
+
+    <section id="kanban-board" class="kanban-stock-board" aria-live="polite">
+      <div class="kanban-stock-loading">Carregando o Kanban de estoque...</div>
+    </section>
+  </main>
+
+  <div id="kanban-categoria-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-kanban-modal="categoria"></div>
+    <div class="modal-dialog modal-small">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Organização</span>
+          <h2 id="kanban-categoria-modal-titulo">Nova categoria</h2>
+          <p>Crie grupos livres, como Conexões, Empurradores, Corpos ou Têmpera.</p>
+        </div>
+        <button id="btn-fechar-kanban-categoria" class="icon-btn" type="button" aria-label="Fechar">X</button>
+      </div>
+
+      <div id="kanban-categoria-mensagem" class="message hidden"></div>
+      <form id="kanban-categoria-form" class="form-grid">
+        <input id="kanban-categoria-id" type="hidden">
+        <div class="field span-12">
+          <label for="kanban-categoria-nome">Nome da categoria</label>
+          <input id="kanban-categoria-nome" type="text" maxlength="100" placeholder="Ex.: Conexões" required>
+        </div>
+        <div class="span-12 modal-actions">
+          <button id="btn-cancelar-kanban-categoria" class="btn btn-neutral" type="button">Cancelar</button>
+          <button class="btn btn-primary" type="submit">Salvar categoria</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="kanban-item-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-kanban-modal="item"></div>
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Monitoramento</span>
+          <h2 id="kanban-item-modal-titulo">Adicionar peça</h2>
+          <p>A quantidade por pacote define automaticamente as faixas de cores do card.</p>
+        </div>
+        <button id="btn-fechar-kanban-item" class="icon-btn" type="button" aria-label="Fechar">X</button>
+      </div>
+
+      <div id="kanban-item-mensagem" class="message hidden"></div>
+      <form id="kanban-item-form" class="form-grid">
+        <input id="kanban-item-id" type="hidden">
+
+        <div class="field span-6">
+          <label for="kanban-item-categoria">Categoria</label>
+          <select id="kanban-item-categoria" required></select>
+        </div>
+
+        <div class="field span-6">
+          <label for="kanban-item-pacote">Quantidade por pacote</label>
+          <input id="kanban-item-pacote" type="number" min="0.01" step="0.01" value="50" required>
+          <span class="form-hint">Ex.: pacote de 50 peças.</span>
+        </div>
+
+        <div class="field span-12">
+          <label for="kanban-item-busca-peca">Buscar no cadastro de peças</label>
+          <div class="autocomplete kanban-piece-autocomplete">
+            <input id="kanban-item-busca-peca" type="search" placeholder="Digite o código ou a descrição" autocomplete="off">
+            <input id="kanban-item-peca" type="hidden">
+            <div id="kanban-item-peca-sugestoes" class="autocomplete-panel kanban-piece-suggestions hidden"></div>
+          </div>
+          <span class="form-hint">As sugestões aparecem somente depois que você começar a digitar.</span>
+        </div>
+
+        <div id="kanban-item-selecionado" class="span-12 kanban-selected-piece hidden">
+          <div>
+            <span>Peça selecionada</span>
+            <strong id="kanban-item-selecionado-codigo">-</strong>
+            <small id="kanban-item-selecionado-descricao">-</small>
+          </div>
+          <button id="btn-limpar-kanban-item" class="icon-btn" type="button" aria-label="Limpar peça selecionada">×</button>
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button id="btn-cancelar-kanban-item" class="btn btn-neutral" type="button">Concluir</button>
+          <button id="btn-salvar-kanban-item" class="btn btn-primary" type="submit">Adicionar peça</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="kanban-detalhes-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-kanban-modal="detalhes"></div>
+    <div id="kanban-detalhes-dialog" class="modal-dialog kanban-stock-details-dialog">
+      <div class="modal-header">
+        <div>
+          <span id="kanban-detalhes-categoria" class="section-pill">Categoria</span>
+          <h2 id="kanban-detalhes-titulo">Detalhes da peça</h2>
+          <p id="kanban-detalhes-descricao">Selecione um card para consultar.</p>
+        </div>
+        <button id="btn-fechar-kanban-detalhes" class="icon-btn" type="button" aria-label="Fechar">X</button>
+      </div>
+
+      <div id="kanban-detalhes-faixa" class="kanban-stock-details-band">
+        <div>
+          <span>Saldo no Almoxarifado</span>
+          <strong id="kanban-detalhes-almox">0</strong>
+        </div>
+        <div>
+          <span>Cobertura atual</span>
+          <strong id="kanban-detalhes-pacotes">0 pacotes</strong>
+        </div>
+      </div>
+
+      <div class="kanban-stock-details-grid">
+        <article><span>Montagem</span><strong id="kanban-detalhes-montagem">0</strong><small>peças em estoque</small></article>
+        <article><span>Expedição</span><strong id="kanban-detalhes-expedicao">0</strong><small>peças em estoque</small></article>
+        <article><span>Vendido</span><strong id="kanban-detalhes-vendido">0</strong><small>em pedidos abertos na Expedição</small></article>
+        <article><span>Duração estimada</span><strong id="kanban-detalhes-duracao">-</strong><small>pelo consumo de 90 dias</small></article>
+      </div>
+
+      <div class="kanban-stock-details-note">
+        <strong id="kanban-detalhes-regra">Pacote: 50 peças</strong>
+        <span>A duração usa a média diária das vendas registradas nos últimos 90 dias.</span>
+      </div>
+
+      <div class="modal-actions">
+        <button id="btn-kanban-excluir-item" class="btn btn-danger" type="button">Remover do Kanban</button>
+        <button id="btn-kanban-editar-item" class="btn btn-secondary" type="button">Editar peça</button>
+        <button id="btn-cancelar-kanban-detalhes" class="btn btn-neutral" type="button">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="kanban-faltas-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-kanban-modal="faltas"></div>
+    <div class="modal-dialog modal-wide kanban-shortages-dialog">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Expedição</span>
+          <h2>Peças faltantes para fechar pedidos</h2>
+          <p>O mesmo diagnóstico em vermelho exibido no Gerenciamento de Pedidos.</p>
+        </div>
+        <button id="btn-fechar-kanban-faltas" class="icon-btn" type="button" aria-label="Fechar">X</button>
+      </div>
+
+      <div class="kanban-shortages-summary">
+        <span><strong id="kanban-faltas-total-pedidos">0</strong> pedidos afetados</span>
+        <span><strong id="kanban-faltas-total-pendencias">0</strong> tipos de falta</span>
+        <span><strong id="kanban-faltas-total-quantidade">0</strong> unidades faltantes</span>
+      </div>
+
+      <div id="kanban-faltas-conteudo" class="kanban-shortages-content">
+        <div class="kanban-stock-loading">Carregando as pendências da Expedição...</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/kanban-estoque.js"></script>
+  <script src="/js/session-indicator.js"></script>
+</body>
+</html>
