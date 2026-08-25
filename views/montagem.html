@@ -927,7 +927,7 @@
         <div>
           <span class="section-pill">Montagem</span>
           <h2>Historico de numeros</h2>
-          <p>Consulte os numeros ja registrados e edite o modelo quando precisar.</p>
+          <p>Consulte e imprima os numeros de serie ja registrados.</p>
         </div>
 
         <button id="btn-fechar-modal-montagem-numero-serie-historico" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
@@ -980,12 +980,11 @@
               <th>Montador</th>
               <th>Cliente / Pedido</th>
               <th>Data da saida</th>
-              <th>Acoes</th>
             </tr>
           </thead>
           <tbody id="montagem-numero-serie-tbody">
             <tr>
-              <td colspan="7" class="empty-state">Carregando registros...</td>
+              <td colspan="6" class="empty-state">Carregando registros...</td>
             </tr>
           </tbody>
         </table>
@@ -1022,51 +1021,6 @@
         <div class="span-12 modal-actions">
           <button id="btn-cancelar-modal-montagem-numero-serie-sequencia" class="btn btn-neutral" type="button">Cancelar</button>
           <button class="btn btn-success" type="submit">Salvar sequencia</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <div id="montagem-numero-serie-editar-modal" class="modal hidden" aria-hidden="true">
-    <div class="modal-backdrop" data-close-modal="montagem-numero-serie-editar"></div>
-
-    <div class="modal-dialog">
-      <div class="modal-header">
-        <div>
-          <span class="section-pill">Montagem</span>
-          <h2>Editar modelo do registro</h2>
-          <p>O numero de serie permanece fixo. Somente o modelo pode ser alterado.</p>
-        </div>
-
-        <button id="btn-fechar-modal-montagem-numero-serie-editar" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
-      </div>
-
-      <div id="montagem-numero-serie-editar-mensagem" class="message hidden"></div>
-
-      <form id="montagem-numero-serie-editar-form" class="form-grid">
-        <input type="hidden" id="montagem-numero-serie-editar-id">
-        <input type="hidden" id="montagem-numero-serie-editar-modelo-id">
-
-        <div class="field span-12">
-          <label for="montagem-numero-serie-editar-numero">Numero de serie</label>
-          <input id="montagem-numero-serie-editar-numero" type="text" readonly>
-        </div>
-
-        <div class="field span-12">
-          <label for="montagem-numero-serie-editar-modelo-busca">Modelo do servo</label>
-          <div class="autocomplete">
-            <input id="montagem-numero-serie-editar-modelo-busca" type="text" placeholder="Digite codigo ou descricao da submontagem">
-            <div id="montagem-numero-serie-editar-modelo-sugestoes" class="autocomplete-panel hidden"></div>
-          </div>
-        </div>
-
-        <div id="montagem-numero-serie-editar-resumo" class="span-12 selected-tags empty">
-          Selecione o novo modelo da submontagem.
-        </div>
-
-        <div class="span-12 modal-actions">
-          <button id="btn-cancelar-modal-montagem-numero-serie-editar" class="btn btn-neutral" type="button">Cancelar</button>
-          <button class="btn btn-primary" type="submit">Salvar modelo</button>
         </div>
       </form>
     </div>
@@ -1413,7 +1367,7 @@
 
   <script src="/js/sector-menu.js"></script>
   <script src="/js/app-sync.js"></script>
-  <script src="/js/montagem.js"></script>
+  <script src="/js/montagem.js?v=20260825-historico-leitura"></script>
   <script src="/js/seriais-disponiveis.js?v=20260824-troca-servo"></script>
   <script src="/js/table-print.js"></script>
   <script src="/js/session-indicator.js"></script>

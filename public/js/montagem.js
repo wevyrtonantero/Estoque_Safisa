@@ -183,15 +183,6 @@ const refs = {
   numeroSerieFiltroMontador: document.getElementById('montagem-numero-serie-filtro-montador'),
   numeroSerieFiltroCliente: document.getElementById('montagem-numero-serie-filtro-cliente'),
   numeroSerieFiltroData: document.getElementById('montagem-numero-serie-filtro-data'),
-  numeroSerieEditarModal: document.getElementById('montagem-numero-serie-editar-modal'),
-  numeroSerieEditarMensagem: document.getElementById('montagem-numero-serie-editar-mensagem'),
-  numeroSerieEditarForm: document.getElementById('montagem-numero-serie-editar-form'),
-  numeroSerieEditarId: document.getElementById('montagem-numero-serie-editar-id'),
-  numeroSerieEditarNumero: document.getElementById('montagem-numero-serie-editar-numero'),
-  numeroSerieEditarModeloId: document.getElementById('montagem-numero-serie-editar-modelo-id'),
-  numeroSerieEditarModeloBusca: document.getElementById('montagem-numero-serie-editar-modelo-busca'),
-  numeroSerieEditarModeloSugestoes: document.getElementById('montagem-numero-serie-editar-modelo-sugestoes'),
-  numeroSerieEditarResumo: document.getElementById('montagem-numero-serie-editar-resumo'),
   simulacaoModal: document.getElementById('montagem-simulacao-modal'),
   simulacaoMensagem: document.getElementById('montagem-simulacao-mensagem'),
   simulacaoForm: document.getElementById('montagem-simulacao-form'),
@@ -269,7 +260,6 @@ function bindEvents() {
       esconderSugestoesEfetuarMontagem();
       esconderSugestoesDesmembrar();
       esconderSugestoesNumeroSerieCadastro();
-      esconderSugestoesNumeroSerieEdicao();
       esconderSugestoesSubmontagem();
     }
   });
@@ -335,8 +325,6 @@ function bindEvents() {
   document.getElementById('btn-abrir-modal-montagem-numero-serie-diagnostico').addEventListener('click', abrirModalDiagnosticoNumeroSerie);
   document.getElementById('btn-fechar-modal-montagem-numero-serie-diagnostico').addEventListener('click', fecharModalDiagnosticoNumeroSerie);
   document.getElementById('btn-voltar-modal-montagem-numero-serie-diagnostico').addEventListener('click', fecharModalDiagnosticoNumeroSerie);
-  document.getElementById('btn-fechar-modal-montagem-numero-serie-editar').addEventListener('click', fecharModalEditarNumeroSerie);
-  document.getElementById('btn-cancelar-modal-montagem-numero-serie-editar').addEventListener('click', fecharModalEditarNumeroSerie);
   refs.efetuarSolicitarFaltantes.addEventListener('click', handleSolicitarFaltantesMontagem);
   document.getElementById('btn-fechar-modal-montagem-simulacao').addEventListener('click', fecharModalSimulacao);
   document.getElementById('btn-fechar-modal-montagem-atendimento').addEventListener('click', fecharModalAtendimento);
@@ -362,7 +350,6 @@ function bindEvents() {
     refs.numeroSerieHistoricoModal,
     refs.numeroSerieSequenciaModal,
     refs.numeroSerieDiagnosticoModal,
-    refs.numeroSerieEditarModal,
     refs.simulacaoModal,
     refs.atendimentoModal,
     refs.statusSolicitacaoModal,
@@ -410,16 +397,7 @@ function bindEvents() {
   refs.numeroSerieFiltroMontador.addEventListener('input', renderizarRegistrosNumeroSerie);
   refs.numeroSerieFiltroCliente.addEventListener('input', renderizarRegistrosNumeroSerie);
   refs.numeroSerieFiltroData.addEventListener('input', renderizarRegistrosNumeroSerie);
-  refs.numeroSerieTbody.addEventListener('click', handleRegistrosNumeroSerieActions);
   document.getElementById('montagem-numero-serie-filtro-limpar').addEventListener('click', limparFiltrosNumeroSerie);
-  refs.numeroSerieEditarForm.addEventListener('submit', handleSalvarEdicaoNumeroSerie);
-  refs.numeroSerieEditarModeloBusca.addEventListener('input', () => {
-    refs.numeroSerieEditarModeloId.value = '';
-    renderizarResumoNumeroSerieEdicao(null);
-    renderizarSugestoesNumeroSerieEdicao(refs.numeroSerieEditarModeloBusca.value.trim());
-  });
-  refs.numeroSerieEditarModeloBusca.addEventListener('focus', () => renderizarSugestoesNumeroSerieEdicao(refs.numeroSerieEditarModeloBusca.value.trim()));
-  refs.numeroSerieEditarModeloSugestoes.addEventListener('click', handleSugestaoNumeroSerieEdicaoClick);
   refs.simulacaoForm.addEventListener('submit', handleSimular);
   refs.simulacaoTbody.addEventListener('click', handleSimulacaoActions);
   refs.atendimentoForm.addEventListener('submit', handleAtenderPedidoRecebido);
@@ -1256,7 +1234,7 @@ async function handleDesmembrarSubmontagem(event) {
 
 async function abrirModalNumerosSerie() {
   resetFormularioNumeroSerie();
-  refs.numeroSerieTbody.innerHTML = '<tr><td colspan="7" class="empty-state">Carregando registros...</td></tr>';
+  refs.numeroSerieTbody.innerHTML = '<tr><td colspan="6" class="empty-state">Carregando registros...</td></tr>';
   refs.numeroSerieTotal.textContent = 'Carregando registros...';
   openModal(refs.numeroSerieModal);
 
@@ -1272,7 +1250,7 @@ async function abrirModalNumerosSerie() {
     notificarAtualizacaoOperacional(['submontagem-seriais', 'estoque']);
   } catch (error) {
     mostrarMensagemNumeroSerie(error.message, 'error');
-    refs.numeroSerieTbody.innerHTML = '<tr><td colspan="7" class="empty-state">Nao foi possivel carregar os registros.</td></tr>';
+    refs.numeroSerieTbody.innerHTML = '<tr><td colspan="6" class="empty-state">Nao foi possivel carregar os registros.</td></tr>';
   }
 }
 
@@ -1474,12 +1452,12 @@ function renderizarRegistrosNumeroSerie() {
   refs.numeroSerieTotal.textContent = `${registros.length} registro(s) encontrado(s)`;
 
   if (!registrosNumeroSerieCache.length) {
-    refs.numeroSerieTbody.innerHTML = '<tr><td colspan="7" class="empty-state">Nenhum numero de serie registrado ainda.</td></tr>';
+    refs.numeroSerieTbody.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhum numero de serie registrado ainda.</td></tr>';
     return;
   }
 
   if (!registros.length) {
-    refs.numeroSerieTbody.innerHTML = '<tr><td colspan="7" class="empty-state">Nenhum registro encontrado com os filtros informados.</td></tr>';
+    refs.numeroSerieTbody.innerHTML = '<tr><td colspan="6" class="empty-state">Nenhum registro encontrado com os filtros informados.</td></tr>';
     return;
   }
 
@@ -1491,14 +1469,6 @@ function renderizarRegistrosNumeroSerie() {
       <td>${escapeHtml(registro.montador_nome || '-')}</td>
       <td>${renderizarPedidoRegistroNumeroSerie(registro)}</td>
       <td>${formatarDataHora(registro.data_saida)}</td>
-      <td>
-        <details class="row-menu">
-          <summary class="row-menu-trigger" aria-label="Abrir acoes">...</summary>
-          <div class="row-menu-panel">
-            <button type="button" class="row-menu-item" data-action="edit-serial-model" data-registro-id="${registro.id}">Editar modelo</button>
-          </div>
-        </details>
-      </td>
     </tr>
   `).join('');
 }
@@ -1577,23 +1547,6 @@ function renderizarSugestoesNumeroSerieCadastro(termo) {
   );
 }
 
-function renderizarSugestoesNumeroSerieEdicao(termo) {
-  const itens = filtrarSubmontagensPorTermo(termo);
-
-  renderizarPainelAutocomplete(
-    refs.numeroSerieEditarModeloSugestoes,
-    itens,
-    (item) => ({
-      id: item.id,
-      title: montarDescricaoModelo(item.descricao),
-      subtitle: item.classificacao === 'ITEM'
-        ? `Item seriado | Saldo Montagem: ${formatInteger(obterSaldoMontagem(item.id))}`
-        : `Submontagem | Componentes: ${formatInteger(item.total_componentes || 0)}`
-    }),
-    'Nenhum modelo encontrado.'
-  );
-}
-
 function handleSugestaoNumeroSerieCadastroClick(event) {
   const option = event.target.closest('button[data-id]');
   if (!option) {
@@ -1611,24 +1564,6 @@ function handleSugestaoNumeroSerieCadastroClick(event) {
   renderizarResumoNumeroSerie(item);
   esconderSugestoesNumeroSerieCadastro();
   atualizarDiagnosticoNumeroSerie();
-}
-
-function handleSugestaoNumeroSerieEdicaoClick(event) {
-  const option = event.target.closest('button[data-id]');
-  if (!option) {
-    return;
-  }
-
-  const item = [...submontagensCache, ...itensCache]
-    .find((entry) => Number(entry.id) === Number(option.dataset.id));
-  if (!item) {
-    return;
-  }
-
-  refs.numeroSerieEditarModeloId.value = String(item.id);
-  refs.numeroSerieEditarModeloBusca.value = montarDescricaoModelo(item.descricao);
-  renderizarResumoNumeroSerieEdicao(item);
-  esconderSugestoesNumeroSerieEdicao();
 }
 
 function renderizarResumoNumeroSerie(item) {
@@ -1649,29 +1584,9 @@ function renderizarResumoNumeroSerie(item) {
   `;
 }
 
-function renderizarResumoNumeroSerieEdicao(item) {
-  if (!item) {
-    refs.numeroSerieEditarResumo.classList.add('selected-tags', 'empty');
-    refs.numeroSerieEditarResumo.textContent = 'Selecione o novo modelo seriado.';
-    return;
-  }
-
-  refs.numeroSerieEditarResumo.classList.remove('empty');
-  refs.numeroSerieEditarResumo.classList.add('selected-tags');
-  refs.numeroSerieEditarResumo.innerHTML = `
-    <span class="selected-tag">${escapeHtml(item.descricao)}</span>
-    <span class="selected-tag">${escapeHtml(`Classificacao: ${item.classificacao}`)}</span>
-  `;
-}
-
 function esconderSugestoesNumeroSerieCadastro() {
   refs.numeroSerieModeloSugestoes.classList.add('hidden');
   refs.numeroSerieModeloSugestoes.innerHTML = '';
-}
-
-function esconderSugestoesNumeroSerieEdicao() {
-  refs.numeroSerieEditarModeloSugestoes.classList.add('hidden');
-  refs.numeroSerieEditarModeloSugestoes.innerHTML = '';
 }
 
 function isNumeroSerieManualAtivo() {
@@ -2054,86 +1969,6 @@ async function executarRegistroNumerosSerie(dadosRegistro) {
     carregarProximoNumeroSerie(),
     carregarRegistrosNumeroSerie()
   ]);
-}
-
-function handleRegistrosNumeroSerieActions(event) {
-  const button = event.target.closest('button[data-action][data-registro-id]');
-  if (!button) {
-    return;
-  }
-
-  if (button.dataset.action === 'edit-serial-model') {
-    abrirModalEditarNumeroSerie(button.dataset.registroId);
-  }
-}
-
-function abrirModalEditarNumeroSerie(registroId) {
-  const registro = registrosNumeroSerieCache.find((item) => Number(item.id) === Number(registroId));
-  if (!registro) {
-    mostrarMensagemNumeroSerie('Nao foi possivel localizar o registro selecionado.', 'error');
-    return;
-  }
-
-  const modeloAtual = [...submontagensCache, ...itensCache]
-    .find((item) => Number(item.id) === Number(registro.id_modelo_servo));
-
-  refs.numeroSerieEditarMensagem.className = 'message hidden';
-  refs.numeroSerieEditarMensagem.textContent = '';
-  refs.numeroSerieEditarForm.reset();
-  refs.numeroSerieEditarId.value = String(registro.id);
-  refs.numeroSerieEditarNumero.value = registro.numero_serie;
-  refs.numeroSerieEditarModeloId.value = String(registro.id_modelo_servo);
-  refs.numeroSerieEditarModeloBusca.value = montarDescricaoModelo(registro.modelo_servo_descricao);
-  renderizarResumoNumeroSerieEdicao({
-    id: registro.id_modelo_servo,
-    codigo: registro.modelo_servo_codigo,
-    descricao: registro.modelo_servo_descricao,
-    classificacao: modeloAtual?.classificacao || 'SUBMONTAGEM'
-  });
-  esconderSugestoesNumeroSerieEdicao();
-  openModal(refs.numeroSerieEditarModal);
-}
-
-function fecharModalEditarNumeroSerie() {
-  esconderSugestoesNumeroSerieEdicao();
-  closeModal(refs.numeroSerieEditarModal);
-}
-
-async function handleSalvarEdicaoNumeroSerie(event) {
-  event.preventDefault();
-
-  try {
-    const idRegistro = Number.parseInt(refs.numeroSerieEditarId.value, 10);
-    const idModeloServo = Number.parseInt(refs.numeroSerieEditarModeloId.value, 10);
-
-    if (!Number.isInteger(idRegistro)) {
-      throw new Error('O registro selecionado e invalido.');
-    }
-
-    if (!Number.isInteger(idModeloServo)) {
-      throw new Error('Selecione um modelo valido para atualizar o registro.');
-    }
-
-    const response = await fetch(`${submontagemSeriaisApiBaseUrl}/${idRegistro}/modelo-servo`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id_modelo_servo: idModeloServo })
-    });
-    const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error(result.message || 'Nao foi possivel atualizar o modelo do numero de serie.');
-    }
-
-    fecharModalEditarNumeroSerie();
-    await carregarRegistrosNumeroSerie();
-    notificarAtualizacaoOperacional(['submontagem-seriais']);
-    mostrarMensagemNumeroSerie(`Modelo do numero de serie ${result.numero_serie} atualizado com sucesso.`, 'success');
-  } catch (error) {
-    refs.numeroSerieEditarMensagem.textContent = error.message;
-    refs.numeroSerieEditarMensagem.className = 'message error';
-    refs.numeroSerieEditarMensagem.classList.remove('hidden');
-  }
 }
 
 function resetModalEfetuarMontagem() {
@@ -3605,7 +3440,6 @@ function handleModalBackdrop(event) {
   if (event.target.dataset.closeModal === 'montagem-numero-serie-historico') fecharModalHistoricoNumeroSerie();
   if (event.target.dataset.closeModal === 'montagem-numero-serie-sequencia') fecharModalSequenciaNumeroSerie();
   if (event.target.dataset.closeModal === 'montagem-numero-serie-diagnostico') fecharModalDiagnosticoNumeroSerie();
-  if (event.target.dataset.closeModal === 'montagem-numero-serie-editar') fecharModalEditarNumeroSerie();
   if (event.target.dataset.closeModal === 'montagem-simulacao') fecharModalSimulacao();
   if (event.target.dataset.closeModal === 'montagem-atendimento') fecharModalAtendimento();
   if (event.target.dataset.closeModal === 'montagem-status-solicitacao') fecharModalStatusSolicitacao();
@@ -3623,7 +3457,6 @@ function handleKeyboardShortcuts(event) {
   esconderSugestoesEfetuarMontagem();
   esconderSugestoesDesmembrar();
   esconderSugestoesNumeroSerieCadastro();
-  esconderSugestoesNumeroSerieEdicao();
   esconderSugestoesSubmontagem();
 
   if (!refs.solicitacaoProducaoModal.classList.contains('hidden')) {
@@ -3673,11 +3506,6 @@ function handleKeyboardShortcuts(event) {
 
   if (!refs.desmembrarModal.classList.contains('hidden')) {
     fecharModalDesmembrar();
-    return;
-  }
-
-  if (!refs.numeroSerieEditarModal.classList.contains('hidden')) {
-    fecharModalEditarNumeroSerie();
     return;
   }
 
@@ -3757,7 +3585,6 @@ function closeModal(modal) {
     refs.numeroSerieHistoricoModal,
     refs.numeroSerieSequenciaModal,
     refs.numeroSerieDiagnosticoModal,
-    refs.numeroSerieEditarModal,
     refs.simulacaoModal,
     refs.atendimentoModal,
     refs.statusSolicitacaoModal,

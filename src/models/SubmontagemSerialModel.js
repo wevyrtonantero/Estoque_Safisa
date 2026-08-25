@@ -1103,39 +1103,6 @@ class SubmontagemSerialModel {
     }
   }
 
-  static async updateModeloServo(id, data = {}, db = pool) {
-    await this.ensureSchema(db);
-
-    const registroAtual = await this.findById(id, db);
-    if (!registroAtual) {
-      return null;
-    }
-
-    const idModeloServo = normalizeOptionalInteger(data.id_modelo_servo);
-    if (!Number.isInteger(idModeloServo)) {
-      throw this.createBusinessError('O modelo de servo informado deve ser valido.');
-    }
-
-    const modeloServo = await this.findModeloServoById(idModeloServo, db);
-    if (!modeloServo) {
-      throw this.createBusinessError('O modelo de servo informado nao foi encontrado como submontagem.');
-    }
-
-    await db.query(
-      `
-        UPDATE submontagem_seriais
-        SET
-          id_modelo_servo = ?,
-          modelo_servo_codigo = ?,
-          modelo_servo_descricao = ?
-        WHERE id = ?
-      `,
-      [modeloServo.id, modeloServo.codigo, modeloServo.descricao, id]
-    );
-
-    return this.findById(id, db);
-  }
-
   static async reconcileExpedicaoStockWithAvailableSeriais(db = pool) {
     await this.ensureSchema(db);
 

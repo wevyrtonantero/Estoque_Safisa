@@ -14,7 +14,6 @@ router.patch('/submontagem-seriais/sequencia', requireApiRoles(OPERATION_WRITE_R
 router.get('/submontagem-seriais/:id', requireApiRoles(OPERATION_READ_ROLES), SubmontagemSerialController.getById);
 router.post('/submontagem-seriais/lote', requireApiRoles(OPERATION_WRITE_ROLES), SubmontagemSerialController.createBatch);
 router.post('/submontagem-seriais/:id/trocar-modelo', requireApiRoles(OPERATION_WRITE_ROLES), SubmontagemSerialController.changeAvailableModel);
-router.patch('/submontagem-seriais/:id/modelo-servo', requireApiRoles(OPERATION_WRITE_ROLES), SubmontagemSerialController.updateModeloServo);
 router.patch('/submontagem-seriais/:id/pedido-saida', requireApiRoles(ADMIN_WRITE_ROLES), SubmontagemSerialController.updatePedidoSaida);
 
 module.exports = router;

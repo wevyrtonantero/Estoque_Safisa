@@ -219,47 +219,6 @@ const SubmontagemSerialController = {
     }
   },
 
-  async updateModeloServo(req, res) {
-    try {
-      const id = normalizeOptionalInteger(req.params.id);
-      if (!Number.isInteger(id)) {
-        return res.status(400).json({ message: 'O registro informado deve ser valido.' });
-      }
-
-      const antes = await SubmontagemSerialModel.findById(id);
-      if (!antes) {
-        return res.status(404).json({ message: 'Registro de numero de serie nao encontrado.' });
-      }
-
-      const atualizado = await SubmontagemSerialModel.updateModeloServo(id, {
-        id_modelo_servo: req.body?.id_modelo_servo
-      });
-
-      await recordAuditLog(req, {
-        modulo: 'SUBMONTAGEM_SERIAIS',
-        acao: 'UPDATE_MODELO_SERVO',
-        entidade_tipo: 'SUBMONTAGEM_SERIAL',
-        entidade_id: atualizado.id,
-        descricao: `Numero de serie ${atualizado.numero_serie} atualizado com novo modelo.`,
-        antes,
-        depois: atualizado
-      });
-
-      return res.status(200).json(atualizado);
-    } catch (error) {
-      console.error('Erro ao atualizar modelo do numero de serie:', error);
-
-      if (error.statusCode) {
-        return res.status(error.statusCode).json({
-          message: error.message,
-          details: error.details || null
-        });
-      }
-
-      return res.status(500).json({ message: 'Erro ao atualizar o modelo do numero de serie.' });
-    }
-  },
-
   async changeAvailableModel(req, res) {
     try {
       const id = normalizeOptionalInteger(req.params.id);

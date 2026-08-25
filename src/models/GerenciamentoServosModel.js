@@ -8,7 +8,7 @@ const SERVO_MODELOS = Object.freeze([
   { key: 'MC040_NORMAL', label: 'MC-040 NORMAL', estoqueCodigo: 'MC040', corpoCodigo: '401' },
   { key: 'MC040_REBAIXADO', label: 'MC-040 REBAIXADO', estoqueCodigo: 'MC040RB', corpoCodigo: '401RB' },
   { key: 'MBF015_NORMAL', label: 'MBF-015 NORMAL', estoqueCodigo: 'MBF015', corpoCodigo: '001' },
-  { key: 'MBF015_DESLOCADO', label: 'MBF-015 DESLOCADO', estoqueCodigo: 'MBF015', corpoCodigo: '001' },
+  { key: 'MBF015_DESLOCADO', label: 'MBF-015 DESLOCADO', estoqueCodigo: 'MBF015DESL', corpoCodigo: '001' },
   { key: 'MBF015_INV_028', label: 'MBF-015 INVERTIDO 028', estoqueCodigo: 'MBF015INV', corpoCodigo: '001' },
   { key: 'BR015_NORMAL', label: 'BR-015 NORMAL', estoqueCodigo: 'BR015', corpoCodigo: '100' },
   { key: 'BR040_NORMAL', label: 'BR-040 NORMAL', estoqueCodigo: 'BR040', corpoCodigo: '350' },
