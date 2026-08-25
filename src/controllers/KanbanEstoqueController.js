@@ -43,43 +43,117 @@ const KanbanEstoqueController = {
       const pedidos = await PedidoExpedicaoModel.findAll({ ativos: true });
       const pedidosComFaltas = pedidos
         .filter((pedido) => Array.isArray(pedido.faltantes) && pedido.faltantes.length > 0)
-        .map((pedido) => ({
-          id: pedido.id,
-          codigo_pedido: pedido.codigo_pedido,
-          cliente_nome: pedido.cliente_nome,
-          cidade: pedido.cidade,
-          status: pedido.status,
-          data_pedido: pedido.data_pedido,
-          data_programacao_saida: pedido.data_programacao_saida,
-          faltantes: pedido.faltantes.map((item) => ({
+        .map((pedido) => {
+          const faltantesAgrupados = new Map();
+
+          pedido.faltantes.forEach((item) => {
+            const chave = `${item.tipo || ''}:${item.codigo || ''}`;
+            if (!faltantesAgrupados.has(chave)) {
+              faltantesAgrupados.set(chave, {
+                id_peca: item.id_peca,
+                codigo: item.codigo,
+                descricao: item.descricao,
+                tipo: item.tipo,
+                quantidade_solicitada: 0,
+                quantidade_disponivel: 0,
+                quantidade_faltante: 0,
+                componentes: new Map()
+              });
+            }
+
+            const agrupado = faltantesAgrupados.get(chave);
+            agrupado.quantidade_solicitada += Number(item.quantidade_solicitada || 0);
+            agrupado.quantidade_disponivel += Number(item.quantidade_disponivel || 0);
+            agrupado.quantidade_faltante += Number(item.quantidade_faltante || 0);
+
+            (Array.isArray(item.componentes_faltantes) ? item.componentes_faltantes : [])
+              .filter((componente) => Number(componente.quantidade_faltante || 0) > 0)
+              .forEach((componente) => {
+                const chaveComponente = `${Number(componente.id_peca || 0)}:${componente.codigo || ''}`;
+                const atual = agrupado.componentes.get(chaveComponente) || {
+                  id_peca: componente.id_peca,
+                  codigo: componente.codigo,
+                  descricao: componente.descricao,
+                  quantidade_faltante: 0
+                };
+                atual.quantidade_faltante += Number(componente.quantidade_faltante || 0);
+                agrupado.componentes.set(chaveComponente, atual);
+              });
+          });
+
+          const faltantes = Array.from(faltantesAgrupados.values()).map((item) => ({
             id_peca: item.id_peca,
             codigo: item.codigo,
             descricao: item.descricao,
             tipo: item.tipo,
-            quantidade_solicitada: Number(item.quantidade_solicitada || 0),
-            quantidade_disponivel: Number(item.quantidade_disponivel || 0),
-            quantidade_faltante: Number(item.quantidade_faltante || 0),
-            mensagem: item.mensagem,
-            componentes_faltantes: Array.isArray(item.componentes_faltantes)
-              ? item.componentes_faltantes
-                .filter((componente) => Number(componente.quantidade_faltante || 0) > 0)
-                .map((componente) => ({
-                  id_peca: componente.id_peca,
-                  codigo: componente.codigo,
-                  descricao: componente.descricao,
-                  quantidade_faltante: Number(componente.quantidade_faltante || 0)
-                }))
-              : []
-          }))
-        }));
+            quantidade_solicitada: Number(item.quantidade_solicitada.toFixed(2)),
+            quantidade_disponivel: Number(item.quantidade_disponivel.toFixed(2)),
+            quantidade_faltante: Number(item.quantidade_faltante.toFixed(2)),
+            mensagem: `Faltam ${Number(item.quantidade_faltante.toFixed(2))} unidade(s) de ${item.codigo}.`,
+            componentes_faltantes: Array.from(item.componentes.values()).map((componente) => ({
+              ...componente,
+              quantidade_faltante: Number(componente.quantidade_faltante.toFixed(2))
+            }))
+          }));
 
-      const faltantes = pedidosComFaltas.flatMap((pedido) => pedido.faltantes);
+          return {
+            id: pedido.id,
+            codigo_pedido: pedido.codigo_pedido,
+            cliente_nome: pedido.cliente_nome,
+            cidade: pedido.cidade,
+            status: pedido.status,
+            data_pedido: pedido.data_pedido,
+            data_programacao_saida: pedido.data_programacao_saida,
+            faltantes
+          };
+        });
+
+      const resumoMap = new Map();
+      pedidosComFaltas.forEach((pedido) => {
+        pedido.faltantes.forEach((item) => {
+          const faltasReais = item.componentes_faltantes.length
+            ? item.componentes_faltantes
+            : [{
+              id_peca: item.id_peca,
+              codigo: item.codigo,
+              descricao: item.descricao,
+              quantidade_faltante: item.quantidade_faltante
+            }];
+
+          faltasReais.forEach((falta) => {
+            const chave = `${Number(falta.id_peca || 0)}:${falta.codigo || ''}`;
+            const atual = resumoMap.get(chave) || {
+              id_peca: falta.id_peca,
+              codigo: falta.codigo,
+              descricao: falta.descricao,
+              quantidade_faltante: 0,
+              pedidos: new Set()
+            };
+            atual.quantidade_faltante += Number(falta.quantidade_faltante || 0);
+            atual.pedidos.add(Number(pedido.id));
+            resumoMap.set(chave, atual);
+          });
+        });
+      });
+
+      const resumoFaltantes = Array.from(resumoMap.values())
+        .map((item) => ({
+          id_peca: item.id_peca,
+          codigo: item.codigo,
+          descricao: item.descricao,
+          quantidade_faltante: Number(item.quantidade_faltante.toFixed(2)),
+          pedidos_afetados: item.pedidos.size
+        }))
+        .sort((a, b) => b.quantidade_faltante - a.quantidade_faltante
+          || String(a.codigo).localeCompare(String(b.codigo), 'pt-BR', { numeric: true }));
+
       return res.status(200).json({
         total_pedidos: pedidosComFaltas.length,
-        total_pendencias: faltantes.length,
-        quantidade_faltante: Number(faltantes
+        total_pendencias: resumoFaltantes.length,
+        quantidade_faltante: Number(resumoFaltantes
           .reduce((total, item) => total + Number(item.quantidade_faltante || 0), 0)
           .toFixed(2)),
+        resumo_faltantes: resumoFaltantes,
         pedidos: pedidosComFaltas
       });
     } catch (error) {

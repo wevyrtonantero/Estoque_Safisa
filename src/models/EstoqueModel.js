@@ -1642,11 +1642,14 @@ class EstoqueModel {
   }
 
   // Realiza uma entrada inicial somando o saldo no estoque escolhido.
-  static async processEntradaInicial(data) {
-    const connection = await pool.getConnection();
+  static async processEntradaInicial(data, externalConnection = null) {
+    const connection = externalConnection || await pool.getConnection();
+    const managesTransaction = !externalConnection;
 
     try {
-      await connection.beginTransaction();
+      if (managesTransaction) {
+        await connection.beginTransaction();
+      }
 
       const item = await this.findItemById(data.id_peca, connection);
       if (!item) {
@@ -1722,7 +1725,9 @@ class EstoqueModel {
           usuario: data.usuario
         });
 
-        await connection.commit();
+        if (managesTransaction) {
+          await connection.commit();
+        }
 
         return {
           item,
@@ -1775,13 +1780,44 @@ class EstoqueModel {
         usuario: data.usuario
       });
 
-      await connection.commit();
+      if (managesTransaction) {
+        await connection.commit();
+      }
 
       return {
         item,
         estoque_destino: estoqueDestino,
         saldo_anterior: quantidadeAtual,
         saldo_atual: novoSaldo
+      };
+    } catch (error) {
+      if (managesTransaction) {
+        await connection.rollback();
+      }
+      throw error;
+    } finally {
+      if (managesTransaction) {
+        connection.release();
+      }
+    }
+  }
+
+  // Registra uma lista de entradas manuais em uma unica transacao.
+  static async processEntradaInicialBatch(items = []) {
+    const connection = await pool.getConnection();
+
+    try {
+      await connection.beginTransaction();
+      const resultados = [];
+
+      for (const item of items) {
+        resultados.push(await this.processEntradaInicial(item, connection));
+      }
+
+      await connection.commit();
+      return {
+        total_itens: resultados.length,
+        itens: resultados
       };
     } catch (error) {
       await connection.rollback();

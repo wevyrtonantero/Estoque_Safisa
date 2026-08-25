@@ -61,14 +61,36 @@ class KanbanEstoqueModel {
         p.descricao,
         p.tipo,
         p.classificacao,
+        p.estoque_minimo AS quantidade_pacote_cadastro,
+        p.consumo_mensal AS consumo_mensal_cadastro,
         COALESCE(s.almoxarifado, 0) AS quantidade_almoxarifado,
         COALESCE(s.montagem, 0) AS quantidade_montagem,
         COALESCE(s.expedicao, 0) AS quantidade_expedicao,
+        COALESCE(s.almoxarifado, 0) + COALESCE(s.montagem, 0) + COALESCE(s.expedicao, 0) AS quantidade_estoque_empresa,
+        GREATEST(
+          COALESCE(s.almoxarifado, 0)
+          + COALESCE(s.montagem, 0)
+          + COALESCE(s.expedicao, 0)
+          - COALESCE(d.quantidade_pedidos_abertos, 0),
+          0
+        ) AS quantidade_saldo_disponivel,
+        COALESCE(prod.quantidade_ordens, 0) AS quantidade_producao_ordens,
+        COALESCE(te.quantidade_fila, 0) AS quantidade_fila_tratamento,
+        COALESCE(prod.quantidade_ordens, 0) + COALESCE(te.quantidade_fila, 0) AS quantidade_producao,
+        COALESCE(rem.quantidade_pendente, 0) AS quantidade_tratamento_externo,
         COALESCE(d.quantidade_pedidos_abertos, 0) AS quantidade_pedidos_abertos,
-        COALESCE(v.vendido_90_dias, 0) AS vendido_90_dias,
         CASE
-          WHEN COALESCE(v.vendido_90_dias, 0) > 0
-            THEN ROUND(COALESCE(s.almoxarifado, 0) / (v.vendido_90_dias / 90), 1)
+          WHEN COALESCE(p.consumo_mensal, 0) > 0
+            THEN ROUND(
+              GREATEST(
+                COALESCE(s.almoxarifado, 0)
+                + COALESCE(s.montagem, 0)
+                + COALESCE(s.expedicao, 0)
+                - COALESCE(d.quantidade_pedidos_abertos, 0),
+                0
+              ) / (p.consumo_mensal / 30),
+              0
+            )
           ELSE NULL
         END AS duracao_estimada_dias
       FROM kanban_estoque_itens ki
@@ -84,6 +106,30 @@ class KanbanEstoqueModel {
         GROUP BY es.id_peca
       ) s ON s.id_peca = ki.id_peca
       LEFT JOIN (
+        SELECT id_peca, SUM(quantidade_planejada) AS quantidade_ordens
+        FROM producao_ordens
+        WHERE status = 'EM_ANDAMENTO'
+        GROUP BY id_peca
+      ) prod ON prod.id_peca = ki.id_peca
+      LEFT JOIN (
+        SELECT id_peca, SUM(quantidade) AS quantidade_fila
+        FROM tratamento_externo_saldos
+        WHERE quantidade > 0
+        GROUP BY id_peca
+      ) te ON te.id_peca = ki.id_peca
+      LEFT JOIN (
+        SELECT
+          ri.id_peca,
+          SUM(GREATEST(ri.quantidade_enviada - ri.quantidade_retorno, 0)) AS quantidade_pendente
+        FROM terceirizacao_remessa_itens ri
+        INNER JOIN terceirizacao_remessas r ON r.id = ri.id_remessa
+        WHERE r.status IN ('ENVIADA', 'RETORNO_PARCIAL')
+          AND ri.status IN ('ENVIADO', 'RETORNO_PARCIAL')
+          AND COALESCE(ri.encerrado_manualmente, 0) = 0
+          AND ri.quantidade_enviada > ri.quantidade_retorno
+        GROUP BY ri.id_peca
+      ) rem ON rem.id_peca = ki.id_peca
+      LEFT JOIN (
         SELECT
           demanda.id_peca,
           SUM(demanda.quantidade) AS quantidade_pedidos_abertos
@@ -98,16 +144,6 @@ class KanbanEstoqueModel {
         ) demanda
         GROUP BY demanda.id_peca
       ) d ON d.id_peca = ki.id_peca
-      LEFT JOIN (
-        SELECT
-          b.id_peca_baixada AS id_peca,
-          SUM(CASE WHEN saida.data_saida >= DATE_SUB(NOW(), INTERVAL 90 DAY) THEN b.quantidade_baixada ELSE 0 END) AS vendido_90_dias
-        FROM expedicao_saida_baixas b
-        INNER JOIN expedicao_saidas saida ON saida.id = b.id_saida
-        WHERE saida.tipo_saida = 'VENDA'
-          AND saida.data_saida >= DATE_SUB(NOW(), INTERVAL 90 DAY)
-        GROUP BY b.id_peca_baixada
-      ) v ON v.id_peca = ki.id_peca
       ORDER BY ki.id_categoria ASC, ki.ordem ASC, p.codigo ASC
     `);
 
@@ -128,7 +164,7 @@ class KanbanEstoqueModel {
 
   static async listAvailablePieces() {
     const [rows] = await pool.query(`
-      SELECT id, codigo, descricao, tipo, classificacao
+      SELECT id, codigo, descricao, tipo, classificacao, estoque_minimo AS quantidade_pacote
       FROM pecas
       WHERE ativo = 1
       ORDER BY codigo ASC

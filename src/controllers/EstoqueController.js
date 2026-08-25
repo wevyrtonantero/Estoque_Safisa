@@ -78,6 +78,13 @@ function buildSaidaPayload(body) {
   };
 }
 
+function buildEntradaBatchPayload(body) {
+  const itens = Array.isArray(body.itens) ? body.itens : [];
+  return {
+    itens: itens.map((item) => buildEntradaPayload(item || {}))
+  };
+}
+
 function buildConsumoInternoPayload(body) {
   const itens = Array.isArray(body.itens) ? body.itens : [];
 
@@ -186,6 +193,27 @@ function validateSaidaPayload(payload) {
     if (!Number.isFinite(item.quantidade) || item.quantidade <= 0) {
       errors.push(`A quantidade da linha ${index + 1} deve ser maior que zero.`);
     }
+  });
+
+  return errors;
+}
+
+function validateEntradaBatchPayload(payload) {
+  const errors = [];
+
+  if (!payload.itens.length) {
+    errors.push('Adicione pelo menos uma entrada a lista.');
+    return errors;
+  }
+
+  if (payload.itens.length > 100) {
+    errors.push('A lista deve conter no maximo 100 entradas por confirmacao.');
+  }
+
+  payload.itens.forEach((item, index) => {
+    validateEntradaPayload(item).forEach((error) => {
+      errors.push(`Item ${index + 1}: ${error}`);
+    });
   });
 
   return errors;
@@ -458,6 +486,39 @@ const EstoqueController = {
       return res.status(201).json(result);
     } catch (error) {
       const response = extractErrorResponse(error, 'Erro ao registrar saida na Expedição.');
+      return res.status(response.status).json(response.body);
+    }
+  },
+
+  // Registra varias entradas manuais de forma atomica.
+  async createEntradaInicialBatch(req, res) {
+    try {
+      const payload = buildEntradaBatchPayload(req.body);
+      const errors = validateEntradaBatchPayload(payload);
+
+      if (errors.length > 0) {
+        return res.status(400).json({ message: 'Dados invalidos.', errors });
+      }
+
+      const itens = payload.itens.map((item) => ({
+        ...item,
+        usuario: req.currentUser || null
+      }));
+      const result = await EstoqueModel.processEntradaInicialBatch(itens);
+      await recordAuditLog(req, {
+        modulo: 'ESTOQUE',
+        acao: 'ENTRADA_INICIAL_LOTE',
+        entidade_tipo: 'MOVIMENTACAO_ESTOQUE',
+        entidade_id: null,
+        descricao: `${result.total_itens} entradas manuais registradas no Almoxarifado.`,
+        depois: {
+          total_itens: result.total_itens,
+          itens: payload.itens
+        }
+      });
+      return res.status(201).json(result);
+    } catch (error) {
+      const response = extractErrorResponse(error, 'Erro ao registrar entradas manuais no estoque.');
       return res.status(response.status).json(response.body);
     }
   },

@@ -45,9 +45,18 @@
 
     <section class="content-card kanban-stock-toolbar-card">
       <div class="kanban-stock-toolbar">
-        <div class="field kanban-stock-search-field">
-          <label for="kanban-busca">Localizar peça</label>
-          <input id="kanban-busca" type="search" placeholder="Digite código, descrição ou categoria">
+        <div class="kanban-stock-filters">
+          <div class="field kanban-stock-category-filter">
+            <label for="kanban-filtro-categoria">Categoria</label>
+            <select id="kanban-filtro-categoria">
+              <option value="">Todas</option>
+            </select>
+          </div>
+
+          <div class="field kanban-stock-search-field">
+            <label for="kanban-busca">Localizar peça</label>
+            <input id="kanban-busca" type="search" placeholder="Digite código ou descrição">
+          </div>
         </div>
 
         <div class="kanban-stock-legend" aria-label="Legenda das cores">
@@ -116,8 +125,8 @@
 
         <div class="field span-6">
           <label for="kanban-item-pacote">Quantidade por pacote</label>
-          <input id="kanban-item-pacote" type="number" min="0.01" step="0.01" value="50" required>
-          <span class="form-hint">Ex.: pacote de 50 peças.</span>
+          <input id="kanban-item-pacote" type="number" min="0.01" step="0.01" placeholder="Informe a quantidade" required>
+          <span id="kanban-item-pacote-hint" class="form-hint">Selecione uma peça para carregar o valor do cadastro.</span>
         </div>
 
         <div class="field span-12">
@@ -171,15 +180,17 @@
       </div>
 
       <div class="kanban-stock-details-grid">
+        <article><span>Produção</span><strong id="kanban-detalhes-producao">0</strong><small id="kanban-detalhes-producao-info">OPs em andamento + fila após produção</small></article>
+        <article id="kanban-detalhes-tratamento-card" class="hidden"><span>Tratamento externo</span><strong id="kanban-detalhes-tratamento">0</strong><small>em remessas abertas, aguardando retorno</small></article>
         <article><span>Montagem</span><strong id="kanban-detalhes-montagem">0</strong><small>peças em estoque</small></article>
         <article><span>Expedição</span><strong id="kanban-detalhes-expedicao">0</strong><small>peças em estoque</small></article>
-        <article><span>Vendido</span><strong id="kanban-detalhes-vendido">0</strong><small>em pedidos abertos na Expedição</small></article>
-        <article><span>Duração estimada</span><strong id="kanban-detalhes-duracao">-</strong><small>pelo consumo de 90 dias</small></article>
+        <article><span>Vendido</span><strong id="kanban-detalhes-vendido">0</strong><small>peças em pedidos abertos da Expedição</small></article>
+        <article><span>Duração do saldo</span><strong id="kanban-detalhes-duracao">-</strong><small id="kanban-detalhes-duracao-info">Saldo disponível dividido pela saída mensal cadastrada</small></article>
       </div>
 
       <div class="kanban-stock-details-note">
         <strong id="kanban-detalhes-regra">Pacote: 50 peças</strong>
-        <span>A duração usa a média diária das vendas registradas nos últimos 90 dias.</span>
+        <span>A duração soma Almoxarifado, Montagem e Expedição, desconta o vendido em pedidos abertos e divide pela saída mensal cadastrada.</span>
       </div>
 
       <div class="modal-actions">
@@ -197,15 +208,15 @@
         <div>
           <span class="section-pill">Expedição</span>
           <h2>Peças faltantes para fechar pedidos</h2>
-          <p>O mesmo diagnóstico em vermelho exibido no Gerenciamento de Pedidos.</p>
+          <p>Resumo consolidado das peças ausentes e diagnóstico detalhado por pedido.</p>
         </div>
         <button id="btn-fechar-kanban-faltas" class="icon-btn" type="button" aria-label="Fechar">X</button>
       </div>
 
       <div class="kanban-shortages-summary">
         <span><strong id="kanban-faltas-total-pedidos">0</strong> pedidos afetados</span>
-        <span><strong id="kanban-faltas-total-pendencias">0</strong> tipos de falta</span>
-        <span><strong id="kanban-faltas-total-quantidade">0</strong> unidades faltantes</span>
+        <span><strong id="kanban-faltas-total-pendencias">0</strong> códigos faltantes</span>
+        <span><strong id="kanban-faltas-total-quantidade">0</strong> peças faltantes</span>
       </div>
 
       <div id="kanban-faltas-conteudo" class="kanban-shortages-content">

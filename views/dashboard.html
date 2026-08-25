@@ -148,18 +148,13 @@
                 <tr>
                   <th>Cod.</th>
                   <th>Desc.</th>
-                  <th>Tipo</th>
-                  <th>Classe</th>
                   <th>Qtd.</th>
-                  <th>Fornecedor</th>
-                  <th>Sai/mes</th>
-                  <th>Dura ate</th>
-                  <th>Estado</th>
+                  <th>Acoes</th>
                 </tr>
               </thead>
               <tbody id="almox-estoque-tbody">
                 <tr>
-                  <td colspan="9" class="empty-state">Carregando estoque...</td>
+                  <td colspan="4" class="empty-state">Carregando estoque...</td>
                 </tr>
               </tbody>
             </table>
@@ -181,6 +176,7 @@
           </div>
 
           <div class="topbar-actions">
+            <button id="almox-btn-imprimir-pedidos" class="btn btn-secondary" type="button">Imprimir lista</button>
             <button id="almox-btn-marcar-pronto-todos" class="btn btn-neutral" type="button">Marcar pronto p/ todos</button>
             <button id="btn-fechar-modal-almox-pedidos" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
           </div>
@@ -225,10 +221,10 @@
               <th>Destino</th>
               <th>Codigo</th>
               <th>Descricao</th>
-              <th>Qtd pacote</th>
-              <th>Solicitada</th>
-              <th>Pendente</th>
+              <th>Qtd solicitada</th>
+              <th>Qtd por pacote</th>
               <th>Saldo Almox</th>
+              <th>Pendente</th>
               <th>Status</th>
               <th>Acoes</th>
             </tr>
@@ -384,12 +380,12 @@
   <div id="almox-entrada-manual-modal" class="modal hidden" aria-hidden="true">
     <div class="modal-backdrop" data-close-modal="almox-entrada-manual"></div>
 
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-wide">
       <div class="modal-header">
         <div>
           <span class="section-pill">Estoque</span>
           <h2>Entrada manual no Almoxarifado</h2>
-          <p>Lance um item pronto diretamente no estoque do Almoxarifado.</p>
+          <p>Monte uma lista de entradas e confirme tudo de uma vez.</p>
         </div>
 
         <button id="btn-fechar-modal-almox-entrada-manual" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
@@ -420,9 +416,36 @@
           <input id="almox-entrada-manual-observacao" type="text" maxlength="255" placeholder="Opcional">
         </div>
 
+        <div class="span-12">
+          <div class="subtle-divider"></div>
+          <span class="section-pill">Lista de entradas</span>
+          <h3>Itens para confirmar</h3>
+          <p id="almox-entrada-manual-lote-total">0 item(ns) na lista</p>
+
+          <div class="table-wrapper">
+            <table class="history-table">
+              <thead>
+                <tr>
+                  <th>Codigo</th>
+                  <th>Descricao</th>
+                  <th>Quantidade</th>
+                  <th>Observacao</th>
+                  <th>Acoes</th>
+                </tr>
+              </thead>
+              <tbody id="almox-entrada-manual-lote-tbody">
+                <tr>
+                  <td colspan="5" class="empty-state">Nenhuma entrada adicionada.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         <div class="span-12 modal-actions">
           <button id="btn-cancelar-modal-almox-entrada-manual" class="btn btn-neutral" type="button">Cancelar</button>
-          <button class="btn btn-primary" type="submit">Salvar Entrada</button>
+          <button id="btn-confirmar-lote-almox-entrada-manual" class="btn btn-success" type="button" disabled>Confirmar Entradas</button>
+          <button id="btn-adicionar-lote-almox-entrada-manual" class="btn btn-primary" type="submit">Adicionar a Lista</button>
         </div>
       </form>
     </div>
@@ -679,6 +702,108 @@
     </div>
   </div>
 
+  <div id="almox-detalhes-peca-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="almox-detalhes-peca"></div>
+
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Detalhes da peca</span>
+          <h2 id="almox-detalhes-peca-titulo">Peca selecionada</h2>
+          <p id="almox-detalhes-peca-subtitulo">Informacoes do cadastro e da cobertura atual.</p>
+        </div>
+        <button id="btn-fechar-modal-almox-detalhes-peca" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div class="almox-piece-details-grid">
+        <article><span>Saldo no Almoxarifado</span><strong id="almox-detalhes-peca-saldo">0</strong></article>
+        <article><span>Tipo</span><strong id="almox-detalhes-peca-tipo">-</strong></article>
+        <article><span>Classificacao</span><strong id="almox-detalhes-peca-classificacao">-</strong></article>
+        <article><span>Fornecedor</span><strong id="almox-detalhes-peca-fornecedor">-</strong></article>
+        <article><span>Quantidade que sai no mes</span><strong id="almox-detalhes-peca-saida-mes">0</strong></article>
+        <article><span>Dura ate</span><strong id="almox-detalhes-peca-duracao">-</strong></article>
+        <article><span>Estado da peca</span><strong id="almox-detalhes-peca-estado">-</strong></article>
+      </div>
+    </div>
+  </div>
+
+  <div id="almox-ajuste-saldo-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="almox-ajuste-saldo"></div>
+
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Ajuste</span>
+          <h2>Ajustar saldo do Almoxarifado</h2>
+          <p>Informe o novo saldo final da peca selecionada.</p>
+        </div>
+        <button id="btn-fechar-modal-almox-ajuste-saldo" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="almox-ajuste-saldo-mensagem" class="message hidden"></div>
+      <div class="structure-highlight">
+        <div>
+          <p class="page-kicker">Item selecionado</p>
+          <h3 id="almox-ajuste-saldo-titulo">Nenhum item selecionado</h3>
+          <p id="almox-ajuste-saldo-subtitulo">Estoque: Almoxarifado</p>
+        </div>
+        <div class="structure-kpis">
+          <span id="almox-ajuste-saldo-atual" class="mini-chip">Saldo atual: 0</span>
+        </div>
+      </div>
+
+      <form id="almox-ajuste-saldo-form" class="form-grid">
+        <input id="almox-ajuste-saldo-id-peca" type="hidden">
+        <input id="almox-ajuste-saldo-id-estoque" type="hidden">
+        <div class="field span-6">
+          <label for="almox-ajuste-saldo-novo">Novo saldo</label>
+          <input id="almox-ajuste-saldo-novo" type="number" min="0" step="0.01" required>
+        </div>
+        <div class="field span-6">
+          <label for="almox-ajuste-saldo-observacao">Observacao</label>
+          <input id="almox-ajuste-saldo-observacao" type="text" maxlength="255" placeholder="Motivo do ajuste">
+        </div>
+        <div class="span-12 modal-actions">
+          <button id="btn-cancelar-modal-almox-ajuste-saldo" class="btn btn-neutral" type="button">Cancelar</button>
+          <button class="btn btn-primary" type="submit">Confirmar ajuste</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="almox-saldos-peca-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="almox-saldos-peca"></div>
+
+    <div class="modal-dialog modal-wide">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Estoques</span>
+          <h2 id="almox-saldos-peca-titulo">Saldo nos estoques</h2>
+          <p id="almox-saldos-peca-subtitulo">Quantidades atuais da peca em cada estoque.</p>
+        </div>
+        <button id="btn-fechar-modal-almox-saldos-peca" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="almox-saldos-peca-mensagem" class="message hidden"></div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Estoque</th>
+              <th>Codigo</th>
+              <th>Descricao</th>
+              <th>Classificacao</th>
+              <th>Quantidade</th>
+            </tr>
+          </thead>
+          <tbody id="almox-saldos-peca-tbody">
+            <tr><td colspan="5" class="empty-state">Selecione uma peca para visualizar os saldos.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <div id="almox-historico-modal" class="modal hidden" aria-hidden="true">
     <div class="modal-backdrop" data-close-modal="almox-historico"></div>
 
@@ -686,7 +811,7 @@
       <div class="modal-header">
         <div>
           <span class="section-pill">Historico</span>
-          <h2>Movimentacoes do Almoxarifado</h2>
+          <h2 id="almox-historico-titulo">Movimentacoes do Almoxarifado</h2>
           <p id="almox-historico-total">0 movimentacao(oes)</p>
         </div>
 

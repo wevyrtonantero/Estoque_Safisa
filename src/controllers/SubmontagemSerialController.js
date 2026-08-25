@@ -258,6 +258,49 @@ const SubmontagemSerialController = {
 
       return res.status(500).json({ message: 'Erro ao atualizar o modelo do numero de serie.' });
     }
+  },
+
+  async changeAvailableModel(req, res) {
+    try {
+      const id = normalizeOptionalInteger(req.params.id);
+      if (!Number.isInteger(id)) {
+        return res.status(400).json({ message: 'O registro informado deve ser valido.' });
+      }
+
+      const result = await SubmontagemSerialModel.changeAvailableModelWithStock(id, {
+        id_modelo_servo: req.body?.id_modelo_servo,
+        usuario: req.currentUser || null
+      });
+
+      await recordAuditLog(req, {
+        modulo: 'SUBMONTAGEM_SERIAIS',
+        acao: 'TROCA_MODELO_COM_ESTOQUE',
+        entidade_tipo: 'SUBMONTAGEM_SERIAL',
+        entidade_id: result.depois.id,
+        descricao: `Numero de serie ${result.numero_serie} trocado de ${result.modelo_anterior.codigo} para ${result.modelo_novo.codigo}, com movimentacao automatica dos estoques.`,
+        antes: result.antes,
+        depois: {
+          registro: result.depois,
+          modelo_anterior: result.modelo_anterior,
+          modelo_novo: result.modelo_novo,
+          componentes_retornados: result.componentes_retornados,
+          componentes_consumidos: result.componentes_consumidos
+        }
+      });
+
+      return res.status(200).json(result);
+    } catch (error) {
+      console.error('Erro ao trocar modelo disponivel com movimentacao de estoque:', error);
+
+      if (error.statusCode) {
+        return res.status(error.statusCode).json({
+          message: error.message,
+          details: error.details || null
+        });
+      }
+
+      return res.status(500).json({ message: 'Erro ao trocar o modelo e movimentar os estoques.' });
+    }
   }
 };
 

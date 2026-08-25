@@ -1,3 +1,11 @@
+// Protecao global: a roda do mouse deve rolar a pagina, nunca alterar inputs numericos.
+if (!document.querySelector('script[data-number-input-guard]')) {
+  const numberInputGuardScript = document.createElement('script');
+  numberInputGuardScript.src = '/js/number-input-guard.js';
+  numberInputGuardScript.dataset.numberInputGuard = 'true';
+  document.head.appendChild(numberInputGuardScript);
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   try {
     const response = await fetch('/api/auth/me', {

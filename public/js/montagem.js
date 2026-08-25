@@ -35,6 +35,7 @@ let reabrirModalNumeroSerieAoFecharDiagnostico = false;
 let solicitacaoEnvioEmAndamento = false;
 let historicoItemMovimentacoesCache = [];
 let numeroSerieFiltroDebounceTimer = null;
+let registroNumeroSerieCorpoPendente = null;
 
 const refs = {
   mensagem: document.getElementById('montagem-mensagem'),
@@ -153,6 +154,12 @@ const refs = {
   numeroSerieManualToggle: document.getElementById('montagem-numero-serie-manual-toggle'),
   numeroSerieManualWrap: document.getElementById('montagem-numero-serie-manual-wrap'),
   numeroSerieManual: document.getElementById('montagem-numero-serie-manual'),
+  numeroSerieConfirmarCorpoModal: document.getElementById('montagem-numero-serie-confirmar-corpo-modal'),
+  numeroSerieConfirmarCorpoModelo: document.getElementById('montagem-numero-serie-confirmar-corpo-modelo'),
+  numeroSerieConfirmarCorpoDescricao: document.getElementById('montagem-numero-serie-confirmar-corpo-descricao'),
+  numeroSerieConfirmarCorpoQuantidade: document.getElementById('montagem-numero-serie-confirmar-corpo-quantidade'),
+  numeroSerieConfirmarCorpoFaixa: document.getElementById('montagem-numero-serie-confirmar-corpo-faixa'),
+  numeroSerieConfirmarCorpoSubmit: document.getElementById('btn-confirmar-modal-montagem-numero-serie-confirmar-corpo'),
   numeroSerieHistoricoModal: document.getElementById('montagem-numero-serie-historico-modal'),
   numeroSerieSequenciaModal: document.getElementById('montagem-numero-serie-sequencia-modal'),
   numeroSerieSequenciaMensagem: document.getElementById('montagem-numero-serie-sequencia-mensagem'),
@@ -317,6 +324,9 @@ function bindEvents() {
   document.getElementById('btn-fechar-modal-montagem-desmembrar').addEventListener('click', fecharModalDesmembrar);
   document.getElementById('btn-cancelar-modal-montagem-desmembrar').addEventListener('click', fecharModalDesmembrar);
   document.getElementById('btn-fechar-modal-montagem-numeros-serie').addEventListener('click', fecharModalNumerosSerie);
+  document.getElementById('btn-fechar-modal-montagem-numero-serie-confirmar-corpo').addEventListener('click', fecharModalConfirmacaoRegistroCorpo);
+  document.getElementById('btn-cancelar-modal-montagem-numero-serie-confirmar-corpo').addEventListener('click', fecharModalConfirmacaoRegistroCorpo);
+  refs.numeroSerieConfirmarCorpoSubmit.addEventListener('click', handleConfirmarRegistroCorpo);
   document.getElementById('btn-abrir-modal-montagem-numero-serie-historico').addEventListener('click', abrirModalHistoricoNumeroSerie);
   document.getElementById('btn-fechar-modal-montagem-numero-serie-historico').addEventListener('click', fecharModalHistoricoNumeroSerie);
   document.getElementById('btn-abrir-modal-montagem-numero-serie-sequencia').addEventListener('click', abrirModalSequenciaNumeroSerie);
@@ -348,6 +358,7 @@ function bindEvents() {
     refs.efetuarModal,
     refs.desmembrarModal,
     refs.numeroSerieModal,
+    refs.numeroSerieConfirmarCorpoModal,
     refs.numeroSerieHistoricoModal,
     refs.numeroSerieSequenciaModal,
     refs.numeroSerieDiagnosticoModal,
@@ -1267,6 +1278,11 @@ async function abrirModalNumerosSerie() {
 
 function fecharModalNumerosSerie() {
   esconderSugestoesNumeroSerieCadastro();
+  if (!refs.numeroSerieConfirmarCorpoModal.classList.contains('hidden')) {
+    fecharModalConfirmacaoRegistroCorpo();
+  } else {
+    registroNumeroSerieCorpoPendente = null;
+  }
   closeModal(refs.numeroSerieModal);
 }
 
@@ -1887,83 +1903,157 @@ async function handleRegistrarNumerosSerie(event) {
   event.preventDefault();
 
   try {
-    const modeloId = Number.parseInt(refs.numeroSerieModeloId.value, 10);
-    const manualAtivo = isNumeroSerieManualAtivo();
-    const numeroManual = refs.numeroSerieManual.value.trim().toUpperCase();
-    const quantidade = manualAtivo ? 1 : Number.parseInt(refs.numeroSerieQuantidade.value, 10);
-    const montador = refs.numeroSerieMontador.value.trim();
+    const dadosRegistro = obterDadosRegistroNumeroSerie();
+    const modelo = localizarModeloNumeroSerie(dadosRegistro.modeloId);
 
-    if (!Number.isInteger(modeloId)) {
-      throw new Error('Selecione um modelo valido para o registro.');
+    if (isModeloCorpoNumeroSerie(modelo)) {
+      abrirModalConfirmacaoRegistroCorpo(modelo, dadosRegistro);
+      return;
     }
 
-    if (!Number.isInteger(quantidade) || quantidade <= 0) {
-      throw new Error('Informe uma quantidade valida para o registro.');
-    }
-
-    if (manualAtivo && !numeroManual) {
-      throw new Error('Informe o numero manual que deseja registrar.');
-    }
-
-    if (!montador) {
-      throw new Error('Informe o nome do montador.');
-    }
-
-    const numeroEsperado = refs.numeroSerieAtual.value;
-    const response = await fetch(`${submontagemSeriaisApiBaseUrl}/lote`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id_modelo_servo: modeloId,
-        quantidade,
-        numero_manual: manualAtivo ? numeroManual : '',
-        montador_nome: montador
-      })
-    });
-    const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error(formatarErroNumeroSerie(result));
-    }
-
-    ultimoMontadorNumeroSerie = montador;
-    const houveConcorrencia = !result.registro_manual && result.primeiro_numero_serie !== numeroEsperado;
-
-    if (result.registro_manual) {
-      mostrarMensagemNumeroSerie(
-        `Numero manual registrado com sucesso: ${result.primeiro_numero_serie}.`,
-        'success'
-      );
-    } else if (houveConcorrencia) {
-      mostrarMensagemNumeroSerie(
-        `Lote registrado com sucesso. Outro operador gravou antes e a faixa confirmada foi de ${result.primeiro_numero_serie} ate ${result.ultimo_numero_serie}.`,
-        'success'
-      );
-    } else {
-      mostrarMensagemNumeroSerie(
-        `Lote registrado com sucesso: ${result.primeiro_numero_serie} ate ${result.ultimo_numero_serie}.`,
-        'success'
-      );
-    }
-
-    refs.numeroSerieModeloId.value = '';
-    refs.numeroSerieModeloBusca.value = '';
-    refs.numeroSerieQuantidade.value = '1';
-    refs.numeroSerieManualToggle.checked = false;
-    refs.numeroSerieManual.value = '';
-    atualizarModoNumeroSerie();
-    renderizarResumoNumeroSerie(null);
-    resetDiagnosticoNumeroSerie();
-    esconderSugestoesNumeroSerieCadastro();
-
-    await Promise.all([
-      carregarProximoNumeroSerie(),
-      carregarRegistrosNumeroSerie()
-    ]);
+    await executarRegistroNumerosSerie(dadosRegistro);
   } catch (error) {
     await atualizarDiagnosticoNumeroSerie();
     mostrarMensagemNumeroSerie(error.message, 'error');
   }
+}
+
+function obterDadosRegistroNumeroSerie() {
+  const modeloId = Number.parseInt(refs.numeroSerieModeloId.value, 10);
+  const manualAtivo = isNumeroSerieManualAtivo();
+  const numeroManual = refs.numeroSerieManual.value.trim().toUpperCase();
+  const quantidade = manualAtivo ? 1 : Number.parseInt(refs.numeroSerieQuantidade.value, 10);
+  const montador = refs.numeroSerieMontador.value.trim();
+
+  if (!Number.isInteger(modeloId)) {
+    throw new Error('Selecione um modelo valido para o registro.');
+  }
+
+  if (!Number.isInteger(quantidade) || quantidade <= 0) {
+    throw new Error('Informe uma quantidade valida para o registro.');
+  }
+
+  if (manualAtivo && !numeroManual) {
+    throw new Error('Informe o numero manual que deseja registrar.');
+  }
+
+  if (!montador) {
+    throw new Error('Informe o nome do montador.');
+  }
+
+  return {
+    modeloId,
+    manualAtivo,
+    numeroManual,
+    quantidade,
+    montador,
+    numeroEsperado: refs.numeroSerieAtual.value,
+    faixaVisual: refs.numeroSerieFaixa.value
+  };
+}
+
+function localizarModeloNumeroSerie(modeloId) {
+  return [...submontagensCache, ...itensCache]
+    .find((item) => Number(item.id) === Number(modeloId)) || null;
+}
+
+function isModeloCorpoNumeroSerie(modelo) {
+  return Boolean(modelo && normalizarBusca(modelo.descricao).includes('corpo'));
+}
+
+function abrirModalConfirmacaoRegistroCorpo(modelo, dadosRegistro) {
+  registroNumeroSerieCorpoPendente = { ...dadosRegistro };
+  refs.numeroSerieConfirmarCorpoModelo.textContent = modelo.codigo || '-';
+  refs.numeroSerieConfirmarCorpoDescricao.textContent = modelo.descricao || '-';
+  refs.numeroSerieConfirmarCorpoQuantidade.textContent = `Quantidade: ${formatInteger(dadosRegistro.quantidade)}`;
+  refs.numeroSerieConfirmarCorpoFaixa.textContent = `Numero(s): ${dadosRegistro.faixaVisual || dadosRegistro.numeroEsperado || '-'}`;
+  refs.numeroSerieConfirmarCorpoSubmit.disabled = false;
+  openModal(refs.numeroSerieConfirmarCorpoModal);
+}
+
+function fecharModalConfirmacaoRegistroCorpo() {
+  registroNumeroSerieCorpoPendente = null;
+  refs.numeroSerieConfirmarCorpoSubmit.disabled = false;
+  closeModal(refs.numeroSerieConfirmarCorpoModal);
+}
+
+async function handleConfirmarRegistroCorpo() {
+  const dadosRegistro = registroNumeroSerieCorpoPendente
+    ? { ...registroNumeroSerieCorpoPendente }
+    : null;
+
+  if (!dadosRegistro) {
+    fecharModalConfirmacaoRegistroCorpo();
+    mostrarMensagemNumeroSerie('Revise e selecione novamente o modelo CORPO.', 'error');
+    return;
+  }
+
+  refs.numeroSerieConfirmarCorpoSubmit.disabled = true;
+  registroNumeroSerieCorpoPendente = null;
+  closeModal(refs.numeroSerieConfirmarCorpoModal);
+
+  try {
+    await executarRegistroNumerosSerie(dadosRegistro);
+  } catch (error) {
+    await atualizarDiagnosticoNumeroSerie();
+    mostrarMensagemNumeroSerie(error.message, 'error');
+  } finally {
+    refs.numeroSerieConfirmarCorpoSubmit.disabled = false;
+  }
+}
+
+async function executarRegistroNumerosSerie(dadosRegistro) {
+  const response = await fetch(`${submontagemSeriaisApiBaseUrl}/lote`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      id_modelo_servo: dadosRegistro.modeloId,
+      quantidade: dadosRegistro.quantidade,
+      numero_manual: dadosRegistro.manualAtivo ? dadosRegistro.numeroManual : '',
+      montador_nome: dadosRegistro.montador
+    })
+  });
+  const result = await response.json();
+
+  if (!response.ok) {
+    throw new Error(formatarErroNumeroSerie(result));
+  }
+
+  ultimoMontadorNumeroSerie = dadosRegistro.montador;
+  const houveConcorrencia = !result.registro_manual
+    && result.primeiro_numero_serie !== dadosRegistro.numeroEsperado;
+
+  if (result.registro_manual) {
+    mostrarMensagemNumeroSerie(
+      `Numero manual registrado com sucesso: ${result.primeiro_numero_serie}.`,
+      'success'
+    );
+  } else if (houveConcorrencia) {
+    mostrarMensagemNumeroSerie(
+      `Lote registrado com sucesso. Outro operador gravou antes e a faixa confirmada foi de ${result.primeiro_numero_serie} ate ${result.ultimo_numero_serie}.`,
+      'success'
+    );
+  } else {
+    mostrarMensagemNumeroSerie(
+      `Lote registrado com sucesso: ${result.primeiro_numero_serie} ate ${result.ultimo_numero_serie}.`,
+      'success'
+    );
+  }
+
+  refs.numeroSerieModeloId.value = '';
+  refs.numeroSerieModeloBusca.value = '';
+  refs.numeroSerieQuantidade.value = '1';
+  refs.numeroSerieManualToggle.checked = false;
+  refs.numeroSerieManual.value = '';
+  atualizarModoNumeroSerie();
+  renderizarResumoNumeroSerie(null);
+  resetDiagnosticoNumeroSerie();
+  esconderSugestoesNumeroSerieCadastro();
+
+  await Promise.all([
+    carregarProximoNumeroSerie(),
+    carregarRegistrosNumeroSerie()
+  ]);
 }
 
 function handleRegistrosNumeroSerieActions(event) {
@@ -3511,6 +3601,7 @@ function handleModalBackdrop(event) {
   if (event.target.dataset.closeModal === 'montagem-efetuar') fecharModalEfetuarMontagem();
   if (event.target.dataset.closeModal === 'montagem-desmembrar') fecharModalDesmembrar();
   if (event.target.dataset.closeModal === 'montagem-numeros-serie') fecharModalNumerosSerie();
+  if (event.target.dataset.closeModal === 'montagem-numero-serie-confirmar-corpo') fecharModalConfirmacaoRegistroCorpo();
   if (event.target.dataset.closeModal === 'montagem-numero-serie-historico') fecharModalHistoricoNumeroSerie();
   if (event.target.dataset.closeModal === 'montagem-numero-serie-sequencia') fecharModalSequenciaNumeroSerie();
   if (event.target.dataset.closeModal === 'montagem-numero-serie-diagnostico') fecharModalDiagnosticoNumeroSerie();
@@ -3590,6 +3681,11 @@ function handleKeyboardShortcuts(event) {
     return;
   }
 
+  if (!refs.numeroSerieConfirmarCorpoModal.classList.contains('hidden')) {
+    fecharModalConfirmacaoRegistroCorpo();
+    return;
+  }
+
   if (!refs.numeroSerieSequenciaModal.classList.contains('hidden')) {
     fecharModalSequenciaNumeroSerie();
     return;
@@ -3657,6 +3753,7 @@ function closeModal(modal) {
     refs.efetuarModal,
     refs.desmembrarModal,
     refs.numeroSerieModal,
+    refs.numeroSerieConfirmarCorpoModal,
     refs.numeroSerieHistoricoModal,
     refs.numeroSerieSequenciaModal,
     refs.numeroSerieDiagnosticoModal,

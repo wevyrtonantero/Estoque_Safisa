@@ -1064,6 +1064,15 @@ textarea {
   color: #666666;
 }
 
+.servo-sheet-balance-cell {
+  color: #111111;
+  font-weight: 900;
+}
+
+.servo-sheet-balance-cell.is-negative {
+  color: #d20f20;
+}
+
 .servo-sheet-signed-cell.is-negative {
   color: #e94d64;
 }
@@ -1074,6 +1083,26 @@ textarea {
 
 .servo-sheet-signed-cell.is-dash {
   color: #8ea0bb;
+}
+
+.servo-sheet-table .servo-sheet-guide-row {
+  background: #fff8c7 !important;
+  box-shadow: inset 0 2px 0 #e6bd00, inset 0 -2px 0 #e6bd00;
+}
+
+.servo-sheet-table .servo-sheet-guide-column {
+  background: #fffbe5 !important;
+  box-shadow: inset 2px 0 0 #e6bd00, inset -2px 0 0 #e6bd00;
+}
+
+.servo-sheet-table .servo-sheet-guide-row.servo-sheet-guide-column {
+  background: #ffef82 !important;
+  box-shadow: inset 0 0 0 2px #d6a900;
+}
+
+.servo-sheet-table .servo-sheet-guide-intersection {
+  background: #ffe34f !important;
+  box-shadow: inset 0 0 0 3px #b88900;
 }
 
 @media (max-width: 1100px) {
@@ -1152,6 +1181,13 @@ textarea {
   .servo-sheet-table th,
   .servo-sheet-table td {
     border-color: #000 !important;
+  }
+
+  .servo-sheet-table .servo-sheet-guide-row,
+  .servo-sheet-table .servo-sheet-guide-column,
+  .servo-sheet-table .servo-sheet-guide-intersection {
+    background: #fff !important;
+    box-shadow: none !important;
   }
 
   .servo-sheet-model-head {
@@ -3772,6 +3808,95 @@ tbody tr:hover {
   text-align: right;
 }
 
+.almox-piece-details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+}
+
+.almox-piece-details-grid article {
+  display: grid;
+  gap: 7px;
+  min-height: 92px;
+  align-content: center;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface-blue);
+}
+
+.almox-piece-details-grid article > span {
+  color: var(--text-soft);
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.almox-piece-details-grid article > strong {
+  color: var(--primary-900);
+  font-size: 1rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.modal-header .numero-serie-corpo-alerta {
+  width: 100%;
+  margin: 5px 0 0;
+  color: #e00018 !important;
+  font-size: 1.65rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  line-height: 1;
+  text-align: center;
+  text-shadow: 0 0 10px rgba(224, 0, 24, 0.35);
+  text-transform: uppercase;
+  animation: numero-serie-corpo-piscar 0.7s ease-in-out infinite;
+}
+
+@keyframes numero-serie-corpo-piscar {
+  0%,
+  100% {
+    color: #d80018;
+    opacity: 1;
+  }
+
+  50% {
+    color: #ff3045;
+    opacity: 0.18;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-header .numero-serie-corpo-alerta {
+    animation: none;
+  }
+}
+
+.serial-available-edit-button {
+  appearance: none;
+  border: 1px solid #ef9aa2;
+  background: #fff0f1;
+  color: #b51221;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 900;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
+}
+
+.serial-available-edit-button:hover,
+.serial-available-edit-button:focus-visible {
+  background: #ffe0e3;
+  box-shadow: 0 8px 18px rgba(181, 18, 33, 0.16);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.serial-available-edit-button::before {
+  content: '\270E';
+  margin-right: 5px;
+}
+
 .expedicao-list-actions {
   width: auto;
   min-width: 200px;
@@ -4076,6 +4201,31 @@ tbody tr:hover {
   color: var(--text-soft);
 }
 
+.seriais-disponiveis-edit-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: -2px 0 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(29, 92, 151, 0.2);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(231, 242, 252, 0.92), rgba(246, 250, 254, 0.96));
+}
+
+.seriais-disponiveis-edit-toolbar > div {
+  display: grid;
+  gap: 3px;
+}
+
+.seriais-disponiveis-edit-toolbar small {
+  color: var(--text-soft);
+}
+
+.seriais-disponiveis-edit-toolbar .btn {
+  flex: 0 0 auto;
+}
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;
@@ -4368,6 +4518,15 @@ tbody tr:hover {
   .topbar-actions .btn,
   .modal-actions .btn,
   .actions-row .btn {
+    width: 100%;
+  }
+
+  .seriais-disponiveis-edit-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .seriais-disponiveis-edit-toolbar .btn {
     width: 100%;
   }
 
@@ -5520,12 +5679,43 @@ tbody tr:hover {
   gap: 16px;
 }
 
+.kanban-stock-filters {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+
+.kanban-stock-category-filter {
+  display: grid;
+  grid-template-columns: auto minmax(140px, 210px);
+  align-items: center;
+  gap: 9px;
+  flex: 0 1 290px;
+}
+
+.kanban-stock-category-filter label {
+  margin: 0;
+  font-size: 0.76rem;
+  white-space: nowrap;
+}
+
+.kanban-stock-category-filter select {
+  min-height: 36px;
+  height: 36px;
+  padding: 6px 32px 6px 11px;
+  border-radius: 11px;
+  font-size: 0.82rem;
+}
+
 .kanban-stock-search-field {
   display: grid;
   grid-template-columns: auto minmax(260px, 520px);
   align-items: center;
   gap: 9px;
-  width: min(650px, 100%);
+  width: min(590px, 100%);
+  flex: 1;
 }
 
 .kanban-stock-search-field label {
@@ -5630,14 +5820,14 @@ tbody tr:hover {
 
 .kanban-stock-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(135px, 1fr));
   gap: 12px;
   padding: 16px;
 }
 
 .kanban-stock-card,
 .kanban-stock-add-card {
-  min-height: 164px;
+  min-height: 136px;
   border: 2px solid rgba(8, 29, 52, 0.2);
   border-radius: 20px;
   cursor: pointer;
@@ -5650,7 +5840,7 @@ tbody tr:hover {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  padding: 12px;
+  padding: 10px 12px;
   overflow: hidden;
   box-shadow: 0 14px 24px rgba(16, 42, 70, 0.13);
 }
@@ -5681,27 +5871,10 @@ tbody tr:hover {
 .kanban-stock-card.is-yellow { background: linear-gradient(145deg, #ffe63c, #f5c900); color: #172436; }
 .kanban-stock-card.is-green { background: linear-gradient(145deg, #2bc35b, #16943f); color: #fff; }
 
-.kanban-stock-card-status {
-  align-self: flex-end;
-  padding: 4px 7px;
-  border: 1px solid rgba(255, 255, 255, 0.24);
-  border-radius: 999px;
-  background: rgba(8, 25, 43, 0.15);
-  font-size: 0.59rem;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.kanban-stock-card.is-yellow .kanban-stock-card-status {
-  border-color: rgba(23, 36, 54, 0.18);
-  background: rgba(255, 255, 255, 0.36);
-}
-
 .kanban-stock-card-code {
   position: relative;
   z-index: 1;
-  margin-top: 9px;
-  font-size: 1.18rem;
+  font-size: 1.34rem;
   line-height: 1.05;
   overflow-wrap: anywhere;
 }
@@ -5723,7 +5896,7 @@ tbody tr:hover {
   position: relative;
   z-index: 1;
   margin-top: auto;
-  font-size: 1.22rem;
+  font-size: 1.4rem;
   font-weight: 900;
 }
 
@@ -5897,7 +6070,7 @@ tbody tr:hover {
 
 .kanban-stock-details-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
   gap: 12px;
 }
 
@@ -5965,7 +6138,64 @@ tbody tr:hover {
 
 .kanban-shortages-content {
   display: grid;
-  gap: 16px;
+  gap: 18px;
+}
+
+.kanban-shortages-report,
+.kanban-shortages-orders {
+  display: grid;
+  gap: 12px;
+}
+
+.kanban-shortages-report {
+  overflow: hidden;
+  border: 1px solid #b9d1e8;
+  border-radius: 18px;
+  background: #fff;
+}
+
+.kanban-shortages-report .kanban-shortages-section-heading {
+  padding: 14px 16px 0;
+}
+
+.kanban-shortages-report .table-wrapper {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.kanban-shortages-report table {
+  min-width: 680px;
+}
+
+.kanban-shortages-section-heading h3 {
+  margin: 7px 0 2px;
+  color: var(--primary-900);
+  font-size: 1.05rem;
+}
+
+.kanban-shortages-section-heading p {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.82rem;
+}
+
+.kanban-shortages-explanation {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 12px 14px;
+  border: 1px solid #f0d49b;
+  border-radius: 14px;
+  background: #fff9e9;
+  color: var(--text-soft);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.kanban-shortages-explanation strong {
+  flex-shrink: 0;
+  color: var(--primary-900);
 }
 
 .kanban-shortage-order {
@@ -5975,14 +6205,46 @@ tbody tr:hover {
   background: #fff;
 }
 
-.kanban-shortage-order > header {
+.kanban-shortage-order > summary {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 14px;
   padding: 14px 16px;
-  border-bottom: 1px solid #f0d1d4;
   background: linear-gradient(135deg, #fff9f9, #fff1f2);
+  cursor: pointer;
+  list-style: none;
+}
+
+.kanban-shortage-order > summary::-webkit-details-marker {
+  display: none;
+}
+
+.kanban-shortage-order[open] > summary {
+  border-bottom: 1px solid #f0d1d4;
+}
+
+.kanban-shortage-order-summary-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.kanban-shortage-chevron {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--primary-800);
+  font-size: 1.25rem;
+  font-weight: 900;
+  transition: transform 0.18s ease;
+}
+
+.kanban-shortage-order[open] .kanban-shortage-chevron {
+  transform: rotate(180deg);
 }
 
 .kanban-shortage-order h3 {
@@ -6076,6 +6338,10 @@ tbody tr:hover {
     align-self: flex-start;
   }
 
+  .kanban-stock-filters {
+    width: 100%;
+  }
+
   .kanban-stock-details-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -6093,6 +6359,18 @@ tbody tr:hover {
   .kanban-stock-search-field {
     grid-template-columns: 1fr;
     gap: 5px;
+  }
+
+  .kanban-stock-filters {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .kanban-stock-category-filter {
+    grid-template-columns: 1fr;
+    gap: 5px;
+    flex-basis: auto;
   }
 
   .kanban-stock-category-header {
@@ -6116,7 +6394,7 @@ tbody tr:hover {
 
   .kanban-stock-card,
   .kanban-stock-add-card {
-    min-height: 154px;
+    min-height: 132px;
     padding: 10px;
   }
 

@@ -2,12 +2,14 @@ const apiBaseUrl = '/api/gerenciamento-servos/matriz';
 
 let escopoAtual = 'global';
 let matrizAtual = null;
+let celulaGuiaAtual = null;
 
 const refs = {
   mensagem: document.getElementById('ger-servos-mensagem'),
   titulo: document.getElementById('ger-servos-titulo'),
   subtitulo: document.getElementById('ger-servos-subtitulo'),
   resumo: document.getElementById('ger-servos-resumo'),
+  tabela: document.getElementById('ger-servos-tabela'),
   thead: document.getElementById('ger-servos-thead'),
   tbody: document.getElementById('ger-servos-tbody'),
   btnDia: document.getElementById('ger-servos-btn-dia'),
@@ -48,6 +50,45 @@ function bindEvents() {
   refs.btnGlobal.addEventListener('click', () => alternarEscopo('global'));
   refs.btnAtualizar.addEventListener('click', () => carregarMatriz());
   refs.btnImprimir.addEventListener('click', () => window.print());
+  refs.tabela.addEventListener('mouseover', atualizarGuiaLeitura);
+  refs.tabela.addEventListener('mouseleave', limparGuiaLeitura);
+}
+
+function atualizarGuiaLeitura(event) {
+  const celula = event.target.closest('th, td');
+  if (!celula || !refs.tabela.contains(celula) || celula.classList.contains('empty-state')) {
+    limparGuiaLeitura();
+    return;
+  }
+
+  if (celulaGuiaAtual === celula) {
+    return;
+  }
+
+  limparGuiaLeitura();
+  celulaGuiaAtual = celula;
+  const indiceColuna = celula.cellIndex;
+
+  Array.from(celula.parentElement.cells).forEach((item) => {
+    item.classList.add('servo-sheet-guide-row');
+  });
+
+  Array.from(refs.tabela.rows).forEach((linha) => {
+    const item = linha.cells[indiceColuna];
+    if (item && Number(item.colSpan || 1) === 1) {
+      item.classList.add('servo-sheet-guide-column');
+    }
+  });
+
+  celula.classList.add('servo-sheet-guide-intersection');
+}
+
+function limparGuiaLeitura() {
+  refs.tabela.querySelectorAll('.servo-sheet-guide-row, .servo-sheet-guide-column, .servo-sheet-guide-intersection')
+    .forEach((celula) => {
+      celula.classList.remove('servo-sheet-guide-row', 'servo-sheet-guide-column', 'servo-sheet-guide-intersection');
+    });
+  celulaGuiaAtual = null;
 }
 
 async function alternarEscopo(escopo) {
@@ -126,7 +167,7 @@ function renderizarResumo() {
     ['Corpos', formatNumber(resumo.corpos_total)],
     ['Zinco', formatNumber(resumo.zinco_total)],
     ['Usinagem', formatNumber(resumo.usinagem_total)],
-    ['INF-Producao', formatSignedNumber(resumo.inf_producao_total)]
+    ['Total final', formatNumber(resumo.saldo_total)]
   ];
 
   refs.resumo.innerHTML = chips.map(([label, value]) => `
@@ -159,7 +200,7 @@ function renderizarTabela() {
       <th class="servo-sheet-resource-col"><span>CORPOS</span></th>
       <th class="servo-sheet-resource-col"><span>ZINCO</span></th>
       <th class="servo-sheet-resource-col"><span>USINAGEM</span></th>
-      <th class="servo-sheet-resource-col"><span>MAT-PRIMA</span></th>
+      <th class="servo-sheet-resource-col" title="Total do modelo menos Estoque, Corpos, Zinco e Usinagem"><span>TOTAL FINAL</span></th>
     </tr>
   `;
 
@@ -192,7 +233,7 @@ function renderizarTabela() {
           ${renderMetricCell(row.corpos)}
           ${renderMetricCell(row.zinco)}
           ${renderMetricCell(row.usinagem)}
-          ${renderMateriaPrimaCell(row.materia_prima)}
+          ${renderSaldoCell(row.saldo_final)}
         </tr>
       `;
     }).join('')}
@@ -204,7 +245,7 @@ function renderizarTabela() {
       <td class="servo-sheet-cell servo-sheet-total-inline">${formatNumberOrEmpty(matrizAtual?.resumo?.corpos_total || 0)}</td>
       <td class="servo-sheet-cell servo-sheet-total-inline">${formatNumberOrEmpty(matrizAtual?.resumo?.zinco_total || 0)}</td>
       <td class="servo-sheet-cell servo-sheet-total-inline">${formatNumberOrEmpty(matrizAtual?.resumo?.usinagem_total || 0)}</td>
-      <td class="servo-sheet-cell servo-sheet-total-inline">${formatNumberOrEmpty(sumMateriaPrima(rows))}</td>
+      ${renderSaldoCell(matrizAtual?.resumo?.saldo_total, 'servo-sheet-total-inline')}
     </tr>
   `;
 }
@@ -215,21 +256,10 @@ function renderMetricCell(value, extraClass = '') {
   return `<td class="servo-sheet-cell ${extraClass} ${isZero ? 'is-zero' : 'is-valued'}">${formatNumberOrEmpty(number)}</td>`;
 }
 
-function renderMateriaPrimaCell(materiaPrima) {
-  const quantidade = Number(materiaPrima?.quantidade || 0);
-  if (!quantidade) {
-    return `<td class="servo-sheet-cell is-dash" title="${escapeHtml(materiaPrima?.codigo || '-') }">-</td>`;
-  }
-
-  return `
-    <td class="servo-sheet-cell is-valued" title="${escapeHtml(`${materiaPrima.codigo || '-'} ${materiaPrima.unidade || ''}`.trim())}">
-      ${formatNumber(quantidade)}
-    </td>
-  `;
-}
-
-function sumMateriaPrima(rows) {
-  return rows.reduce((sum, row) => sum + Number(row?.materia_prima?.quantidade || 0), 0);
+function renderSaldoCell(value, extraClass = '') {
+  const number = Number(value || 0);
+  const signalClass = number < 0 ? 'is-negative' : (number > 0 ? 'is-positive' : 'is-zero');
+  return `<td class="servo-sheet-cell servo-sheet-balance-cell ${extraClass} ${signalClass}">${formatNumber(number)}</td>`;
 }
 
 function formatNumber(value) {

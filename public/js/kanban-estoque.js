@@ -5,8 +5,9 @@ const kanbanState = {
   pecas: [],
   itemDetalhesId: null,
   filtro: '',
+  categoriaFiltro: '',
   categoriasOrdenadas: new Set(),
-  faltasExpedicao: { total_pedidos: 0, total_pendencias: 0, quantidade_faltante: 0, pedidos: [] }
+  faltasExpedicao: { total_pedidos: 0, total_pendencias: 0, quantidade_faltante: 0, resumo_faltantes: [], pedidos: [] }
 };
 
 const kanbanRefs = {};
@@ -16,6 +17,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     board: document.getElementById('kanban-board'),
     mensagem: document.getElementById('kanban-mensagem'),
     busca: document.getElementById('kanban-busca'),
+    categoriaFiltro: document.getElementById('kanban-filtro-categoria'),
     categoriaModal: document.getElementById('kanban-categoria-modal'),
     categoriaForm: document.getElementById('kanban-categoria-form'),
     categoriaId: document.getElementById('kanban-categoria-id'),
@@ -27,6 +29,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     itemId: document.getElementById('kanban-item-id'),
     itemCategoria: document.getElementById('kanban-item-categoria'),
     itemPacote: document.getElementById('kanban-item-pacote'),
+    itemPacoteHint: document.getElementById('kanban-item-pacote-hint'),
     itemPeca: document.getElementById('kanban-item-peca'),
     itemPecaSugestoes: document.getElementById('kanban-item-peca-sugestoes'),
     itemSelecionado: document.getElementById('kanban-item-selecionado'),
@@ -76,6 +79,10 @@ function bindKanbanEvents() {
     kanbanState.filtro = normalizarTexto(kanbanRefs.busca.value);
     renderKanban();
   });
+  kanbanRefs.categoriaFiltro.addEventListener('change', () => {
+    kanbanState.categoriaFiltro = kanbanRefs.categoriaFiltro.value;
+    renderKanban();
+  });
   kanbanRefs.board.addEventListener('click', handleBoardClick);
 
   document.querySelectorAll('[data-close-kanban-modal]').forEach((backdrop) => {
@@ -114,6 +121,7 @@ async function apiRequest(url, options = {}) {
 async function carregarKanban() {
   const result = await apiRequest(kanbanApiUrl);
   kanbanState.categorias = Array.isArray(result.categorias) ? result.categorias : [];
+  renderFiltroCategorias();
   renderKanban();
   renderCategoriasSelect();
 }
@@ -129,6 +137,7 @@ async function carregarFaltasExpedicao() {
     total_pedidos: Number(result.total_pedidos || 0),
     total_pendencias: Number(result.total_pendencias || 0),
     quantidade_faltante: Number(result.quantidade_faltante || 0),
+    resumo_faltantes: Array.isArray(result.resumo_faltantes) ? result.resumo_faltantes : [],
     pedidos: Array.isArray(result.pedidos) ? result.pedidos : []
   };
   renderFaltasExpedicao();
@@ -189,60 +198,119 @@ function renderFaltasExpedicao() {
     return;
   }
 
-  kanbanRefs.faltasConteudo.innerHTML = resumo.pedidos.map((pedido) => `
-    <article class="kanban-shortage-order">
-      <header>
+  kanbanRefs.faltasConteudo.innerHTML = `
+    <section class="kanban-shortages-report">
+      <div class="kanban-shortages-section-heading">
         <div>
-          <span class="section-pill">Pedido ${escapeHtml(pedido.codigo_pedido || String(pedido.id))}</span>
-          <h3>${escapeHtml(pedido.cliente_nome || 'Cliente não informado')}</h3>
-          <p>${escapeHtml(pedido.cidade || '-')} · ${escapeHtml(pedido.status || '-')} · ${formatarDataKanban(pedido.data_pedido)}</p>
+          <span class="section-pill">Resumo geral</span>
+          <h3>Peças realmente faltantes</h3>
+          <p>Quantidades somadas por código em todos os pedidos abertos.</p>
         </div>
-        <strong class="kanban-shortage-count">${formatarNumero(pedido.faltantes.length)} falta(s)</strong>
-      </header>
+      </div>
       <div class="table-wrapper">
         <table>
           <thead>
             <tr>
               <th>Código</th>
               <th>Descrição</th>
-              <th>Tipo</th>
-              <th>Disponível</th>
-              <th>Falta</th>
-              <th>Detalhe</th>
+              <th>Quantidade faltante</th>
+              <th>Pedidos afetados</th>
             </tr>
           </thead>
           <tbody>
-            ${pedido.faltantes.map((item) => `
+            ${resumo.resumo_faltantes.map((item) => `
               <tr>
                 <td class="table-code">${escapeHtml(item.codigo)}</td>
-                <td>${escapeHtml(item.descricao)}</td>
-                <td>${escapeHtml(item.tipo === 'NUMERO_SERIE' ? 'Número de série' : 'Avulso')}</td>
-                <td>${formatarNumero(item.quantidade_disponivel)}</td>
+                <td>${escapeHtml(item.descricao || '-')}</td>
                 <td><strong class="kanban-shortage-value">${formatarNumero(item.quantidade_faltante)}</strong></td>
-                <td>${renderDetalheFalta(item)}</td>
+                <td>${formatarNumero(item.pedidos_afetados)}</td>
               </tr>
             `).join('')}
           </tbody>
         </table>
       </div>
-    </article>
-  `).join('');
+    </section>
+
+    <div class="kanban-shortages-explanation">
+      <strong>Como interpretar:</strong>
+      <span>“Falta” no pedido indica quantos produtos ou servos não podem ser concluídos. Os códigos em “Peças/componentes ausentes” são o material realmente necessário e entram no resumo geral acima.</span>
+    </div>
+
+    <section class="kanban-shortages-orders">
+      <div class="kanban-shortages-section-heading">
+        <div>
+          <span class="section-pill">Por pedido</span>
+          <h3>Pedidos afetados</h3>
+          <p>Clique em um pedido para visualizar os detalhes.</p>
+        </div>
+      </div>
+      ${resumo.pedidos.map((pedido) => `
+        <details class="kanban-shortage-order">
+          <summary>
+            <div>
+              <span class="section-pill">Pedido ${escapeHtml(pedido.codigo_pedido || String(pedido.id))}</span>
+              <h3>${escapeHtml(pedido.cliente_nome || 'Cliente não informado')}</h3>
+              <p>${escapeHtml(pedido.cidade || '-')} · ${escapeHtml(pedido.status || '-')} · ${formatarDataKanban(pedido.data_pedido)}</p>
+            </div>
+            <div class="kanban-shortage-order-summary-actions">
+              <strong class="kanban-shortage-count">${formatarNumero(pedido.faltantes.length)} falta(s)</strong>
+              <span class="kanban-shortage-chevron" aria-hidden="true">⌄</span>
+            </div>
+          </summary>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Produto/servo</th>
+                  <th>Descrição</th>
+                  <th>Tipo</th>
+                  <th>Disponível</th>
+                  <th>Não atendido</th>
+                  <th>Peças/componentes ausentes</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${pedido.faltantes.map((item) => `
+                  <tr>
+                    <td class="table-code">${escapeHtml(item.codigo)}</td>
+                    <td>${escapeHtml(item.descricao)}</td>
+                    <td>${escapeHtml(item.tipo === 'NUMERO_SERIE' ? 'Número de série' : 'Avulso')}</td>
+                    <td>${formatarNumero(item.quantidade_disponivel)}</td>
+                    <td><strong class="kanban-shortage-value">${formatarNumero(item.quantidade_faltante)}</strong></td>
+                    <td>${renderDetalheFalta(item)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      `).join('')}
+    </section>
+  `;
 }
 
 function renderDetalheFalta(item) {
   const componentes = Array.isArray(item.componentes_faltantes) ? item.componentes_faltantes : [];
+  if (!componentes.length) {
+    return `
+      <div class="kanban-shortage-detail">
+        <span>A própria peça <strong>${escapeHtml(item.codigo)}</strong> está faltando.</span>
+        <div class="kanban-shortage-components">
+          <span>${escapeHtml(item.codigo)} <strong>−${formatarNumero(item.quantidade_faltante)}</strong></span>
+        </div>
+      </div>
+    `;
+  }
   return `
     <div class="kanban-shortage-detail">
-      <span>${escapeHtml(item.mensagem || '-')}</span>
-      ${componentes.length ? `
-        <div class="kanban-shortage-components">
-          ${componentes.map((componente) => `
-            <span title="${escapeHtml(componente.descricao || componente.codigo)}">
-              ${escapeHtml(componente.codigo)} <strong>−${formatarNumero(componente.quantidade_faltante)}</strong>
-            </span>
-          `).join('')}
-        </div>
-      ` : ''}
+      <span>Para concluir ${formatarNumero(item.quantidade_faltante)} unidade(s) de <strong>${escapeHtml(item.codigo)}</strong>:</span>
+      <div class="kanban-shortage-components">
+        ${componentes.map((componente) => `
+          <span title="${escapeHtml(componente.descricao || componente.codigo)}">
+            ${escapeHtml(componente.codigo)} <strong>−${formatarNumero(componente.quantidade_faltante)}</strong>
+          </span>
+        `).join('')}
+      </div>
     </div>
   `;
 }
@@ -288,7 +356,26 @@ function renderKanban() {
   `;
 }
 
+function renderFiltroCategorias() {
+  const current = String(kanbanState.categoriaFiltro || '');
+  const categoriaExiste = kanbanState.categorias.some((categoria) => String(categoria.id) === current);
+  if (current && !categoriaExiste) {
+    kanbanState.categoriaFiltro = '';
+  }
+
+  kanbanRefs.categoriaFiltro.innerHTML = `
+    <option value="">Todas</option>
+    ${kanbanState.categorias.map((categoria) => `
+      <option value="${categoria.id}" ${String(categoria.id) === String(kanbanState.categoriaFiltro) ? 'selected' : ''}>${escapeHtml(categoria.nome)}</option>
+    `).join('')}
+  `;
+}
+
 function renderCategoria(categoria) {
+  if (kanbanState.categoriaFiltro && String(categoria.id) !== String(kanbanState.categoriaFiltro)) {
+    return '';
+  }
+
   let itens = (categoria.itens || []).filter((item) => itemCombinaFiltro(item, categoria));
   const ordenarPorCor = kanbanState.categoriasOrdenadas.has(Number(categoria.id));
   if (ordenarPorCor) {
@@ -335,7 +422,6 @@ function renderCard(item) {
   const pacotes = quantidade / pacote;
   return `
     <button class="kanban-stock-card ${color.className}" type="button" data-action="detalhes-item" data-item-id="${item.id}">
-      <span class="kanban-stock-card-status">${color.label}</span>
       <strong class="kanban-stock-card-code">${escapeHtml(item.codigo)}</strong>
       <span class="kanban-stock-card-description">${escapeHtml(item.descricao)}</span>
       <span class="kanban-stock-card-quantity">${formatarNumero(quantidade)} <small>peças</small></span>
@@ -434,7 +520,7 @@ function abrirItemModal(item = null, categoryId = null) {
 
   kanbanRefs.itemForm.reset();
   kanbanRefs.itemId.value = item?.id || '';
-  kanbanRefs.itemPacote.value = item ? Number(item.quantidade_pacote) : 50;
+  kanbanRefs.itemPacote.value = item ? Number(item.quantidade_pacote) : '';
   kanbanRefs.itemBuscaPeca.value = '';
   kanbanRefs.itemTitulo.textContent = item ? 'Editar peça monitorada' : 'Adicionar peça';
   document.getElementById('btn-salvar-kanban-item').textContent = item ? 'Salvar alteração' : 'Adicionar peça';
@@ -523,6 +609,11 @@ function selecionarPeca(id) {
   document.getElementById('kanban-item-selecionado-descricao').textContent = peca.descricao;
   kanbanRefs.itemSelecionado.classList.remove('hidden');
   kanbanRefs.itemPecaSugestoes.classList.add('hidden');
+  const pacoteCadastro = Number(peca.quantidade_pacote || 0);
+  if (!Number(kanbanRefs.itemId.value)) {
+    kanbanRefs.itemPacote.value = pacoteCadastro > 0 ? pacoteCadastro : '';
+  }
+  atualizarPacoteCadastroHint(peca);
 }
 
 function limparPecaSelecionada(focus = false) {
@@ -531,7 +622,18 @@ function limparPecaSelecionada(focus = false) {
   kanbanRefs.itemSelecionado.classList.add('hidden');
   kanbanRefs.itemPecaSugestoes.classList.add('hidden');
   kanbanRefs.itemPecaSugestoes.innerHTML = '';
+  if (!Number(kanbanRefs.itemId.value)) {
+    kanbanRefs.itemPacote.value = '';
+    kanbanRefs.itemPacoteHint.textContent = 'Selecione uma peça para carregar o valor do cadastro.';
+  }
   if (focus) kanbanRefs.itemBuscaPeca.focus();
+}
+
+function atualizarPacoteCadastroHint(peca) {
+  const pacoteCadastro = Number(peca?.quantidade_pacote || 0);
+  kanbanRefs.itemPacoteHint.textContent = pacoteCadastro > 0
+    ? `Valor do cadastro da peça: ${formatarNumero(pacoteCadastro)}.`
+    : 'A peça não possui quantidade por pacote cadastrada. Informe o valor para continuar.';
 }
 
 async function salvarItem(event) {
@@ -585,7 +687,7 @@ function abrirDetalhesModal(id) {
   const pacote = Number(item.quantidade_pacote) || 1;
   const color = obterFaixaCor(quantidade, pacote);
   const duracao = item.duracao_estimada_dias === null || item.duracao_estimada_dias === ''
-    ? 'Sem consumo'
+    ? 'Sem saída cadastrada'
     : `${formatarDecimal(Number(item.duracao_estimada_dias))} dias`;
 
   document.getElementById('kanban-detalhes-categoria').textContent = categoria.nome;
@@ -595,8 +697,14 @@ function abrirDetalhesModal(id) {
   document.getElementById('kanban-detalhes-pacotes').textContent = `${formatarDecimal(quantidade / pacote)} pacotes`;
   document.getElementById('kanban-detalhes-montagem').textContent = formatarNumero(item.quantidade_montagem);
   document.getElementById('kanban-detalhes-expedicao').textContent = formatarNumero(item.quantidade_expedicao);
+  document.getElementById('kanban-detalhes-producao').textContent = formatarNumero(item.quantidade_producao);
+  document.getElementById('kanban-detalhes-producao-info').textContent = `OPs: ${formatarNumero(item.quantidade_producao_ordens)} · fila: ${formatarNumero(item.quantidade_fila_tratamento)}`;
+  const tratamentoQuantidade = Number(item.quantidade_tratamento_externo || 0);
+  document.getElementById('kanban-detalhes-tratamento').textContent = formatarNumero(tratamentoQuantidade);
+  document.getElementById('kanban-detalhes-tratamento-card').classList.toggle('hidden', tratamentoQuantidade <= 0);
   document.getElementById('kanban-detalhes-vendido').textContent = formatarNumero(item.quantidade_pedidos_abertos);
   document.getElementById('kanban-detalhes-duracao').textContent = duracao;
+  document.getElementById('kanban-detalhes-duracao-info').textContent = `Saldo disponível: ${formatarNumero(item.quantidade_saldo_disponivel)} · saída/mês: ${formatarNumero(item.consumo_mensal_cadastro)}`;
   document.getElementById('kanban-detalhes-regra').textContent = `Pacote: ${formatarNumero(pacote)} peças · Faixa: ${color.label}`;
   kanbanRefs.detalhesDialog.className = `modal-dialog kanban-stock-details-dialog ${color.className}`;
   abrirModal(kanbanRefs.detalhesModal);

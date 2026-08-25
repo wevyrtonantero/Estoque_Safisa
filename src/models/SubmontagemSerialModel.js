@@ -798,6 +798,311 @@ class SubmontagemSerialModel {
     return this.findById(id, db);
   }
 
+  static async changeAvailableModelWithStock(id, data = {}, externalConnection = null) {
+    await this.ensureSchema(pool);
+
+    const idRegistro = normalizeOptionalInteger(id);
+    const idNovoModelo = normalizeOptionalInteger(data.id_modelo_servo);
+
+    if (!Number.isInteger(idRegistro)) {
+      throw this.createBusinessError('O numero de serie informado deve ser valido.');
+    }
+
+    if (!Number.isInteger(idNovoModelo)) {
+      throw this.createBusinessError('Selecione um novo modelo valido.');
+    }
+
+    const connection = externalConnection || await pool.getConnection();
+    const managesTransaction = !externalConnection;
+
+    try {
+      if (managesTransaction) {
+        await connection.beginTransaction();
+      }
+
+      const [serialRows] = await connection.query(
+        `
+          SELECT *
+          FROM submontagem_seriais
+          WHERE id = ?
+          LIMIT 1
+          FOR UPDATE
+        `,
+        [idRegistro]
+      );
+      const registroAtual = serialRows[0] ? this.mapRow(serialRows[0]) : null;
+
+      if (!registroAtual) {
+        throw this.createBusinessError('Registro de numero de serie nao encontrado.');
+      }
+
+      if (registroAtual.numero_pedido || registroAtual.data_saida) {
+        throw this.createBusinessError('Somente numeros disponiveis, sem pedido e sem saida, podem trocar de modelo.');
+      }
+
+      if (Number(registroAtual.id_modelo_servo) === idNovoModelo) {
+        throw this.createBusinessError('O novo modelo deve ser diferente do modelo atual.');
+      }
+
+      const modeloAtual = await EstoqueModel.findItemById(registroAtual.id_modelo_servo, connection);
+      const novoModeloElegivel = await this.findModeloServoById(idNovoModelo, connection);
+      const novoModelo = await EstoqueModel.findItemById(idNovoModelo, connection);
+
+      if (!modeloAtual) {
+        throw this.createBusinessError('O modelo atual do numero de serie nao foi encontrado no cadastro de pecas.');
+      }
+
+      if (!novoModeloElegivel || !novoModelo || Number(novoModelo.ativo) !== 1) {
+        throw this.createBusinessError('O novo modelo nao foi encontrado, esta inativo ou nao aceita numero de serie.');
+      }
+
+      const estoqueMontagem = await EstoqueModel.findStockByName(EstoqueModel.MONTAGEM_NOME, connection);
+      const estoqueExpedicao = await EstoqueModel.findStockByName(EstoqueModel.EXPEDICAO_NOME, connection);
+
+      if (!estoqueMontagem || Number(estoqueMontagem.ativo) !== 1) {
+        throw this.createBusinessError('O estoque da Montagem nao esta disponivel para realizar a troca.');
+      }
+
+      if (!estoqueExpedicao || Number(estoqueExpedicao.ativo) !== 1) {
+        throw this.createBusinessError('O estoque da Expedicao nao esta disponivel para realizar a troca.');
+      }
+
+      const observacaoBase = `Troca segura do numero de serie ${registroAtual.numero_serie}: ${modeloAtual.codigo} para ${novoModelo.codigo}.`;
+      const saldoModeloAtualExpedicao = await EstoqueModel.findSaldoForUpdate(
+        connection,
+        estoqueExpedicao.id,
+        modeloAtual.id
+      );
+      const quantidadeModeloAtualExpedicao = saldoModeloAtualExpedicao
+        ? Number(saldoModeloAtualExpedicao.quantidade)
+        : 0;
+
+      if (quantidadeModeloAtualExpedicao < 1) {
+        throw this.createBusinessError(
+          `O modelo atual ${modeloAtual.codigo} nao possui saldo na Expedicao para realizar a troca.`
+        );
+      }
+
+      await EstoqueModel.persistSaldo(
+        connection,
+        estoqueExpedicao.id,
+        modeloAtual.id,
+        Number((quantidadeModeloAtualExpedicao - 1).toFixed(2)),
+        saldoModeloAtualExpedicao
+      );
+
+      let componentesRetornados = [];
+
+      if (String(modeloAtual.classificacao).toUpperCase() === 'SUBMONTAGEM') {
+        await EstoqueModel.createMovimentacao(connection, {
+          id_peca: modeloAtual.id,
+          id_estoque_origem: estoqueExpedicao.id,
+          id_estoque_destino: null,
+          tipo_movimentacao: 'SAIDA',
+          quantidade: 1,
+          observacao: `${observacaoBase} Saida do modelo atual da Expedicao para desmembramento na Montagem.`.slice(0, 255),
+          usuario: data.usuario
+        });
+
+        componentesRetornados = await EstoqueModel.expandSubmontagemIntoStock(
+          connection,
+          modeloAtual,
+          1,
+          estoqueMontagem.id,
+          `${observacaoBase} Componentes recuperados do modelo atual.`,
+          'TRANSFERENCIA',
+          estoqueExpedicao.id,
+          data.usuario
+        );
+      } else {
+        const saldoModeloAtualMontagem = await EstoqueModel.findSaldoForUpdate(
+          connection,
+          estoqueMontagem.id,
+          modeloAtual.id
+        );
+        const quantidadeModeloAtualMontagem = saldoModeloAtualMontagem
+          ? Number(saldoModeloAtualMontagem.quantidade)
+          : 0;
+
+        await EstoqueModel.persistSaldo(
+          connection,
+          estoqueMontagem.id,
+          modeloAtual.id,
+          Number((quantidadeModeloAtualMontagem + 1).toFixed(2)),
+          saldoModeloAtualMontagem
+        );
+
+        await EstoqueModel.createMovimentacao(connection, {
+          id_peca: modeloAtual.id,
+          id_estoque_origem: estoqueExpedicao.id,
+          id_estoque_destino: estoqueMontagem.id,
+          tipo_movimentacao: 'TRANSFERENCIA',
+          quantidade: 1,
+          observacao: `${observacaoBase} Item atual devolvido para a Montagem.`.slice(0, 255),
+          usuario: data.usuario
+        });
+      }
+
+      let componentesConsumidos = [];
+
+      if (String(novoModelo.classificacao).toUpperCase() === 'SUBMONTAGEM') {
+        componentesConsumidos = await EstoqueModel.consumeSubmontagemComponentsFromStock(
+          connection,
+          novoModelo,
+          1,
+          estoqueMontagem.id,
+          estoqueExpedicao.nome,
+          `${observacaoBase} Montagem do novo modelo.`,
+          data.usuario
+        );
+
+        const saldoNovoModeloExpedicao = await EstoqueModel.findSaldoForUpdate(
+          connection,
+          estoqueExpedicao.id,
+          novoModelo.id
+        );
+        const quantidadeNovoModeloExpedicao = saldoNovoModeloExpedicao
+          ? Number(saldoNovoModeloExpedicao.quantidade)
+          : 0;
+
+        await EstoqueModel.persistSaldo(
+          connection,
+          estoqueExpedicao.id,
+          novoModelo.id,
+          Number((quantidadeNovoModeloExpedicao + 1).toFixed(2)),
+          saldoNovoModeloExpedicao
+        );
+
+        await EstoqueModel.createMovimentacao(connection, {
+          id_peca: novoModelo.id,
+          id_estoque_origem: estoqueMontagem.id,
+          id_estoque_destino: estoqueExpedicao.id,
+          tipo_movimentacao: 'ENTRADA_INICIAL',
+          quantidade: 1,
+          observacao: `${observacaoBase} Novo modelo montado e encaminhado para a Expedicao.`.slice(0, 255),
+          usuario: data.usuario
+        });
+      } else {
+        const saldoNovoModeloMontagem = await EstoqueModel.findSaldoForUpdate(
+          connection,
+          estoqueMontagem.id,
+          novoModelo.id
+        );
+        const quantidadeNovoModeloMontagem = saldoNovoModeloMontagem
+          ? Number(saldoNovoModeloMontagem.quantidade)
+          : 0;
+
+        if (quantidadeNovoModeloMontagem < 1) {
+          throw this.createBusinessError(
+            `O novo modelo ${novoModelo.codigo} nao possui saldo na Montagem para realizar a troca.`,
+            {
+              tipo: 'FALTA_ITEM_MONTAGEM',
+              faltantes: [{
+                id_peca: novoModelo.id,
+                codigo: novoModelo.codigo,
+                descricao: novoModelo.descricao,
+                quantidade_necessaria: 1,
+                quantidade_disponivel: quantidadeNovoModeloMontagem,
+                quantidade_faltante: 1
+              }]
+            }
+          );
+        }
+
+        await EstoqueModel.persistSaldo(
+          connection,
+          estoqueMontagem.id,
+          novoModelo.id,
+          Number((quantidadeNovoModeloMontagem - 1).toFixed(2)),
+          saldoNovoModeloMontagem
+        );
+
+        const saldoNovoModeloExpedicao = await EstoqueModel.findSaldoForUpdate(
+          connection,
+          estoqueExpedicao.id,
+          novoModelo.id
+        );
+        const quantidadeNovoModeloExpedicao = saldoNovoModeloExpedicao
+          ? Number(saldoNovoModeloExpedicao.quantidade)
+          : 0;
+
+        await EstoqueModel.persistSaldo(
+          connection,
+          estoqueExpedicao.id,
+          novoModelo.id,
+          Number((quantidadeNovoModeloExpedicao + 1).toFixed(2)),
+          saldoNovoModeloExpedicao
+        );
+
+        await EstoqueModel.createMovimentacao(connection, {
+          id_peca: novoModelo.id,
+          id_estoque_origem: estoqueMontagem.id,
+          id_estoque_destino: estoqueExpedicao.id,
+          tipo_movimentacao: 'TRANSFERENCIA',
+          quantidade: 1,
+          observacao: `${observacaoBase} Novo item encaminhado para a Expedicao.`.slice(0, 255),
+          usuario: data.usuario
+        });
+      }
+
+      await connection.query(
+        `
+          UPDATE submontagem_seriais
+          SET
+            id_modelo_servo = ?,
+            modelo_servo_codigo = ?,
+            modelo_servo_descricao = ?
+          WHERE id = ?
+        `,
+        [novoModelo.id, novoModelo.codigo, novoModelo.descricao, idRegistro]
+      );
+
+      const [updatedRows] = await connection.query(
+        `
+          SELECT *
+          FROM submontagem_seriais
+          WHERE id = ?
+          LIMIT 1
+        `,
+        [idRegistro]
+      );
+      const registroAtualizado = this.mapRow(updatedRows[0]);
+
+      if (managesTransaction) {
+        await connection.commit();
+      }
+
+      return {
+        numero_serie: registroAtual.numero_serie,
+        antes: registroAtual,
+        depois: registroAtualizado,
+        modelo_anterior: {
+          id: Number(modeloAtual.id),
+          codigo: modeloAtual.codigo,
+          descricao: modeloAtual.descricao,
+          classificacao: modeloAtual.classificacao
+        },
+        modelo_novo: {
+          id: Number(novoModelo.id),
+          codigo: novoModelo.codigo,
+          descricao: novoModelo.descricao,
+          classificacao: novoModelo.classificacao
+        },
+        componentes_retornados: componentesRetornados,
+        componentes_consumidos: componentesConsumidos
+      };
+    } catch (error) {
+      if (managesTransaction) {
+        await connection.rollback();
+      }
+      throw error;
+    } finally {
+      if (managesTransaction) {
+        connection.release();
+      }
+    }
+  }
+
   static async updateModeloServo(id, data = {}, db = pool) {
     await this.ensureSchema(db);
 

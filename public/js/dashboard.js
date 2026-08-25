@@ -4,6 +4,7 @@ const estoqueSaldosApiBaseUrl = '/api/estoque/saldos';
 const estoquePrioridadesApiBaseUrl = '/api/estoque/prioridades';
 const estoqueMovimentacoesApiBaseUrl = '/api/estoque/movimentacoes';
 const estoqueEntradaApiBaseUrl = '/api/estoque/entrada-inicial';
+const estoqueAjusteApiBaseUrl = '/api/estoque/ajuste';
 const estoqueTransferenciaApiBaseUrl = '/api/estoque/transferencia';
 const estoqueConsumoInternoApiBaseUrl = '/api/estoque/consumo-interno';
 const fornecedoresApiBaseUrl = '/api/fornecedores';
@@ -26,6 +27,8 @@ let materiasPrimasCache = [];
 let itensEstoqueCache = [];
 let fornecedoresCache = [];
 let mpEntradaLoteCache = [];
+let entradaManualLoteCache = [];
+let historicoItemIdAtual = null;
 let autoRefreshHandle = null;
 const ACTIVE_REQUEST_STATUSES = ['PENDENTE', 'EM_SEPARACAO', 'ATENDIDA_PARCIAL'];
 const CLOSED_REQUEST_STATUSES = ['ATENDIDA', 'CANCELADA'];
@@ -50,6 +53,18 @@ const refs = {
   filtroClassificacao: document.getElementById('almox-filtro-classificacao'),
   filtroEstado: document.getElementById('almox-filtro-estado'),
   filtroQuantidade: document.getElementById('almox-filtro-quantidade'),
+  detalhesPecaModal: document.getElementById('almox-detalhes-peca-modal'),
+  ajusteSaldoModal: document.getElementById('almox-ajuste-saldo-modal'),
+  ajusteSaldoMensagem: document.getElementById('almox-ajuste-saldo-mensagem'),
+  ajusteSaldoIdPeca: document.getElementById('almox-ajuste-saldo-id-peca'),
+  ajusteSaldoIdEstoque: document.getElementById('almox-ajuste-saldo-id-estoque'),
+  ajusteSaldoNovo: document.getElementById('almox-ajuste-saldo-novo'),
+  ajusteSaldoObservacao: document.getElementById('almox-ajuste-saldo-observacao'),
+  saldosPecaModal: document.getElementById('almox-saldos-peca-modal'),
+  saldosPecaMensagem: document.getElementById('almox-saldos-peca-mensagem'),
+  saldosPecaTitulo: document.getElementById('almox-saldos-peca-titulo'),
+  saldosPecaSubtitulo: document.getElementById('almox-saldos-peca-subtitulo'),
+  saldosPecaTbody: document.getElementById('almox-saldos-peca-tbody'),
   badgePedidos: document.getElementById('almox-badge-pedidos'),
   badgeTratamento: document.getElementById('almox-badge-tratamento'),
   badgeProducao: document.getElementById('almox-badge-producao'),
@@ -70,6 +85,10 @@ const refs = {
   entradaManualResumo: document.getElementById('almox-entrada-manual-resumo'),
   entradaManualQuantidade: document.getElementById('almox-entrada-manual-quantidade'),
   entradaManualObservacao: document.getElementById('almox-entrada-manual-observacao'),
+  entradaManualLoteTotal: document.getElementById('almox-entrada-manual-lote-total'),
+  entradaManualLoteTbody: document.getElementById('almox-entrada-manual-lote-tbody'),
+  entradaManualBtnConfirmar: document.getElementById('btn-confirmar-lote-almox-entrada-manual'),
+  entradaManualBtnAdicionar: document.getElementById('btn-adicionar-lote-almox-entrada-manual'),
   transferenciaModal: document.getElementById('almox-transferencia-modal'),
   transferenciaMensagem: document.getElementById('almox-transferencia-mensagem'),
   transferenciaBusca: document.getElementById('almox-transferencia-busca'),
@@ -127,6 +146,7 @@ const refs = {
   mpBtnSalvar: document.getElementById('btn-salvar-modal-almox-mp'),
   mpBtnConfirmarLote: document.getElementById('btn-confirmar-lote-almox-mp'),
   historicoModal: document.getElementById('almox-historico-modal'),
+  historicoTitulo: document.getElementById('almox-historico-titulo'),
   historicoTotal: document.getElementById('almox-historico-total'),
   historicoTbody: document.getElementById('almox-historico-tbody'),
   producaoModal: document.getElementById('almox-producao-modal'),
@@ -152,6 +172,7 @@ function bindEvents() {
   refs.filtroClassificacao.addEventListener('change', renderizarEstoque);
   refs.filtroEstado.addEventListener('change', renderizarEstoque);
   refs.filtroQuantidade.addEventListener('change', renderizarEstoque);
+  refs.estoqueTbody.addEventListener('click', handleEstoqueActions);
   document.getElementById('almox-btn-limpar-filtros').addEventListener('click', limparFiltrosEstoque);
 
   document.getElementById('almox-btn-pedidos').addEventListener('click', abrirModalPedidos);
@@ -161,7 +182,7 @@ function bindEvents() {
   document.getElementById('almox-btn-tratamento').addEventListener('click', abrirModalTratamento);
   document.getElementById('almox-btn-mp').addEventListener('click', abrirModalMateriaPrima);
   document.getElementById('almox-btn-fornecedores').addEventListener('click', abrirModalFornecedores);
-  document.getElementById('almox-btn-historico').addEventListener('click', abrirModalHistorico);
+  document.getElementById('almox-btn-historico').addEventListener('click', () => abrirModalHistorico());
   document.getElementById('almox-btn-producao').addEventListener('click', abrirModalProducao);
 
   document.getElementById('btn-fechar-modal-almox-fornecedores').addEventListener('click', fecharModalFornecedores);
@@ -173,6 +194,8 @@ function bindEvents() {
   document.getElementById('btn-fechar-modal-almox-entrada-manual').addEventListener('click', fecharModalEntradaManual);
   document.getElementById('btn-cancelar-modal-almox-entrada-manual').addEventListener('click', fecharModalEntradaManual);
   document.getElementById('almox-entrada-manual-form').addEventListener('submit', handleSalvarEntradaManual);
+  refs.entradaManualBtnConfirmar.addEventListener('click', handleConfirmarLoteEntradaManual);
+  refs.entradaManualLoteTbody.addEventListener('click', handleEntradaManualLoteActions);
   refs.entradaManualBusca.addEventListener('input', () => {
     refs.entradaManualIdItem.value = '';
     renderizarResumoEntradaManual(null);
@@ -207,6 +230,7 @@ function bindEvents() {
   refs.pedidosFiltroStatus.addEventListener('change', renderizarPedidos);
   refs.pedidosFiltroSituacao.addEventListener('change', renderizarPedidos);
   document.getElementById('almox-btn-limpar-pedidos').addEventListener('click', limparFiltrosPedidos);
+  document.getElementById('almox-btn-imprimir-pedidos').addEventListener('click', imprimirListaSeparacaoAlmox);
   document.getElementById('almox-btn-marcar-pronto-todos').addEventListener('click', marcarProntoTodosPedidos);
   refs.pedidosTbody.addEventListener('click', handlePedidosActions);
 
@@ -238,6 +262,11 @@ function bindEvents() {
   refs.mpSugestoes.addEventListener('click', handleSugestaoMateriaPrimaClick);
   refs.mpLoteTbody.addEventListener('click', handleRemoverEntradaMpLote);
 
+  document.getElementById('btn-fechar-modal-almox-detalhes-peca').addEventListener('click', fecharModalDetalhesPeca);
+  document.getElementById('btn-fechar-modal-almox-ajuste-saldo').addEventListener('click', fecharModalAjusteSaldo);
+  document.getElementById('btn-cancelar-modal-almox-ajuste-saldo').addEventListener('click', fecharModalAjusteSaldo);
+  document.getElementById('almox-ajuste-saldo-form').addEventListener('submit', handleSalvarAjusteSaldo);
+  document.getElementById('btn-fechar-modal-almox-saldos-peca').addEventListener('click', fecharModalSaldosPeca);
   document.getElementById('btn-fechar-modal-almox-historico').addEventListener('click', fecharModalHistorico);
   document.getElementById('btn-fechar-modal-almox-producao').addEventListener('click', fecharModalProducao);
   document.getElementById('btn-fechar-modal-almox-producao-rodape').addEventListener('click', fecharModalProducao);
@@ -252,6 +281,9 @@ function bindEvents() {
     refs.tratamentoModal,
     refs.recebimentoModal,
     refs.mpModal,
+    refs.detalhesPecaModal,
+    refs.ajusteSaldoModal,
+    refs.saldosPecaModal,
     refs.historicoModal,
     refs.producaoModal
   ].forEach((modal) => modal.addEventListener('click', handleModalBackdrop));
@@ -480,13 +512,17 @@ async function carregarTratamento() {
   atualizarBadgesMenu();
 }
 
-async function carregarHistoricoAlmox() {
+async function carregarHistoricoAlmox(itemId = historicoItemIdAtual) {
   const almox = obterEstoqueAlmoxarifado();
   if (!almox) {
     throw new Error('Estoque do Almoxarifado nao encontrado.');
   }
 
-  const response = await fetch(`${estoqueMovimentacoesApiBaseUrl}?estoque=${almox.id}`);
+  const idPeca = Number.parseInt(itemId, 10);
+  const url = Number.isInteger(idPeca) && idPeca > 0
+    ? `${estoqueMovimentacoesApiBaseUrl}/${idPeca}`
+    : `${estoqueMovimentacoesApiBaseUrl}?estoque=${almox.id}`;
+  const response = await fetch(url);
   const result = await response.json();
 
   if (!response.ok) {
@@ -784,12 +820,12 @@ function renderizarEstoque() {
   refs.estoqueTotal.textContent = `${saldosFiltrados.length} registro(s) encontrado(s)`;
 
   if (!registrosEstoque.length) {
-    refs.estoqueTbody.innerHTML = '<tr><td colspan="9" class="empty-state">Nenhum item monitorado no Almoxarifado.</td></tr>';
+    refs.estoqueTbody.innerHTML = '<tr><td colspan="4" class="empty-state">Nenhum item monitorado no Almoxarifado.</td></tr>';
     return;
   }
 
   if (!saldosFiltrados.length) {
-    refs.estoqueTbody.innerHTML = '<tr><td colspan="9" class="empty-state">Nenhum item encontrado com os filtros informados.</td></tr>';
+    refs.estoqueTbody.innerHTML = '<tr><td colspan="4" class="empty-state">Nenhum item encontrado com os filtros informados.</td></tr>';
     return;
   }
 
@@ -797,13 +833,18 @@ function renderizarEstoque() {
     <tr class="${obterClasseLinhaPrioridade(item)}">
       <td class="table-code">${escapeHtml(item.codigo)}</td>
       <td class="table-description">${escapeHtml(item.descricao)}</td>
-      <td>${escapeHtml(item.tipo)}</td>
-      <td>${escapeHtml(item.classificacao)}</td>
       <td class="table-quantity">${formatDecimal(item.quantidade)}</td>
-      <td class="table-description">${escapeHtml(formatarFornecedorEstoque(item))}</td>
-      <td class="table-quantity">${formatDecimal(item.quantidade_saida_mes)}</td>
-      <td>${escapeHtml(formatarDuracaoPrioridade(item))}</td>
-      <td>${renderizarEstadoNecessidade(item.estado_necessidade)}</td>
+      <td class="table-actions-cell">
+        <details class="row-menu">
+          <summary class="row-menu-trigger" aria-label="Abrir acoes">...</summary>
+          <div class="row-menu-panel">
+            <button type="button" class="row-menu-item" data-estoque-action="details" data-item-id="${item.id_peca}">Detalhes da peca</button>
+            <button type="button" class="row-menu-item" data-estoque-action="adjust" data-item-id="${item.id_peca}">Ajustar saldo</button>
+            <button type="button" class="row-menu-item" data-estoque-action="history" data-item-id="${item.id_peca}">Ver historico</button>
+            <button type="button" class="row-menu-item" data-estoque-action="stocks" data-item-id="${item.id_peca}">Ver saldo nos estoques</button>
+          </div>
+        </details>
+      </td>
     </tr>
   `).join('');
 }
@@ -827,10 +868,10 @@ function renderizarPedidos() {
       <td>${escapeHtml(item.destino_nome)}</td>
       <td class="table-code">${escapeHtml(item.codigo)}</td>
       <td class="table-description">${escapeHtml(item.descricao)}</td>
-      <td class="table-quantity">${formatPackage(item.quantidade_pacote)}</td>
       <td class="table-quantity">${formatInteger(item.quantidade_solicitada)}</td>
-      <td class="table-quantity">${formatInteger(item.quantidade_pendente)}</td>
+      <td class="table-quantity">${formatPackage(item.quantidade_pacote)}</td>
       <td class="table-quantity">${formatInteger(item.saldo_almoxarifado)}</td>
+      <td class="table-quantity">${formatInteger(item.quantidade_pendente)}</td>
       <td>${renderizarStatus(item.status)}</td>
       <td class="table-actions-cell">
         <details class="row-menu">
@@ -1143,10 +1184,53 @@ function resetModalEntradaManual() {
   refs.entradaManualMensagem.textContent = '';
   refs.entradaManualSugestoes.classList.add('hidden');
   refs.entradaManualSugestoes.innerHTML = '';
+  entradaManualLoteCache = [];
+  renderizarLoteEntradaManual();
 }
 
-async function handleSalvarEntradaManual(event) {
+function handleSalvarEntradaManual(event) {
   event.preventDefault();
+
+  const itemId = Number.parseInt(refs.entradaManualIdItem.value, 10);
+  const quantidade = Number.parseFloat(String(refs.entradaManualQuantidade.value || '').replace(',', '.'));
+  const observacao = refs.entradaManualObservacao.value.trim();
+  const item = itensEstoqueCache.find((entry) => Number(entry.id) === itemId);
+
+  if (!Number.isInteger(itemId) || !item) {
+    mostrarErroEntradaManual('Selecione um item valido antes de adicionar.');
+    return;
+  }
+
+  if (!Number.isFinite(quantidade) || quantidade <= 0) {
+    mostrarErroEntradaManual('Informe uma quantidade maior que zero para adicionar.');
+    return;
+  }
+
+  if (entradaManualLoteCache.length >= 100) {
+    mostrarErroEntradaManual('Confirme a lista atual antes de adicionar mais de 100 entradas.');
+    return;
+  }
+
+  entradaManualLoteCache.push({
+    id_peca: itemId,
+    codigo: item.codigo,
+    descricao: item.descricao,
+    quantidade,
+    observacao
+  });
+
+  limparCamposEntradaManual();
+  renderizarLoteEntradaManual();
+  refs.entradaManualMensagem.textContent = 'Entrada adicionada a lista.';
+  refs.entradaManualMensagem.className = 'message success';
+  refs.entradaManualMensagem.classList.remove('hidden');
+}
+
+async function handleConfirmarLoteEntradaManual() {
+  if (!entradaManualLoteCache.length) {
+    mostrarErroEntradaManual('Adicione pelo menos uma entrada antes de confirmar.');
+    return;
+  }
 
   try {
     const almox = obterEstoqueAlmoxarifado();
@@ -1154,14 +1238,19 @@ async function handleSalvarEntradaManual(event) {
       throw new Error('Estoque do Almoxarifado nao encontrado.');
     }
 
-    const response = await fetch(estoqueEntradaApiBaseUrl, {
+    refs.entradaManualBtnConfirmar.disabled = true;
+    refs.entradaManualBtnAdicionar.disabled = true;
+    const totalEntradas = entradaManualLoteCache.length;
+    const response = await fetch(`${estoqueEntradaApiBaseUrl}-lote`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        id_peca: refs.entradaManualIdItem.value,
-        id_estoque_destino: almox.id,
-        quantidade: refs.entradaManualQuantidade.value,
-        observacao: refs.entradaManualObservacao.value.trim()
+        itens: entradaManualLoteCache.map((item) => ({
+          id_peca: item.id_peca,
+          id_estoque_destino: almox.id,
+          quantidade: item.quantidade,
+          observacao: item.observacao
+        }))
       })
     });
     const result = await response.json();
@@ -1171,13 +1260,248 @@ async function handleSalvarEntradaManual(event) {
     }
 
     fecharModalEntradaManual();
-    mostrarMensagem('Entrada manual registrada com sucesso.', 'success');
+    mostrarMensagem(`${result.total_itens || totalEntradas} entrada(s) manual(is) registrada(s) com sucesso.`, 'success');
     await Promise.all([carregarEstoqueAlmox(), carregarHistoricoSeAberto()]);
   } catch (error) {
-    refs.entradaManualMensagem.textContent = error.message;
-    refs.entradaManualMensagem.className = 'message error';
-    refs.entradaManualMensagem.classList.remove('hidden');
+    mostrarErroEntradaManual(error.message);
+  } finally {
+    refs.entradaManualBtnConfirmar.disabled = entradaManualLoteCache.length === 0;
+    refs.entradaManualBtnAdicionar.disabled = false;
   }
+}
+
+function handleEntradaManualLoteActions(event) {
+  const button = event.target.closest('button[data-entrada-manual-index]');
+  if (!button) {
+    return;
+  }
+
+  const index = Number.parseInt(button.dataset.entradaManualIndex, 10);
+  if (!Number.isInteger(index) || index < 0 || index >= entradaManualLoteCache.length) {
+    return;
+  }
+
+  entradaManualLoteCache.splice(index, 1);
+  renderizarLoteEntradaManual();
+}
+
+function renderizarLoteEntradaManual() {
+  refs.entradaManualLoteTotal.textContent = `${entradaManualLoteCache.length} item(ns) na lista`;
+  refs.entradaManualBtnConfirmar.disabled = entradaManualLoteCache.length === 0;
+
+  if (!entradaManualLoteCache.length) {
+    refs.entradaManualLoteTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhuma entrada adicionada.</td></tr>';
+    return;
+  }
+
+  refs.entradaManualLoteTbody.innerHTML = entradaManualLoteCache.map((item, index) => `
+    <tr>
+      <td class="table-code">${escapeHtml(item.codigo)}</td>
+      <td class="table-description">${escapeHtml(item.descricao)}</td>
+      <td class="table-quantity">${formatDecimal(item.quantidade)}</td>
+      <td>${escapeHtml(item.observacao || '-')}</td>
+      <td class="table-actions-cell">
+        <button type="button" class="btn btn-danger" data-entrada-manual-index="${index}">Remover</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function localizarRegistroEstoque(itemId) {
+  const idPeca = Number.parseInt(itemId, 10);
+  if (!Number.isInteger(idPeca) || idPeca <= 0) {
+    return null;
+  }
+
+  return obterRegistrosEstoqueAlmox().find((item) => Number(item.id_peca) === idPeca) || null;
+}
+
+function handleEstoqueActions(event) {
+  const button = event.target.closest('button[data-estoque-action]');
+  if (!button) {
+    return;
+  }
+
+  const item = localizarRegistroEstoque(button.dataset.itemId);
+  closeAllRowMenus();
+
+  if (!item) {
+    mostrarMensagem('Nao foi possivel localizar a peca selecionada.', 'error');
+    return;
+  }
+
+  if (button.dataset.estoqueAction === 'details') {
+    abrirModalDetalhesPeca(item);
+    return;
+  }
+
+  if (button.dataset.estoqueAction === 'adjust') {
+    abrirModalAjusteSaldo(item);
+    return;
+  }
+
+  if (button.dataset.estoqueAction === 'history') {
+    abrirModalHistorico(item.id_peca);
+    return;
+  }
+
+  if (button.dataset.estoqueAction === 'stocks') {
+    abrirModalSaldosPeca(item);
+  }
+}
+
+function abrirModalDetalhesPeca(item) {
+  const duracaoPrioridade = formatarDuracaoPrioridade(item);
+  const duracao = duracaoPrioridade === 'Sem previsao'
+    ? renderizarCoberturaConsumo(item)
+    : duracaoPrioridade;
+
+  document.getElementById('almox-detalhes-peca-titulo').textContent = `${item.codigo} - ${item.descricao}`;
+  document.getElementById('almox-detalhes-peca-subtitulo').textContent = 'Informacoes do cadastro e da cobertura atual no Almoxarifado.';
+  document.getElementById('almox-detalhes-peca-saldo').textContent = `${formatDecimal(item.quantidade)} peca(s)`;
+  document.getElementById('almox-detalhes-peca-tipo').textContent = item.tipo || '-';
+  document.getElementById('almox-detalhes-peca-classificacao').textContent = item.classificacao || '-';
+  document.getElementById('almox-detalhes-peca-fornecedor').textContent = formatarFornecedorEstoque(item);
+  document.getElementById('almox-detalhes-peca-saida-mes').textContent = `${formatDecimal(item.quantidade_saida_mes)} peca(s)`;
+  document.getElementById('almox-detalhes-peca-duracao').textContent = duracao;
+  document.getElementById('almox-detalhes-peca-estado').innerHTML = renderizarEstadoNecessidade(item.estado_necessidade);
+  openModal(refs.detalhesPecaModal);
+}
+
+function fecharModalDetalhesPeca() {
+  closeModal(refs.detalhesPecaModal);
+}
+
+function abrirModalAjusteSaldo(item) {
+  const almox = obterEstoqueAlmoxarifado();
+  if (!almox) {
+    mostrarMensagem('Estoque do Almoxarifado nao encontrado.', 'error');
+    return;
+  }
+
+  refs.ajusteSaldoMensagem.className = 'message hidden';
+  refs.ajusteSaldoMensagem.textContent = '';
+  refs.ajusteSaldoIdPeca.value = String(item.id_peca);
+  refs.ajusteSaldoIdEstoque.value = String(almox.id);
+  refs.ajusteSaldoNovo.value = String(Number(item.quantidade || 0));
+  refs.ajusteSaldoObservacao.value = '';
+  document.getElementById('almox-ajuste-saldo-titulo').textContent = `${item.codigo} - ${item.descricao}`;
+  document.getElementById('almox-ajuste-saldo-subtitulo').textContent = `Estoque: ${almox.nome}`;
+  document.getElementById('almox-ajuste-saldo-atual').textContent = `Saldo atual: ${formatDecimal(item.quantidade)}`;
+  openModal(refs.ajusteSaldoModal);
+  window.requestAnimationFrame(() => refs.ajusteSaldoNovo.focus());
+}
+
+function fecharModalAjusteSaldo() {
+  document.getElementById('almox-ajuste-saldo-form').reset();
+  refs.ajusteSaldoIdPeca.value = '';
+  refs.ajusteSaldoIdEstoque.value = '';
+  refs.ajusteSaldoMensagem.className = 'message hidden';
+  refs.ajusteSaldoMensagem.textContent = '';
+  closeModal(refs.ajusteSaldoModal);
+}
+
+async function handleSalvarAjusteSaldo(event) {
+  event.preventDefault();
+
+  const form = event.currentTarget;
+  const submitButton = form.querySelector('button[type="submit"]');
+  const payload = {
+    id_peca: Number.parseInt(refs.ajusteSaldoIdPeca.value, 10),
+    id_estoque: Number.parseInt(refs.ajusteSaldoIdEstoque.value, 10),
+    novo_saldo: Number.parseFloat(refs.ajusteSaldoNovo.value),
+    observacao: refs.ajusteSaldoObservacao.value.trim() || null
+  };
+
+  submitButton.disabled = true;
+  refs.ajusteSaldoMensagem.className = 'message hidden';
+  refs.ajusteSaldoMensagem.textContent = '';
+
+  try {
+    const response = await fetch(estoqueAjusteApiBaseUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(extractErrorMessage(result));
+    }
+
+    fecharModalAjusteSaldo();
+    await Promise.all([
+      carregarEstoqueAlmox(),
+      carregarPrioridadesAlmox(),
+      carregarHistoricoSeAberto()
+    ]);
+    mostrarMensagem('Saldo ajustado e movimentacao registrada no historico.', 'success');
+  } catch (error) {
+    refs.ajusteSaldoMensagem.textContent = error.message;
+    refs.ajusteSaldoMensagem.className = 'message error';
+    refs.ajusteSaldoMensagem.classList.remove('hidden');
+  } finally {
+    submitButton.disabled = false;
+  }
+}
+
+async function abrirModalSaldosPeca(item) {
+  refs.saldosPecaMensagem.className = 'message hidden';
+  refs.saldosPecaMensagem.textContent = '';
+  refs.saldosPecaTitulo.textContent = `Saldos de ${item.codigo}`;
+  refs.saldosPecaSubtitulo.textContent = `${item.descricao} | Quantidade atual em cada estoque.`;
+  refs.saldosPecaTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Carregando saldos...</td></tr>';
+  openModal(refs.saldosPecaModal);
+
+  try {
+    const response = await fetch(`${estoqueSaldosApiBaseUrl}?id_peca=${item.id_peca}&modo=TODOS`);
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.message || 'Nao foi possivel carregar os saldos da peca.');
+    }
+
+    if (!Array.isArray(result) || !result.length) {
+      refs.saldosPecaTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Nenhum estoque encontrado para esta peca.</td></tr>';
+      return;
+    }
+
+    refs.saldosPecaTbody.innerHTML = result.map((saldo) => `
+      <tr>
+        <td>${escapeHtml(saldo.estoque_nome || '-')}</td>
+        <td class="table-code">${escapeHtml(saldo.codigo || '-')}</td>
+        <td class="table-description">${escapeHtml(saldo.descricao || '-')}</td>
+        <td>${escapeHtml(saldo.classificacao || '-')}</td>
+        <td class="table-quantity">${formatDecimal(saldo.quantidade)}</td>
+      </tr>
+    `).join('');
+  } catch (error) {
+    refs.saldosPecaMensagem.textContent = error.message;
+    refs.saldosPecaMensagem.className = 'message error';
+    refs.saldosPecaMensagem.classList.remove('hidden');
+    refs.saldosPecaTbody.innerHTML = '<tr><td colspan="5" class="empty-state">Nao foi possivel carregar os saldos.</td></tr>';
+  }
+}
+
+function fecharModalSaldosPeca() {
+  closeModal(refs.saldosPecaModal);
+}
+
+function limparCamposEntradaManual() {
+  refs.entradaManualIdItem.value = '';
+  refs.entradaManualBusca.value = '';
+  refs.entradaManualQuantidade.value = '1';
+  refs.entradaManualObservacao.value = '';
+  renderizarResumoEntradaManual(null);
+  refs.entradaManualSugestoes.classList.add('hidden');
+  refs.entradaManualSugestoes.innerHTML = '';
+  refs.entradaManualBusca.focus();
+}
+
+function mostrarErroEntradaManual(message) {
+  refs.entradaManualMensagem.textContent = message;
+  refs.entradaManualMensagem.className = 'message error';
+  refs.entradaManualMensagem.classList.remove('hidden');
 }
 
 async function abrirModalTransferencia() {
@@ -1399,9 +1723,15 @@ function fecharModalMateriaPrima() {
   closeModal(refs.mpModal);
 }
 
-async function abrirModalHistorico() {
+async function abrirModalHistorico(itemId = null) {
   try {
-    await carregarHistoricoAlmox();
+    const idPeca = Number.parseInt(itemId, 10);
+    historicoItemIdAtual = Number.isInteger(idPeca) && idPeca > 0 ? idPeca : null;
+    const item = historicoItemIdAtual ? localizarRegistroEstoque(historicoItemIdAtual) : null;
+    refs.historicoTitulo.textContent = item
+      ? `Historico de ${item.codigo}`
+      : 'Movimentacoes do Almoxarifado';
+    await carregarHistoricoAlmox(historicoItemIdAtual);
     openModal(refs.historicoModal);
   } catch (error) {
     mostrarMensagem(error.message, 'error');
@@ -1409,6 +1739,8 @@ async function abrirModalHistorico() {
 }
 
 function fecharModalHistorico() {
+  historicoItemIdAtual = null;
+  refs.historicoTitulo.textContent = 'Movimentacoes do Almoxarifado';
   closeModal(refs.historicoModal);
 }
 
@@ -1674,6 +2006,107 @@ async function handleSalvarEntradaMp(event) {
   refs.mpMensagem.classList.remove('hidden');
   limparCamposEntradaMpAtual();
   renderizarEntradaMpLote();
+}
+
+function imprimirListaSeparacaoAlmox() {
+  const itens = obterPedidosFiltrados().filter((item) => Number(item.quantidade_pendente || 0) > 0);
+
+  if (!itens.length) {
+    mostrarMensagem('Nenhuma solicitacao pendente nos filtros atuais para imprimir.', 'info');
+    return;
+  }
+
+  const printWindow = window.open('', '_blank', 'width=900,height=750');
+  if (!printWindow) {
+    mostrarMensagem('Nao foi possivel abrir a janela de impressao. Verifique o bloqueio de pop-ups.', 'error');
+    return;
+  }
+
+  const dataImpressao = new Date().toLocaleString('pt-BR');
+  const linhas = itens.map((item) => `
+    <tr>
+      <td class="check-cell"><span class="check-box"></span></td>
+      <td class="code-cell">${escapeHtml(item.codigo || '-')}</td>
+      <td>${escapeHtml(item.descricao || '-')}</td>
+      <td class="quantity-cell">${formatDecimal(item.quantidade_pendente)}</td>
+    </tr>
+  `).join('');
+
+  printWindow.document.write(`
+    <!doctype html>
+    <html lang="pt-BR">
+      <head>
+        <meta charset="utf-8">
+        <title>Lista de separacao do Almoxarifado</title>
+        <style>
+          @page { size: portrait; margin: 10mm; }
+          * { box-sizing: border-box; }
+          body {
+            margin: 0;
+            color: #102f54;
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 12px;
+          }
+          header {
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+            margin-bottom: 14px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #102f54;
+          }
+          h1 { margin: 0 0 4px; font-size: 20px; }
+          p { margin: 0; color: #53677f; }
+          table { width: 100%; border-collapse: collapse; }
+          th, td {
+            padding: 8px;
+            border: 1px solid #9fb3c8;
+            text-align: left;
+            vertical-align: middle;
+          }
+          th {
+            background: #e7f0fa;
+            font-size: 10px;
+            text-transform: uppercase;
+          }
+          tbody tr { break-inside: avoid; }
+          .check-cell { width: 42px; text-align: center; }
+          .check-box {
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            border: 2px solid #102f54;
+            border-radius: 2px;
+          }
+          .code-cell { width: 120px; font-weight: 700; }
+          .quantity-cell { width: 100px; text-align: center; font-size: 14px; font-weight: 700; }
+        </style>
+      </head>
+      <body>
+        <header>
+          <div>
+            <h1>Lista de separacao do Almoxarifado</h1>
+            <p>${itens.length} item(ns) pendente(s)</p>
+          </div>
+          <p>${escapeHtml(dataImpressao)}</p>
+        </header>
+        <table>
+          <thead>
+            <tr>
+              <th>Conferido</th>
+              <th>Codigo</th>
+              <th>Descricao</th>
+              <th>Quantidade</th>
+            </tr>
+          </thead>
+          <tbody>${linhas}</tbody>
+        </table>
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+  printWindow.focus();
+  window.setTimeout(() => printWindow.print(), 250);
 }
 
 async function handleConfirmarEntradaMpLote() {
@@ -1973,7 +2406,10 @@ function formatarDataCurta(value) {
 }
 
 function formatarDuracaoPrioridade(item) {
-  const dias = Number(item.dias_cobertura);
+  const possuiDias = item.dias_cobertura !== null
+    && item.dias_cobertura !== undefined
+    && item.dias_cobertura !== '';
+  const dias = possuiDias ? Number(item.dias_cobertura) : Number.NaN;
   const dataPrevista = formatarDataCurta(item.data_prevista_ruptura);
 
   if (!Number.isFinite(dias) && dataPrevista === '-') {
@@ -2059,6 +2495,9 @@ function handleModalBackdrop(event) {
   if (event.target.dataset.closeModal === 'almox-tratamento') fecharModalTratamento();
   if (event.target.dataset.closeModal === 'almox-recebimento') fecharModalRecebimento();
   if (event.target.dataset.closeModal === 'almox-mp') fecharModalMateriaPrima();
+  if (event.target.dataset.closeModal === 'almox-detalhes-peca') fecharModalDetalhesPeca();
+  if (event.target.dataset.closeModal === 'almox-ajuste-saldo') fecharModalAjusteSaldo();
+  if (event.target.dataset.closeModal === 'almox-saldos-peca') fecharModalSaldosPeca();
   if (event.target.dataset.closeModal === 'almox-historico') fecharModalHistorico();
   if (event.target.dataset.closeModal === 'almox-producao') fecharModalProducao();
 }
@@ -2091,6 +2530,9 @@ function handleKeyboardShortcuts(event) {
   if (!refs.producaoModal.classList.contains('hidden')) fecharModalProducao();
   else if (!refs.fornecedoresModal.classList.contains('hidden')) fecharModalFornecedores();
   else if (!refs.historicoModal.classList.contains('hidden')) fecharModalHistorico();
+  else if (!refs.saldosPecaModal.classList.contains('hidden')) fecharModalSaldosPeca();
+  else if (!refs.ajusteSaldoModal.classList.contains('hidden')) fecharModalAjusteSaldo();
+  else if (!refs.detalhesPecaModal.classList.contains('hidden')) fecharModalDetalhesPeca();
   else if (!refs.mpModal.classList.contains('hidden')) fecharModalMateriaPrima();
   else if (!refs.consumoInternoModal.classList.contains('hidden')) fecharModalConsumoInterno();
   else if (!refs.transferenciaModal.classList.contains('hidden')) fecharModalTransferencia();
@@ -2144,6 +2586,9 @@ function closeModal(modal) {
     refs.tratamentoModal,
     refs.recebimentoModal,
     refs.mpModal,
+    refs.detalhesPecaModal,
+    refs.ajusteSaldoModal,
+    refs.saldosPecaModal,
     refs.historicoModal,
     refs.producaoModal
   ].some((item) => !item.classList.contains('hidden'));

@@ -24,6 +24,7 @@ router.get('/estoque/saldos/:id', requireApiRoles(STOCK_READ_ROLES), EstoqueCont
 
 // Rota para registrar entrada inicial no estoque.
 router.post('/estoque/entrada-inicial', requireApiRoles(STOCK_WRITE_ROLES), EstoqueController.createEntradaInicial);
+router.post('/estoque/entrada-inicial-lote', requireApiRoles(STOCK_WRITE_ROLES), EstoqueController.createEntradaInicialBatch);
 
 // Rota para transferir item entre estoques.
 router.post('/estoque/transferencia', requireApiRoles(STOCK_WRITE_ROLES), EstoqueController.createTransferencia);

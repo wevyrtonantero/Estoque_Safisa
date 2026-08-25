@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="icon" href="/img/icon-safisa.ico" type="image/x-icon">
   <title>SAFISA | Montagem</title>
-  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/style.css?v=20260824-troca-servo">
 </head>
 <body>
   <main class="workspace">
@@ -881,6 +881,44 @@
     </div>
   </div>
 
+  <div id="montagem-numero-serie-confirmar-corpo-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="montagem-numero-serie-confirmar-corpo"></div>
+
+    <div class="modal-dialog modal-small">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Confirmacao obrigatoria</span>
+          <h2>Realmente deseja registrar um CORPO?</h2>
+          <p class="numero-serie-corpo-alerta">CORPO</p>
+        </div>
+
+        <button id="btn-fechar-modal-montagem-numero-serie-confirmar-corpo" class="icon-btn" type="button" aria-label="Voltar e revisar">X</button>
+      </div>
+
+      <div class="message warning">
+        O numero de serie sera vinculado exatamente ao modelo exibido abaixo.
+      </div>
+
+      <div class="structure-highlight">
+        <div>
+          <p class="page-kicker">Modelo selecionado</p>
+          <h3 id="montagem-numero-serie-confirmar-corpo-modelo">-</h3>
+          <p id="montagem-numero-serie-confirmar-corpo-descricao">-</p>
+        </div>
+
+        <div class="structure-kpis">
+          <span id="montagem-numero-serie-confirmar-corpo-quantidade" class="mini-chip">Quantidade: 0</span>
+          <span id="montagem-numero-serie-confirmar-corpo-faixa" class="mini-chip">Numero(s): -</span>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button id="btn-cancelar-modal-montagem-numero-serie-confirmar-corpo" class="btn btn-neutral" type="button">Voltar e revisar</button>
+        <button id="btn-confirmar-modal-montagem-numero-serie-confirmar-corpo" class="btn btn-danger" type="button">Sim, registrar este CORPO</button>
+      </div>
+    </div>
+  </div>
+
   <div id="montagem-numero-serie-historico-modal" class="modal hidden" aria-hidden="true">
     <div class="modal-backdrop" data-close-modal="montagem-numero-serie-historico"></div>
 
@@ -1286,6 +1324,14 @@
         <button id="btn-fechar-modal-seriais-disponiveis" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
       </div>
 
+      <div class="seriais-disponiveis-edit-toolbar">
+        <div>
+          <strong>Precisa trocar o modelo de um numero de serie?</strong>
+          <small>Ative a edicao e clique no numero que deseja alterar.</small>
+        </div>
+        <button id="btn-editar-modelo-seriais-disponiveis" class="btn btn-secondary btn-small" type="button">Editar modelo de servo</button>
+      </div>
+
       <div class="selected-tags" id="seriais-disponiveis-resumo"></div>
 
       <div class="table-wrapper">
@@ -1308,10 +1354,67 @@
     </div>
   </div>
 
+  <div id="seriais-disponiveis-troca-modal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="seriais-disponiveis-troca"></div>
+
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <div>
+          <span class="section-pill">Troca segura</span>
+          <h2>Editar modelo do servo</h2>
+          <p>O estoque e o registro do numero de serie serao atualizados juntos.</p>
+        </div>
+
+        <button id="btn-fechar-modal-seriais-disponiveis-troca" class="icon-btn" type="button" aria-label="Fechar modal">X</button>
+      </div>
+
+      <div id="seriais-disponiveis-troca-mensagem" class="message hidden"></div>
+
+      <div class="structure-highlight">
+        <div>
+          <p class="page-kicker">Numero selecionado</p>
+          <h3 id="seriais-disponiveis-troca-numero">-</h3>
+          <p id="seriais-disponiveis-troca-atual">Modelo atual: -</p>
+        </div>
+
+        <div class="structure-kpis">
+          <span class="mini-chip">Atual: Expedicao para Montagem</span>
+          <span class="mini-chip">Novo: Montagem para Expedicao</span>
+        </div>
+      </div>
+
+      <form id="seriais-disponiveis-troca-form" class="form-grid">
+        <input id="seriais-disponiveis-troca-serial-id" type="hidden">
+        <input id="seriais-disponiveis-troca-modelo-id" type="hidden">
+
+        <div class="field span-12">
+          <label for="seriais-disponiveis-troca-modelo-busca">Novo modelo</label>
+          <div class="autocomplete">
+            <input id="seriais-disponiveis-troca-modelo-busca" type="text" placeholder="Digite o codigo ou a descricao do novo modelo" autocomplete="off">
+            <div id="seriais-disponiveis-troca-modelo-sugestoes" class="autocomplete-panel hidden"></div>
+          </div>
+        </div>
+
+        <div id="seriais-disponiveis-troca-modelo-resumo" class="span-12 selected-tags empty">
+          Selecione o novo modelo para continuar.
+        </div>
+
+        <div class="span-12 message warning">
+          Se o modelo atual for uma submontagem, seus componentes retornarao para a Montagem. O novo modelo consumira os componentes da Montagem e entrara pronto na Expedicao.
+        </div>
+
+        <div class="span-12 modal-actions">
+          <button id="btn-cancelar-modal-seriais-disponiveis-troca" class="btn btn-neutral" type="button">Cancelar</button>
+          <button id="btn-confirmar-modal-seriais-disponiveis-troca" class="btn btn-danger" type="submit" disabled>Confirmar troca de modelo</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script src="/js/sector-menu.js"></script>
   <script src="/js/app-sync.js"></script>
   <script src="/js/montagem.js"></script>
-  <script src="/js/seriais-disponiveis.js"></script>
+  <script src="/js/seriais-disponiveis.js?v=20260824-troca-servo"></script>
   <script src="/js/table-print.js"></script>
   <script src="/js/session-indicator.js"></script>
   <datalist id="montagem-numero-serie-montadores">
