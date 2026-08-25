@@ -531,9 +531,11 @@ class GerenciamentoServosModel {
       const corpos = isPrimaryBodyRow ? roundDisplay(corpoStockMap.get(model.corpoCodigo) || 0) : null;
       const zinco = isPrimaryBodyRow ? roundDisplay(zincoMap.get(model.corpoCodigo) || 0) : null;
       const usinagem = isPrimaryBodyRow ? roundDisplay(usinagemMap.get(model.corpoCodigo) || 0) : null;
-      const saldoFinal = roundDisplay(
-        current.total - (toNumber(estoque) + toNumber(corpos) + toNumber(zinco) + toNumber(usinagem))
-      );
+      const saldoFinal = isPrimaryStockRow && isPrimaryBodyRow
+        ? roundDisplay(
+          (toNumber(estoque) + toNumber(corpos) + toNumber(zinco) + toNumber(usinagem)) - current.total
+        )
+        : null;
 
       return {
         ...current,

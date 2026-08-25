@@ -200,7 +200,7 @@ function renderizarTabela() {
       <th class="servo-sheet-resource-col"><span>CORPOS</span></th>
       <th class="servo-sheet-resource-col"><span>ZINCO</span></th>
       <th class="servo-sheet-resource-col"><span>USINAGEM</span></th>
-      <th class="servo-sheet-resource-col" title="Total do modelo menos Estoque, Corpos, Zinco e Usinagem"><span>TOTAL FINAL</span></th>
+      <th class="servo-sheet-resource-col" title="Estoque, Corpos, Zinco e Usinagem menos o total devido"><span>TOTAL FINAL</span></th>
     </tr>
   `;
 
@@ -257,6 +257,10 @@ function renderMetricCell(value, extraClass = '') {
 }
 
 function renderSaldoCell(value, extraClass = '') {
+  if (value === null || value === undefined || value === '') {
+    return `<td class="servo-sheet-cell servo-sheet-balance-cell ${extraClass} is-empty"></td>`;
+  }
+
   const number = Number(value || 0);
   const signalClass = number < 0 ? 'is-negative' : (number > 0 ? 'is-positive' : 'is-zero');
   return `<td class="servo-sheet-cell servo-sheet-balance-cell ${extraClass} ${signalClass}">${formatNumber(number)}</td>`;
