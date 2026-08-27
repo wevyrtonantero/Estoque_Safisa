@@ -200,7 +200,7 @@ function renderizarTabela() {
       <th class="servo-sheet-resource-col"><span>CORPOS</span></th>
       <th class="servo-sheet-resource-col"><span>ZINCO</span></th>
       <th class="servo-sheet-resource-col"><span>USINAGEM</span></th>
-      <th class="servo-sheet-resource-col" title="Estoque, Corpos, Zinco e Usinagem menos o total devido"><span>TOTAL FINAL</span></th>
+      <th class="servo-sheet-resource-col" title="Estoque, Corpos e Zinco menos o total devido; Usinagem nao entra no calculo"><span>TOTAL FINAL</span></th>
     </tr>
   `;
 

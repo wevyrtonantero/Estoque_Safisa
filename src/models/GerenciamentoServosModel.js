@@ -26,6 +26,29 @@ const SERVO_MODELOS = Object.freeze([
   { key: 'SAF040_NORMAL', label: 'SAF-040 NORMAL', estoqueCodigo: 'SAF040', corpoCodigo: '600' }
 ]);
 
+const SERVO_BALANCE_GROUPS = Object.freeze([
+  Object.freeze({
+    primaryKey: 'MBF015_NORMAL',
+    memberKeys: Object.freeze(['MBF015_NORMAL', 'MBF015_DESLOCADO', 'MBF015_INV_028'])
+  }),
+  Object.freeze({
+    primaryKey: 'BR040_NORMAL',
+    memberKeys: Object.freeze(['BR040_NORMAL', 'BR040_INV_015VF', 'BR040_INV_028'])
+  }),
+  Object.freeze({
+    primaryKey: 'MBF025_NORMAL',
+    memberKeys: Object.freeze(['MBF025_NORMAL', 'MBF025_INV_015VF', 'MBF040_NORMAL', 'MBF040_INV_028'])
+  }),
+  Object.freeze({
+    primaryKey: 'MBF032_NORMAL',
+    memberKeys: Object.freeze(['MBF032_NORMAL', 'MBF032_INV_028'])
+  }),
+  Object.freeze({
+    primaryKey: 'AL10_NORMAL',
+    memberKeys: Object.freeze(['AL10_NORMAL', 'AL10_INV_028'])
+  })
+]);
+
 const BUSINESS_TIME_ZONE = process.env.APP_TIME_ZONE || 'America/Sao_Paulo';
 
 function normalizeScope(value) {
@@ -523,6 +546,23 @@ class GerenciamentoServosModel {
 
     const bodyShareStats = this.buildSharedBodyStats();
     const servoShareMap = this.buildSharedServoStats();
+    const groupedModelKeys = new Set(SERVO_BALANCE_GROUPS.flatMap((group) => group.memberKeys));
+    const groupBalanceByPrimaryKey = new Map(SERVO_BALANCE_GROUPS.map((group) => {
+      const models = this.MODEL_DEFINITIONS.filter((model) => group.memberKeys.includes(model.key));
+      return [
+        group.primaryKey,
+        {
+          demandTotal: models.reduce(
+            (sum, model) => sum + toNumber(rowMap.get(model.key)?.total),
+            0
+          ),
+          stockTotal: models.reduce(
+            (sum, model) => sum + this.getStockQuantityForModel(servoStockMap, model),
+            0
+          )
+        }
+      ];
+    }));
     const rows = this.MODEL_DEFINITIONS.map((model) => {
       const current = rowMap.get(model.key);
       const isPrimaryStockRow = this.isPrimarySharedRow(model.estoqueCodigo, model, servoShareMap);
@@ -531,11 +571,18 @@ class GerenciamentoServosModel {
       const corpos = isPrimaryBodyRow ? roundDisplay(corpoStockMap.get(model.corpoCodigo) || 0) : null;
       const zinco = isPrimaryBodyRow ? roundDisplay(zincoMap.get(model.corpoCodigo) || 0) : null;
       const usinagem = isPrimaryBodyRow ? roundDisplay(usinagemMap.get(model.corpoCodigo) || 0) : null;
-      const saldoFinal = isPrimaryStockRow && isPrimaryBodyRow
-        ? roundDisplay(
-          (toNumber(estoque) + toNumber(corpos) + toNumber(zinco) + toNumber(usinagem)) - current.total
-        )
-        : null;
+      let saldoFinal = null;
+      const groupBalance = groupBalanceByPrimaryKey.get(model.key);
+
+      if (groupBalance) {
+        saldoFinal = roundDisplay(
+          groupBalance.stockTotal + toNumber(corpos) + toNumber(zinco) - groupBalance.demandTotal
+        );
+      } else if (!groupedModelKeys.has(model.key) && isPrimaryStockRow && isPrimaryBodyRow) {
+        saldoFinal = roundDisplay(
+          toNumber(estoque) + toNumber(corpos) + toNumber(zinco) - current.total
+        );
+      }
 
       return {
         ...current,
