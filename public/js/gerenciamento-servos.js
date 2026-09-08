@@ -141,7 +141,9 @@ async function carregarMatriz() {
 
 function renderizarCabecalho() {
   const data = matrizAtual?.data_referencia || '-';
-  refs.titulo.textContent = `Consulta de servos - ${escopoAtual === 'dia' ? 'Pedidos do dia' : 'Visao global'}`;
+  if (refs.titulo) {
+    refs.titulo.textContent = escopoAtual === 'dia' ? 'Pedidos do dia' : 'Visao global';
+  }
   if (refs.subtitulo) {
     refs.subtitulo.textContent = `Referencia ${data}.`;
   }
@@ -191,11 +193,15 @@ function renderizarTabela() {
         </div>
       </th>
       <th class="servo-sheet-total-col servo-sheet-head-accent">TOTAL</th>
-      ${pedidos.map((pedido) => `
-        <th class="servo-sheet-vertical-col" title="${escapeHtml(`${pedido.cliente_nome} | ${pedido.codigo_pedido}`)}">
-          <strong>${escapeHtml(pedido.cliente_nome)}</strong>
-        </th>
-      `).join('')}
+      ${pedidos.map((pedido) => {
+        const diaPedido = obterDiaPedido(pedido.data_pedido);
+        const clienteComDia = [pedido.cliente_nome, diaPedido].filter(Boolean).join(' ');
+        return `
+          <th class="servo-sheet-vertical-col" title="${escapeHtml(`${clienteComDia} | ${pedido.codigo_pedido}`)}">
+            <strong>${escapeHtml(clienteComDia)}</strong>
+          </th>
+        `;
+      }).join('')}
       <th class="servo-sheet-resource-col servo-sheet-divider-left"><span>ESTOQUE</span></th>
       <th class="servo-sheet-resource-col"><span>CORPOS</span></th>
       <th class="servo-sheet-resource-col"><span>ZINCO</span></th>
@@ -281,6 +287,11 @@ function formatNumber(value) {
 function formatNumberOrEmpty(value) {
   const number = Number(value || 0);
   return number === 0 ? '' : formatNumber(number);
+}
+
+function obterDiaPedido(value) {
+  const match = String(value || '').match(/^\d{4}-\d{2}-(\d{2})/);
+  return match ? String(Number(match[1])) : '';
 }
 
 function escapeHtml(value) {

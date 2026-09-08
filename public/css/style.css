@@ -193,7 +193,7 @@ textarea {
 .servo-sheet-panel-head {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 16px;
   margin-bottom: 6px;
 }
@@ -923,7 +923,7 @@ textarea {
 }
 
 .servo-sheet-total-col.servo-sheet-head-accent {
-  font-size: 0.62rem;
+  font-size: 0.7rem;
   letter-spacing: 0.05em;
 }
 
@@ -939,9 +939,9 @@ textarea {
 .servo-sheet-vertical-col > strong,
 .servo-sheet-vertical-col {
   color: #111111;
-  font-size: 0.58rem;
+  font-size: 0.67rem;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
 }
 
 .servo-sheet-vertical-col > span,
@@ -1009,7 +1009,7 @@ textarea {
   display: inline-flex;
   align-items: flex-start;
   gap: 4px;
-  font-size: 0.76rem;
+  font-size: 0.84rem;
   font-weight: 800;
   letter-spacing: 0.01em;
   text-transform: uppercase;
@@ -1028,12 +1028,12 @@ textarea {
   .servo-sheet-total-cell {
     padding: 6px 6px !important;
     text-align: center;
-    font-size: 0.82rem;
+    font-size: 0.9rem;
     font-weight: 800;
   }
 
 .servo-sheet-total-cell {
-  font-size: 0.86rem;
+  font-size: 0.94rem;
   background: #ffffff;
 }
 

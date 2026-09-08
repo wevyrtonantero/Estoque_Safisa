@@ -501,6 +501,7 @@ class GerenciamentoServosModel {
       id: Number(pedido.id),
       cliente_nome: pedido.cliente_nome,
       codigo_pedido: pedido.codigo_pedido || `PED-${String(pedido.id).padStart(6, '0')}`,
+      data_pedido: pedido.data_pedido || null,
       cidade: pedido.cidade || '-',
       prioridade_ordem: Number(pedido.prioridade_ordem || 0)
     }));
